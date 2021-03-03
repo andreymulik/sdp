@@ -268,6 +268,23 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
     select  f (AnyChunks es) = concatMap (select f) es
     extract f (AnyChunks es) = bimap concat AnyChunks . unzip $ extract f <$> es
     
+    before (AnyChunks ess) i e = AnyChunks $ go (max 0 i) ess
+      where
+        go n (xs : xss) =
+          let c = sizeOf xs
+          in  n < c ? before xs n e : xss $ xs : go (n - c) xss
+        go _     []     = [single e]
+    
+    remove es@(AnyChunks ess) i = i < 0 ? es $ AnyChunks (go i ess)
+      where
+        go n (xs : xss)
+            | c == 1 = xss -- singleton chunk
+            | n >= c = xs : go (n - c) xss
+            |  True  = remove xs n : xss
+          where
+            c = sizeOf xs
+        go _     []     = []
+    
     selects fs = second fromList . selects fs . listL
     
     ofoldr f' base' = go 0 f' base' . toChunks
@@ -357,8 +374,7 @@ instance (BorderedM1 m rep Int e, SplitM1 m rep e) => LinearM m (AnyChunks rep e
       where
         (d, n) = c `divMod` lim
     
-    -- TODO: rewrite without SplitM
-    copyTo src os trg ot c = when (c > 0) $ do
+    copyTo src os trg ot c = when (c > 0) $ do -- TODO: rewrite without SplitM
         when (os < 0 || ot < 0) $ underEx "copyTo"
         src' <- dropM os src
         trg' <- dropM ot trg
@@ -626,5 +642,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
 

@@ -390,6 +390,22 @@ instance Linear (SArray# e) e
       void $ foldl (\ b a -> write# a =<< b) (return 0) ess
       done marr
     
+    before es@(SArray# c@(I# c#) (I# o#) arr#) n@(I# n#) e
+      | n >= c = es :< e
+      | n <= 0 = e :> es
+      |  True  = runST $ ST $ \ s1# -> case newArray# (c# +# 1#) e s1# of
+        (# s2#, marr# #) -> case copyArray# arr# o# marr# 0# n# s2# of
+          s3# -> case copyArray# arr# (o# +# n#) marr# (n# +# 1#) (c# -# n#) s3# of
+            s4# -> case unsafeFreezeArray# marr# s4# of
+              (# s5#, res# #) -> (# s5#, SArray# (c + 1) 0 res# #)
+    
+    remove es@(SArray# c@(I# c#) (I# o#) arr#) n@(I# n#) = n < 0 || n >= c ? es $
+      runST $ ST $ \ s1# -> case newArray# (c# -# 1#) (unreachEx "remove") s1# of
+        (# s2#, marr# #) -> case copyArray# arr# o# marr# 0# n# s2# of
+          s3# -> case copyArray# arr# (o# +# n# +# 1#) marr# n# (c# -# n# -# 1#) s3# of
+            s4# -> case unsafeFreezeArray# marr# s4# of
+              (# s5#, res# #) -> (# s5#, SArray# (c - 1) 0 res# #)
+    
     select  f = foldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
     
     extract f =
@@ -513,7 +529,7 @@ instance SetWith (SArray# e) e
     setWith f = nubSorted f . sortBy f
     
     insertWith f e es = case (\ x -> x `f` e /= LT) .$ es of
-      Just  i -> e `f` (es!^i) == EQ ? es $ before i e es
+      Just  i -> e `f` (es!^i) == EQ ? es $ before es i e
       Nothing -> es :< e
     
     deleteWith f e es = memberWith f e es ? except (\ x -> f e x == EQ) es $ es
@@ -1075,9 +1091,8 @@ instance (MonadIO io) => MapM io (MIOArray# io e) Int e
     (>!) = (!#>)
     
     overwrite = pack ... overwrite . unpack
-    
-    kfoldrM = ofoldrM
-    kfoldlM = ofoldlM
+    kfoldrM   = ofoldrM
+    kfoldlM   = ofoldlM
 
 instance (MonadIO io) => IndexedM io (MIOArray# io e) Int e
   where
@@ -1192,16 +1207,6 @@ nubSorted _ Z  = Z
 nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2])
   where
     fun = \ e ls -> e `f` head ls == EQ ? ls $ e : ls
-
-before :: Int -> e -> SArray# e -> SArray# e
-before n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) arr#)
-  | n >= c = es :< e
-  | n <= 0 = e :> es
-  |  True  = runST $ ST $ \ s1# -> case newArray# (c# +# 1#) e s1# of
-    (# s2#, marr# #) -> case copyArray# arr# o# marr# 0# n# s2# of
-      s3# -> case copyArray# arr# (o# +# n#) marr# (n# +# 1#) (c# -# n#) s3# of
-        s4# -> case unsafeFreezeArray# marr# s4# of
-          (# s5#, res# #) -> (# s5#, SArray# (c + 1) 0 res# #)
 
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
 ascsBounds =  \ ((x, _) : xs) -> foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs

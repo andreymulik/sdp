@@ -265,7 +265,9 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
     partitions  f = fmap fromList . partitions f . listL
     intersperse e = withBounds . intersperse e . unpack
     
-    filter f = withBounds . filter f . unpack
+    filter  f = withBounds . filter f . unpack
+    before es = withBounds ... before (unpack es)
+    remove es = withBounds  .  remove (unpack es)
     
     reverse (AnyBorder l u rep) = AnyBorder l u (reverse rep)
     force   (AnyBorder l u rep) = AnyBorder l u (force   rep)
@@ -602,4 +604,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
+
 

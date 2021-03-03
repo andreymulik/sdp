@@ -233,6 +233,22 @@ instance (Unboxed e) => Linear (SBytes# e) e
     
     reverse es = runST $ fromIndexed' es >>= reversed >>= done
     
+    before es@(SBytes# c@(I# c#) (I# o#) arr#) n@(I# n#) e
+      | n >= c = es :< e
+      | n <= 0 = e :> es
+      |  True  = runST $ ST $ \ s1# -> case newUnboxed' e (c# +# 1#) s1# of
+        (# s2#, marr# #) -> case copyUnboxed# e arr# o# marr# 0# n# s2# of
+          s3# -> case copyUnboxed# e arr# (o# +# n#) marr# (n# +# 1#) (c# -# n#) s3# of
+            s4# -> case unsafeFreezeByteArray# marr# s4# of
+              (# s5#, res# #) -> (# s5#, SBytes# (c + 1) 0 res# #)
+    
+    remove es@(SBytes# c@(I# c#) (I# o#) arr#) n@(I# n#) = n < 0 || n >= c ? es $
+      runST $ ST $ \ s1# -> case pnewUnboxed es (c# -# 1#) s1# of
+        (# s2#, marr# #) -> case pcopyUnboxed es arr# o# marr# 0# n# s2# of
+          s3# -> case pcopyUnboxed es arr# (o# +# n# +# 1#) marr# n# (c# -# n# -# 1#) s3# of
+            s4# -> case unsafeFreezeByteArray# marr# s4# of
+              (# s5#, res# #) -> (# s5#, SBytes# (c - 1) 0 res# #)
+    
     select  f = o_foldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
     extract f =
       let g o = second (o :) `maybe` (first . (:)) $ f o
@@ -360,7 +376,7 @@ instance (Unboxed e) => SetWith (SBytes# e) e
     setWith f = nubSorted f . sortBy f
     
     insertWith f e es = case (\ x -> x `f` e /= LT) .$ es of
-      Just i -> e `f` (es!^i) == EQ ? es $ before i e es
+      Just i -> e `f` (es!^i) == EQ ? es $ before es i e
       _      -> es :< e
     
     deleteWith f e es = memberWith f e es ? except (\ x -> f e x == EQ) es $ es
@@ -927,8 +943,7 @@ instance (MonadIO io, Unboxed e) => IndexedM io (MIOBytes# io e) Int e
     fromAssocs  bnds = pack  .  fromAssocs  bnds
     fromAssocs' bnds = pack ... fromAssocs' bnds
     
-    writeM' es = stToMIO ... writeM' (unpack es)
-    
+    writeM'   es = stToMIO ... writeM' (unpack es)
     fromIndexed' = pack . fromIndexed'
     
     fromIndexedM es = do
@@ -1101,16 +1116,6 @@ cloneSTBytes# es@(STBytes# c@(I# c#) (I# o#) marr#) = do
   ST $ \ s1# -> case pcopyUnboxedM es marr# o# copy# 0# c# s1# of
     s2# -> (# s2#, () #)
   return copy
-
-before :: (Unboxed e) => Int -> e -> SBytes# e -> SBytes# e
-before n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) arr#)
-  | n >= c = es :< e
-  | n <= 0 = e :> es
-  |  True  = runST $ ST $ \ s1# -> case newUnboxed' e (c# +# 1#) s1# of
-    (# s2#, marr# #) -> case copyUnboxed# e arr# o# marr# 0# n# s2# of
-      s3# -> case copyUnboxed# e arr# (o# +# n#) marr# (n# +# 1#) (c# -# n#) s3# of
-        s4# -> case unsafeFreezeByteArray# marr# s4# of
-          (# s5#, res# #) -> (# s5#, SBytes# (c + 1) 0 res# #)
 
 {-# INLINE nubSorted #-}
 nubSorted :: (Unboxed e) => Compare e -> SBytes# e -> SBytes# e

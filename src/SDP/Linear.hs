@@ -356,7 +356,41 @@ class (Nullable l) => Linear l e | l -> e
     force :: l -> l
     force =  fromList . listL
     
-    -- | Generalized subsequences.
+    {- |
+      @'before' es i e@ insert @e@ to @es@ before element with offset @i@. If
+      @i@ goes beyond the lower or upper bounds, @e@ is prepended or appended to
+      @es@ respectively.
+      
+      > before [0 .. 5] (-1) 7 == [7,0,1,2,3,4,5]
+      > before [0 .. 5]   0  7 == [7,0,1,2,3,4,5]
+      > before [0 .. 5]   3  7 == [0,1,2,7,3,4,5]
+      > before [0 .. 5]   5  7 == [0,1,2,3,4,7,5]
+      > before [0 .. 5]  19  7 == [0,1,2,3,4,5,7]
+    -}
+    before :: l -> Int -> e -> l
+    before es = fromList ... before (listL es)
+    
+    {- |
+      @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
+      
+      > after es i e == before es (i + 1) e
+    -}
+    after :: l -> Int -> e -> l
+    after es i e = before es (i + 1) e
+    
+    {- |
+      @'remove' es i@ delete element with offset @i@ from @es@.
+      
+      > remove [0 .. 5] (-1) == [0 .. 5]
+      > remove [0 .. 5]   0  == [1,2,3,4,5]
+      > remove [0 .. 5]   3  == [0,1,2,4,5]
+      > remove [0 .. 5]   5  == [0,1,2,3,4]
+      > remove [0 .. 5]   6  == [0 .. 5]
+    -}
+    remove :: l -> Int -> l
+    remove es = fromList . remove (listL es)
+    
+    -- | Generalized 'subsequences'.
     subsequences :: l -> [l]
     subsequences =  (Z :) . go
       where
@@ -802,7 +836,7 @@ instance Linear [e] e
     listL  = toList
     nubBy  = L.nubBy
     
-    -- | O(1) force, same as 'id'.
+    -- | O(1) 'force', same as 'id'.
     force = id
     
     uncons    []    = throw $ PatternMatchFail "in SDP.Linear.(:>)"
@@ -819,6 +853,18 @@ instance Linear [e] e
     concatMap   = L.concatMap
     intersperse = L.intersperse
     isSubseqOf  = L.isSubsequenceOf
+    
+    before es i e = go (max 0 i) es
+      where
+        go 0    xs    = e : xs
+        go n (x : xs) = x : go (n - 1) xs
+        go _    []    = [e]
+    
+    remove es i = i < 0 ? es $ go i es
+      where
+        go 0 (_ : xs) = xs
+        go n (x : xs) = x : go (n - 1) xs
+        go _    []    = []
     
     iterate n f e = n < 1 ? [] $ e : iterate (n - 1) f (f e)
     
@@ -915,6 +961,5 @@ inits es = es : inits (init es)
 -}
 ascending :: (Split s e, Sort s e, Ord e) => s -> [Int] -> Bool
 ascending =  all sorted ... flip splits
-
 
 
