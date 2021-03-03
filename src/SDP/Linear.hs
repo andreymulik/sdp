@@ -357,6 +357,8 @@ class (Nullable l) => Linear l e | l -> e
     force =  fromList . listL
     
     {- |
+      @since 0.2.1
+      
       @'before' es i e@ insert @e@ to @es@ before element with offset @i@. If
       @i@ goes beyond the lower or upper bounds, @e@ is prepended or appended to
       @es@ respectively.
@@ -371,6 +373,8 @@ class (Nullable l) => Linear l e | l -> e
     before es = fromList ... before (listL es)
     
     {- |
+      @since 0.2.1
+      
       @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
       
       > after es i e == before es (i + 1) e
@@ -961,5 +965,6 @@ inits es = es : inits (init es)
 -}
 ascending :: (Split s e, Sort s e, Ord e) => s -> [Int] -> Bool
 ascending =  all sorted ... flip splits
+
 
 
