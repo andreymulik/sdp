@@ -114,6 +114,24 @@ class (Nullable map) => Map map key e | map -> key, map -> e
     (//) :: map -> [(key, e)] -> map
     (//) =  toMap ... (++) . assocs
     
+    {- |
+      @since 0.3
+      
+      Safe index-based immutable writer. Earlier defined in "SDP.Indexed".
+    -}
+    {-# INLINE write' #-}
+    write' :: map -> key -> e -> map
+    write' es = write es . offsetOf es
+    default write' :: (Bordered map key, Linear map e) => map -> key -> e -> map
+    
+    {- |
+      @since 0.3
+      
+      Update element by given function. Earlier defined in "SDP.Indexed".
+    -}
+    update' :: map -> (e -> e) -> key -> map
+    update' es f i = write' es i . f $ es!i
+    
     -- | @('.!')@ is unsafe reader, can be faster @('!')@ by skipping checks.
     {-# INLINE (.!) #-}
     (.!) :: map -> key -> e
@@ -207,14 +225,16 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       @key <= k@ (if any). If @k@ is a @map@ element, returns @(k, e)@.
     -}
     lookupLE' :: (Ord key) => key -> map -> Maybe (key, e)
-    lookupLE' k me = (,) k <$> (me !? k) <|> lookupLEWith cmpfst (k, unreachEx "lookupLE'") (assocs me)
+    lookupLE' k me = (,) k <$> (me !? k) <|> lookupLEWith cmpfst
+      (k, unreachEx "lookupLE'") (assocs me)
     
     {- |
       @lookupGE' k map@ finds pair @(key, value)@ with  @key@, where
       @key >= k@ (if any).
     -}
     lookupGE' :: (Ord key) => key -> map -> Maybe (key, e)
-    lookupGE' k me = (,) k <$> (me !? k) <|> lookupGEWith cmpfst (k, unreachEx "lookupGE'") (assocs me)
+    lookupGE' k me = (,) k <$> (me !? k) <|> lookupGEWith cmpfst
+      (k, unreachEx "lookupGE'") (assocs me)
     
     -- | Returns list of map keys.
     keys :: map -> [key]

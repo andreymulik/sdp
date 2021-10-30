@@ -53,7 +53,7 @@ es .== 10 -- length es == 10
 es .>   5 -- length es > 5
 ```
 * `Unboxed` is a service class that simplifies interacting with data stored in
-* `ByteArray#` and `MutableArray#`. Used in containers that based on `SBytes#`,
+`ByteArray#` and `MutableArray#`. Used in containers that based on `SBytes#`,
 `STBytes#` or `IOBytes#`.
 * `Shape` is a service class for dimension operations and finite-dimensional
 index transformations. `Index` is a service class that generalizes `Enum` to

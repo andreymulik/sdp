@@ -54,11 +54,11 @@ default ()
   'fromChunksM').
   
   * Efficiency of operations on @'AnyChunks' rep e@ are very sensitive in the
-  efficiency of 'Bordered', 'Linear' and 'Split' on @rep e@.
+  efficiency of 'Bordered' and 'Linear' on @rep e@.
   * @'AnyChunks' rep e@ is only defined for Int-indexed @rep e@.
   * 'Eq', 'Ord', 'Eq1' and 'Ord1' instances compare @'AnyChunks' rep e@ as
   streams of equal size chunks. To do this, the comparison @rep e@ must also be
-  lexicographic, also for @rep e@ must implement 'Bordered' and 'Split'.
+  lexicographic, also for @rep e@ must implement 'Bordered' and 'Linear'.
   * 'Freeze' and 'Thaw' for @'AnyChunks' rep e@ are defined for all @rep e@ that
   already have 'Freeze' and 'Thaw' instances.
 -}
@@ -83,7 +83,7 @@ toChunks =  E.coerce
 
 {- Eq and Ord instances. -}
 
-instance (Eq (rep e), Bordered1 rep Int e, Split1 rep e) => Eq (AnyChunks rep e)
+instance (Eq (rep e), Bordered1 rep Int e, Linear1 rep e) => Eq (AnyChunks rep e)
   where
     Z == Z = True
     xs@(AnyChunks (x : xs')) == ys@(AnyChunks (y : ys')) = if n1 > n2
@@ -94,7 +94,7 @@ instance (Eq (rep e), Bordered1 rep Int e, Split1 rep e) => Eq (AnyChunks rep e)
         n2 = sizeOf y
     _ == _ = False
 
-instance (Ord (rep e), Bordered1 rep Int e, Split1 rep e) => Ord (AnyChunks rep e)
+instance (Ord (rep e), Bordered1 rep Int e, Linear1 rep e) => Ord (AnyChunks rep e)
   where
     compare Z Z = EQ
     compare xs@(AnyChunks (x : xs')) ys@(AnyChunks (y : ys')) = if n1 > n2
@@ -125,12 +125,7 @@ instance (Indexed1 rep Int e, Read e) => Read (AnyChunks rep e)
 
 --------------------------------------------------------------------------------
 
-{- Semigroup, Monoid, Nullable, Default and Estimate instances. -}
-
-instance Nullable (AnyChunks rep e)
-  where
-    isNull = \ (AnyChunks es) -> null es
-    lzero  = AnyChunks []
+{- Semigroup, Monoid and Default instances. -}
 
 instance Semigroup (AnyChunks rep e)
   where
@@ -138,21 +133,6 @@ instance Semigroup (AnyChunks rep e)
 
 instance Monoid  (AnyChunks rep e) where mempty = AnyChunks []; mappend = (<>)
 instance Default (AnyChunks rep e) where def    = AnyChunks []
-
-instance (Bordered1 rep Int e) => Estimate (AnyChunks rep e)
-  where
-    (<==>) = go 0
-      where
-        go o (AnyChunks [])   (AnyChunks []) = o <=> 0
-        go o (AnyChunks [])               ys = o <=.> ys
-        go o xs               (AnyChunks []) = xs <.=> (-o)
-        go o (AnyChunks (x : xs)) (AnyChunks (y : ys)) =
-          go (o + sizeOf x - sizeOf y) (AnyChunks xs) (AnyChunks ys)
-    
-    (AnyChunks       []) <.=> n = 0 <=> n
-    (AnyChunks (x : xs)) <.=> n = c > n ? GT $ AnyChunks xs <.=> (n - c)
-      where
-        c = sizeOf x
 
 --------------------------------------------------------------------------------
 
@@ -202,7 +182,40 @@ instance (Traversable rep) => Traversable (AnyChunks rep)
 
 --------------------------------------------------------------------------------
 
-{- Bordered, Linear and Split instances. -}
+{- Nullable, NullableM, Forceable and Estimate instances. -}
+
+instance (Forceable1 rep e) => Forceable (AnyChunks rep e)
+  where
+    force = AnyChunks . force . E.coerce
+
+instance Nullable (AnyChunks rep e)
+  where
+    isNull = \ (AnyChunks es) -> null es
+    lzero  = AnyChunks []
+
+instance (NullableM m (rep e)) => NullableM m (AnyChunks rep e)
+  where
+    nowNull = fmap and . mapM nowNull . toChunks
+    newNull = return (AnyChunks [])
+
+instance (Bordered1 rep Int e) => Estimate (AnyChunks rep e)
+  where
+    (<==>) = go 0
+      where
+        go o (AnyChunks [])   (AnyChunks []) = o <=> 0
+        go o (AnyChunks [])               ys = o <=.> ys
+        go o xs               (AnyChunks []) = xs <.=> (-o)
+        go o (AnyChunks (x : xs)) (AnyChunks (y : ys)) =
+          go (o + sizeOf x - sizeOf y) (AnyChunks xs) (AnyChunks ys)
+    
+    (AnyChunks       []) <.=> n = 0 <=> n
+    (AnyChunks (x : xs)) <.=> n = c > n ? GT $ AnyChunks xs <.=> (n - c)
+      where
+        c = sizeOf x
+
+--------------------------------------------------------------------------------
+
+{- Bordered and Linear instances. -}
 
 instance (Bordered1 rep Int e) => Bordered (AnyChunks rep e) Int
   where
@@ -260,12 +273,10 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
         chunk = replicate lim e
         rest  = replicate rst e
     
-    reverse (AnyChunks es) = AnyChunks (reverse <$> reverse es)
-    force   (AnyChunks es) = AnyChunks (force <$> es)
-    
     partition p = both fromList . partition p . listL
     
     select  f (AnyChunks es) = concatMap (select f) es
+    reverse   (AnyChunks es) = AnyChunks (reverse <$> reverse es)
     extract f (AnyChunks es) = bimap concat AnyChunks . unzip $ extract f <$> es
     
     before (AnyChunks ess) i e = AnyChunks $ go (max 0 i) ess
@@ -278,7 +289,7 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
     remove i es@(AnyChunks ess) = i < 0 ? es $ AnyChunks (go i ess)
       where
         go n (xs : xss)
-            | c == 1 = xss -- singleton chunk
+            | c == 1 = xss -- single chunk
             | n >= c = xs : go (n - c) xss
             |  True  = remove n xs : xss
           where
@@ -299,9 +310,7 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
     
     o_foldr f base = foldr (flip $ o_foldr f) base . toChunks
     o_foldl f base = foldl (o_foldl f) base . toChunks
-
-instance (Bordered1 rep Int e, Split1 rep e) => Split (AnyChunks rep e) e
-  where
+    
     take n = AnyChunks . go n . toChunks
       where
         go c (x : xs) = let s = sizeOf x in case c <=> s of
@@ -324,7 +333,7 @@ instance (Bordered1 rep Int e, Split1 rep e) => Split (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
-{- BorderedM, LinearM and SplitM instances. -}
+{- BorderedM and LinearM instances. -}
 
 instance (BorderedM1 m rep Int e) => BorderedM m (AnyChunks rep e) Int
   where
@@ -336,12 +345,10 @@ instance (BorderedM1 m rep Int e) => BorderedM m (AnyChunks rep e) Int
     getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
     nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
 
-instance (BorderedM1 m rep Int e, SplitM1 m rep e) => LinearM m (AnyChunks rep e) e
+instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep e) e
   where
-    nowNull = fmap and . mapM nowNull . toChunks
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
-    newNull = return (AnyChunks [])
     
     prepend e' es' = AnyChunks <$> go e' (toChunks es')
       where
@@ -410,9 +417,7 @@ instance (BorderedM1 m rep Int e, SplitM1 m rep e) => LinearM m (AnyChunks rep e
     
     foldrM f base = foldr ((=<<) . flip (foldrM f)) (return base) . toChunks
     foldlM f base = foldl (flip $ (=<<) . flip (foldlM f)) (return base) . toChunks
-
-instance (BorderedM1 m rep Int e, SplitM1 m rep e) => SplitM m (AnyChunks rep e) e
-  where
+    
     takeM n (AnyChunks (e : es)) = n < 1 ? newNull $ do
       c <- getSizeOf e
       case n <=> c of
@@ -436,7 +441,7 @@ instance (BorderedM1 m rep Int e, SplitM1 m rep e) => SplitM m (AnyChunks rep e)
 
 --------------------------------------------------------------------------------
 
-{- Set and Scan instances. -}
+{- Set, SetWith and Scan instances. -}
 
 instance (Nullable (AnyChunks rep e), SetWith1 (AnyChunks rep) e, Ord e) => Set (AnyChunks rep e) e
 
@@ -470,7 +475,7 @@ instance (Linear1 (AnyChunks rep) e) => Scan (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
-{- Indexed instance. -}
+{- Map and Indexed instances. -}
 
 instance (Indexed1 rep Int e) => Map (AnyChunks rep e) Int e
   where
@@ -521,7 +526,7 @@ instance (Indexed1 rep Int e) => Indexed (AnyChunks rep e) Int e
 
 {- MapM, IndexedM and SortM instances. -}
 
-instance (SplitM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m (AnyChunks rep e) Int e
+instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m (AnyChunks rep e) Int e
   where
     newMap ascs = AnyChunks <$> sequence (go (ascsBounds ascs) ascs)
       where
@@ -536,6 +541,9 @@ instance (SplitM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m 
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
+    
+    {-# INLINE writeM' #-}
+    writeM' es i e = (i < 0) `unless` writeM es i e
     
     {-# INLINE (>!) #-}
     es >! i = i < 0 ? overEx "(>!)" $ es !#> i
@@ -552,7 +560,7 @@ instance (SplitM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m 
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
-instance (SplitM1 m rep e, IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
+instance (IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
   where
     fromAssocs bnds ascs = AnyChunks <$> sequence (go bnds ascs)
       where
@@ -568,13 +576,10 @@ instance (SplitM1 m rep e, IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
     
-    {-# INLINE writeM' #-}
-    writeM' es i e = (i < 0) `unless` writeM es i e
-    
     fromIndexed' = newLinear  .  listL
     fromIndexedM = newLinear <=< getLeft
 
-instance (BorderedM1 m rep Int e, SortM1 m rep e, SplitM1 m rep e, LinearM1 m rep e) => SortM m (AnyChunks rep e) e
+instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e) => SortM m (AnyChunks rep e) e
   where
     sortMBy = timSortBy
     

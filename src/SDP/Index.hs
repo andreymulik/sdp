@@ -176,7 +176,8 @@ class (Ord i, Shape i, Shape (DimLast i), Shape (DimInit i), Shape (GIndex i)) =
     -- | Returns bounds of nonempty range (swaps bounds in each empty subshape).
     {-# INLINE ordBounds #-}
     ordBounds :: (i, i) -> (i, i)
-    ordBounds = \ bs -> isEmpty bs ? swap bs $ bs
+    ordBounds bs = isEmpty bs ? swap bs $ bs
+    default ordBounds :: (GIndex i ~~ I1 i) => (i, i) -> (i, i)
     
     -- | Returns size of biggest range, that may be represented by this type.
     defLimit :: i -> Integer
@@ -303,15 +304,16 @@ instance Index E
     sizes = const []
     range = const []
     
+    offset _ _ = emptyEx "offset {E}"
+    index  _ _ = emptyEx "index {E}"
+    ordBounds  = id
     next   _ _ = E
     prev   _ _ = E
-    index  _ _ = emptyEx "index {E}"
-    offset _ _ = emptyEx "offset {E}"
     
+    inRange     _ _ = False
     isUnderflow _ _ = True
     isOverflow  _ _ = True
     isEmpty       _ = True
-    inRange     _ _ = False
     inBounds    _ _ = ER
 
 instance Index ()
@@ -552,5 +554,7 @@ checkBounds bnds i res = case inBounds bnds i of
 
 emptyEx :: String -> a
 emptyEx =  throw . EmptyRange . showString "in SDP.Index."
+
+
 
 

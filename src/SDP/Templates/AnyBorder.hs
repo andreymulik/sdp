@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, DeriveGeneric, TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
 {-# LANGUAGE Trustworthy, UndecidableInstances #-}
 
 {- |
@@ -41,8 +41,8 @@ import Data.Data
 import Text.Read.SDP
 import Text.Show.SDP
 
-import GHC.Generics
 import qualified GHC.Exts as E
+import GHC.Generics
 
 import Control.Exception.SDP
 
@@ -119,16 +119,32 @@ instance (Index i, E.IsList (rep e), Bordered1 rep Int e) => E.IsList (AnyBorder
 
 --------------------------------------------------------------------------------
 
-{- Semigroup, Monoid, Nullable, Default and Estimate instances. -}
+{- Semigroup, Monoid and Default instances. -}
 
-instance (Index i, Bordered (rep e) Int, Nullable (rep e)) => Nullable (AnyBorder rep i e)
+instance (Index i, Nullable1 rep e) => Default (AnyBorder rep i e) where def = Z
+
+instance (Index i, Semigroup (rep e), Bordered1 rep Int e) => Semigroup (AnyBorder rep i e)
+  where
+    (<>) = withBounds ... on (<>) unpack
+
+instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e) => Monoid (AnyBorder rep i e)
+  where
+    mappend = (<>)
+    mempty  = Z
+
+--------------------------------------------------------------------------------
+
+{- Nullable, NullableM and Estimate instances. -}
+
+instance (Index i, Nullable (rep e)) => Nullable (AnyBorder rep i e)
   where
     isNull = \ (AnyBorder l u rep) -> isEmpty (l, u) || isNull rep
-    lzero  = withBounds lzero
+    lzero  = uncurry AnyBorder (defaultBounds 0) Z
 
-instance (Linear1 (AnyBorder rep i) e) => Semigroup (AnyBorder rep i e) where (<>) = (++)
-instance (Linear1 (AnyBorder rep i) e) => Monoid    (AnyBorder rep i e) where mempty = Z; mappend = (<>)
-instance (Linear1 (AnyBorder rep i) e) => Default   (AnyBorder rep i e) where def = Z
+instance (Index i, NullableM m (rep e)) => NullableM m (AnyBorder rep i e)
+  where
+    nowNull (AnyBorder l u es) = isEmpty (l, u) ? return True $ nowNull es
+    newNull = uncurry AnyBorder (defaultBounds 0) <$> newNull
 
 instance (Index i) => Estimate (AnyBorder rep i e)
   where
@@ -218,7 +234,11 @@ instance (Index i, Traversable rep) => Traversable (AnyBorder rep i)
 
 --------------------------------------------------------------------------------
 
-{- Bordered, Linear and Split instances. -}
+{- Forceable, Bordered and Linear instances. -}
+
+instance (Index i, Forceable1 rep e) => Forceable (AnyBorder rep i e)
+  where
+    force (AnyBorder l u rep) = AnyBorder l u (force rep)
 
 instance (Index i) => Bordered (AnyBorder rep i e) i
   where
@@ -255,7 +275,6 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
     
     {-# INLINE (!^) #-}
     (!^) = (!^) . unpack
-    (++) = withBounds ... on (++) unpack
     
     write (AnyBorder l u es) n e = AnyBorder l u (write es n e)
     
@@ -270,7 +289,6 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
     before es = withBounds ... before (unpack es)
     
     reverse (AnyBorder l u rep) = AnyBorder l u (reverse rep)
-    force   (AnyBorder l u rep) = AnyBorder l u (force   rep)
     
     select   f = select f . unpack
     extract  f = second withBounds . extract  f . unpack
@@ -284,9 +302,7 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
     
     o_foldr f base = o_foldr f base . unpack
     o_foldl f base = o_foldl f base . unpack
-
-instance (Index i, Split1 rep e, Bordered1 rep Int e) => Split (AnyBorder rep i e) e
-  where
+    
     take n = withBounds . take n . unpack
     drop n = withBounds . drop n . unpack
     keep n = withBounds . keep n . unpack
@@ -294,7 +310,6 @@ instance (Index i, Split1 rep e, Bordered1 rep Int e) => Split (AnyBorder rep i 
     
     splits ns = fmap withBounds . splits ns . unpack
     chunks ns = fmap withBounds . chunks ns . unpack
-    parts  ns = fmap withBounds . parts  ns . unpack
     
     justifyL n e = withBounds . justifyL n e . unpack
     justifyR n e = withBounds . justifyR n e . unpack
@@ -307,7 +322,7 @@ instance (Index i, Split1 rep e, Bordered1 rep Int e) => Split (AnyBorder rep i 
 
 --------------------------------------------------------------------------------
 
-{- BorderedM, LinearM and SplitM instances. -}
+{- BorderedM and LinearM instances. -}
 
 instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
   where
@@ -320,10 +335,6 @@ instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
 
 instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBorder rep i e) e
   where
-    newNull = uncurry AnyBorder (defaultBounds 0) <$> newNull
-    
-    nowNull (AnyBorder l u es) = isEmpty (l, u) ? return True $ nowNull es
-    
     getHead = getHead . unpack
     getLast = getLast . unpack
     
@@ -353,9 +364,7 @@ instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBo
     
     foldrM f e = foldrM f e . unpack
     foldlM f e = foldlM f e . unpack
-
-instance (Index i, BorderedM1 m rep Int e, SplitM1 m rep e) => SplitM m (AnyBorder rep i e) e
-  where
+    
     takeM n es@(AnyBorder l u rep)
         | n <= 0 = newNull
         | n >= c = return es
@@ -407,7 +416,7 @@ instance (Index i, BorderedM1 m rep Int e, SplitM1 m rep e) => SplitM m (AnyBord
 
 --------------------------------------------------------------------------------
 
-{- Set, Scan and Sort instances. -}
+{- Set and SetWith instances. -}
 
 instance (SetWith1 (AnyBorder rep i) e, Nullable (AnyBorder rep i e), Ord e) => Set (AnyBorder rep i e) e
 
@@ -423,15 +432,19 @@ instance (Index i, SetWith1 rep e, Linear1 rep e, Bordered1 rep Int e) => SetWit
     deleteWith f e = withBounds . deleteWith f e . unpack
     
     intersectionWith f = withBounds ... on (intersectionWith f) unpack
-    unionWith        f = withBounds ... on (unionWith        f) unpack
     differenceWith   f = withBounds ... on (differenceWith   f) unpack
     symdiffWith      f = withBounds ... on (symdiffWith      f) unpack
+    unionWith        f = withBounds ... on (unionWith        f) unpack
     
     memberWith   f e = memberWith   f e . unpack
     lookupLTWith f o = lookupLTWith f o . unpack
     lookupGTWith f o = lookupGTWith f o . unpack
     lookupLEWith f o = lookupLEWith f o . unpack
     lookupGEWith f o = lookupGEWith f o . unpack
+
+--------------------------------------------------------------------------------
+
+{- Scan and Sort instances. -}
 
 instance (Linear1 (AnyBorder rep i) e) => Scan (AnyBorder rep i e) e
 
@@ -478,7 +491,7 @@ instance (Index i, Indexed1 rep Int e) => Indexed (AnyBorder rep i e) i e
     
     fromIndexed = withBounds . fromIndexed
 
-instance (Bordered1 rep Int e, Split1 rep e) => Shaped (AnyBorder rep) e
+instance (Bordered1 rep Int e, Linear1 rep e) => Shaped (AnyBorder rep) e
   where
     reshape es bs = size bs >. es ? expEx "reshape" $ uncurry AnyBorder bs (unpack es)
     
@@ -511,6 +524,9 @@ instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e) 
       let bnds@(l, u) = ascsBounds ascs
       in  AnyBorder l u <$> newMap' defvalue [ (offset bnds i, e) | (i, e) <- ascs ]
     
+    {-# INLINE writeM' #-}
+    writeM' (AnyBorder l u es) = writeM' es . offset (l, u)
+    
     {-# INLINE (>!) #-}
     (>!) (AnyBorder l u es) = (es !#>) . offset (l, u)
     
@@ -533,9 +549,6 @@ instance (Index i, IndexedM1 m rep Int e) => IndexedM m (AnyBorder rep i e) i e
       where
         ies  = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
         bnds = (0, size (l, u) - 1)
-    
-    {-# INLINE writeM' #-}
-    writeM' (AnyBorder l u es) = writeM' es . offset (l, u)
     
     fromIndexed' = withBounds' <=< fromIndexed'
     fromIndexedM = withBounds' <=< fromIndexedM
@@ -604,7 +617,4 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
-
-
 

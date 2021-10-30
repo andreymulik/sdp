@@ -80,9 +80,33 @@ class (Monad m) => MapM m map key e | map -> m, map -> key, map -> e
     (!?>) :: map -> key -> m (Maybe e)
     es !?> i = do b <- memberM' es i; b ? Just <$> (es >! i) $ pure empty
     
+    {- |
+      @since 0.3
+      
+      @'writeM' map key e@ writes element @e@ to @key@ position safely (if @key@
+      is out of @map@ range, do nothing). The 'writeM' function is intended to
+      overwrite only existing values, so its behavior is identical for
+      structures with both static and dynamic boundaries.
+      
+      Earlier defined in "SDP.IndexedM".
+    -}
+    writeM' :: map -> key -> e -> m ()
+    default writeM' :: (BorderedM m map key, LinearM m map e) => map -> key -> e -> m ()
+    writeM' es i e = do bnds <- getBounds es; writeM es (offset bnds i) e
+    
     -- | Update elements by mapping with indices.
     updateM :: map -> (key -> e -> e) -> m map
-    updateM es f = do ascs <- getAssocs es; es `overwrite` [ (i, f i e) | (i, e) <- ascs ]
+    updateM es f = do
+      ascs <- getAssocs es
+      overwrite es [ (i, f i e) | (i, e) <- ascs ]
+    
+    {- |
+      @since 0.3
+      
+      Update element by given function. Earlier defined in "SDP.IndexedM".
+    -}
+    updateM' :: map -> (e -> e) -> key -> m ()
+    updateM' es f i = writeM' es i . f =<< es >! i
     
     {- |
       This function designed to overwrite large enough fragments of the
@@ -170,6 +194,7 @@ overEx =  throw . IndexOverflow . showString "in SDP.MapM."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.MapM."
+
 
 
 

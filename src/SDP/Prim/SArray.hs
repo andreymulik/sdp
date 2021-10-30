@@ -138,16 +138,31 @@ instance E.IsList (SArray# e)
 
 --------------------------------------------------------------------------------
 
-{- Semigroup, Monoid, Nullable, Default and Estimate instances. -}
+{- Semigroup, Monoid and Default instances. -}
+
+instance Default   (SArray# e) where def = Z
+instance Monoid    (SArray# e) where mempty = Z; mappend = (<>)
+
+instance Semigroup (SArray# e)
+  where
+    -- [internal]: always return new array, even if (at least) one is empty
+    SArray# (I# n1#) (I# o1#) arr1# <> SArray# (I# n2#) (I# o2#) arr2# =
+      runST $ ST $ \ s1# -> case newArray# n# (unreachEx "(++)") s1# of
+        (#s2#, marr# #) -> case copyArray# arr1# o1# marr# 0# n1# s2# of
+          s3# -> case copyArray# arr2# o2# marr# n1# n2# s3# of
+            s4# -> case unsafeFreezeArray# marr# s4# of
+              (# s5#, arr# #) -> (# s5#, SArray# (I# n#) 0 arr# #)
+      where
+        n# = n1# +# n2#
+
+--------------------------------------------------------------------------------
+
+{- Nullable and Estimate instances. -}
 
 instance Nullable (SArray# e)
   where
     lzero  = runST $ filled 0 (unreachEx "lzero") >>= done
     isNull = \ (SArray# c _ _) -> c == 0
-
-instance Semigroup (SArray# e) where (<>) = (++)
-instance Monoid    (SArray# e) where mempty = Z; mappend = (<>)
-instance Default   (SArray# e) where def = Z
 
 instance Estimate (SArray# e)
   where
@@ -328,7 +343,27 @@ instance Traversable SArray#
 
 --------------------------------------------------------------------------------
 
-{- Linear, Split and Bordered instances. -}
+{- Bordered, Forceable and Linear instances. -}
+
+instance Bordered (SArray# e) Int
+  where
+    lower _ = 0
+    
+    sizeOf   (SArray# c _ _) = c
+    upper    (SArray# c _ _) = c - 1
+    bounds   (SArray# c _ _) = (0, c - 1)
+    indices  (SArray# c _ _) = [0 .. c - 1]
+    indexOf  (SArray# c _ _) = index (0, c - 1)
+    offsetOf (SArray# c _ _) = offset (0, c - 1)
+    indexIn  (SArray# c _ _) = \ i -> i >= 0 && i < c
+
+instance Forceable (SArray# e)
+  where
+    force (SArray# n@(I# n#) (I# o#) arr#) = runST $ ST $
+      \ s1# -> case newArray# n# (unreachEx "force") s1# of
+        (# s2#, marr# #) -> case copyArray# arr# o# marr# 0# n# s2# of
+          s3# -> case unsafeFreezeArray# marr# s3# of
+            (# s4#, copy# #) -> (# s4#, SArray# n 0 copy# #)
 
 instance Linear (SArray# e) e
   where
@@ -356,22 +391,6 @@ instance Linear (SArray# e) e
     
     fromListN  n es = runST $ newLinearN  n es >>= done
     fromFoldable es = runST $ fromFoldableM es >>= done
-    
-    -- [internal]: always return new array, even if (at least) one is empty
-    SArray# (I# n1#) (I# o1#) arr1# ++ SArray# (I# n2#) (I# o2#) arr2# =
-      runST $ ST $ \ s1# -> case newArray# n# (unreachEx "(++)") s1# of
-        (#s2#, marr# #) -> case copyArray# arr1# o1# marr# 0# n1# s2# of
-          s3# -> case copyArray# arr2# o2# marr# n1# n2# s3# of
-            s4# -> case unsafeFreezeArray# marr# s4# of
-              (# s5#, arr# #) -> (# s5#, SArray# (I# n#) 0 arr# #)
-      where
-        n# = n1# +# n2#
-    
-    force (SArray# n@(I# n#) (I# o#) arr#) = runST $ ST $
-      \ s1# -> case newArray# n# (unreachEx "force") s1# of
-        (# s2#, marr# #) -> case copyArray# arr# o# marr# 0# n# s2# of
-          s3# -> case unsafeFreezeArray# marr# s3# of
-            (# s4#, copy# #) -> (# s4#, SArray# n 0 copy# #)
     
     listL = toList
     listR = flip (:) `foldl` []
@@ -432,9 +451,7 @@ instance Linear (SArray# e) e
     
     o_foldr = foldr
     o_foldl = foldl
-
-instance Split (SArray# e) e
-  where
+    
     -- | O(1) 'take', O(1) memory.
     take n es@(SArray# c o arr#)
       | n <= 0 = Z
@@ -514,21 +531,9 @@ instance Split (SArray# e) e
       let go i es = i == 0 ? [] $ maybe [] (: go (i - 1) es) $ g (es !^ i)
       in  reverse $ go (c - 1) xs
 
-instance Bordered (SArray# e) Int
-  where
-    lower _ = 0
-    
-    sizeOf   (SArray# c _ _) = c
-    upper    (SArray# c _ _) = c - 1
-    bounds   (SArray# c _ _) = (0, c - 1)
-    indices  (SArray# c _ _) = [0 .. c - 1]
-    indexOf  (SArray# c _ _) = index (0, c - 1)
-    offsetOf (SArray# c _ _) = offset (0, c - 1)
-    indexIn  (SArray# c _ _) = \ i -> i >= 0 && i < c
-
 --------------------------------------------------------------------------------
 
-{- Set, SetWith, Scan and Sort instances. -}
+{- Set and SetWith instances. -}
 
 instance (Ord e) => Set (SArray# e) e
 
@@ -668,6 +673,10 @@ instance SetWith (SArray# e) e
             j = l + (u - l) `div` 2
             e = es !^ j
 
+--------------------------------------------------------------------------------
+
+{- Scan and Sort instances. -}
+
 instance Scan (SArray# e) e
 
 instance Sort (SArray# e) e
@@ -677,7 +686,7 @@ instance Sort (SArray# e) e
 
 --------------------------------------------------------------------------------
 
-{- Indexed instance. -}
+{- Map and Indexed instances. -}
 
 instance Map (SArray# e) Int e
   where
@@ -694,7 +703,7 @@ instance Map (SArray# e) Int e
 
 instance Indexed (SArray# e) Int e
   where
-    assoc' bnds defvalue ascs = runST $ fromAssocs' bnds defvalue ascs >>= done
+    assoc' bnds e ascs = runST $ fromAssocs' bnds e ascs >>= done
     
     fromIndexed es = runST $ do
       let n = sizeOf es
@@ -702,6 +711,8 @@ instance Indexed (SArray# e) Int e
       updateM copy (\ i _ -> es!^i) >>= done
 
 --------------------------------------------------------------------------------
+
+{- Thaw and Freeze instances. -}
 
 instance Thaw (ST s) (SArray# e) (STArray# s e)
   where
@@ -742,7 +753,14 @@ instance Eq (STArray# s e)
 
 --------------------------------------------------------------------------------
 
-{- Estimate, Bordered, BorderedM, LinearM and SplitM instances. -}
+{- NullableM, Estimate and Bordered instances. -}
+
+instance NullableM (ST s) (STArray# s e)
+  where
+    newNull = ST $ \ s1# -> case newArray# 0# (unreachEx "newNull") s1# of
+      (# s2#, marr# #) -> (# s2#, STArray# 0 0 marr# #)
+    
+    nowNull (STArray# n _ _) = return (n < 1)
 
 instance Estimate (STArray# s e)
   where
@@ -770,6 +788,10 @@ instance Bordered (STArray# s e) Int
     offsetOf (STArray# c _ _) = offset (0, c - 1)
     indexIn  (STArray# c _ _) = \ i -> i >= 0 && i < c
 
+--------------------------------------------------------------------------------
+
+{- BorderedM and LinearM instances. -}
+
 instance BorderedM (ST s) (STArray# s e) Int
   where
     nowIndexIn (STArray# c _ _) = return . inRange (0, c - 1)
@@ -782,11 +804,6 @@ instance BorderedM (ST s) (STArray# s e) Int
 
 instance LinearM (ST s) (STArray# s e) e
   where
-    newNull = ST $ \ s1# -> case newArray# 0# (unreachEx "newNull") s1# of
-      (# s2#, marr# #) -> (# s2#, STArray# 0 0 marr# #)
-    
-    nowNull es = return (sizeOf es < 1)
-    
     getHead es = es >! 0
     getLast es = es >! upper es
     
@@ -870,9 +887,7 @@ instance LinearM (ST s) (STArray# s e) e
     foldlM f base = \ arr@(STArray# n _ _) ->
       let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
       in  go (n - 1)
-
-instance SplitM (ST s) (STArray# s e) e
-  where
+    
     takeM n es@(STArray# c o marr#)
       | n <= 0 = newNull
       | n >= c = return es
@@ -925,7 +940,11 @@ instance SplitM (ST s) (STArray# s e) e
 
 instance MapM (ST s) (STArray# s e) Int e
   where
-    newMap' defvalue ascs = fromAssocs' (ascsBounds ascs) defvalue ascs
+    newMap' e ascs = fromAssocs' (ascsBounds ascs) e ascs
+    
+    {-# INLINE writeM' #-}
+    writeM' (STArray# _ (I# o#) marr#) = \ (I# i#) e -> ST $
+      \ s1# -> case writeArray# marr# (o# +# i#) e s1# of s2# -> (# s2#, () #)
     
     (>!) = (!#>)
     
@@ -938,11 +957,7 @@ instance MapM (ST s) (STArray# s e) Int e
 
 instance IndexedM (ST s) (STArray# s e) Int e
   where
-    fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
-    
-    {-# INLINE writeM' #-}
-    writeM' (STArray# _ (I# o#) marr#) = \ (I# i#) e -> ST $
-      \ s1# -> case writeArray# marr# (o# +# i#) e s1# of s2# -> (# s2#, () #)
+    fromAssocs' bnds e ascs = size bnds `filled` e >>= (`overwrite` ascs)
     
     fromIndexed' es = do
       let n = sizeOf es
@@ -983,7 +998,7 @@ pack =  stToMIO . coerce
 
 --------------------------------------------------------------------------------
 
-{- Estimate, Bordered and BorderedM instances. -}
+{- Estimate, Bordered and NullableM instances. -}
 
 instance Estimate (MIOArray# io e)
   where
@@ -1011,6 +1026,15 @@ instance Bordered (MIOArray# io e) Int
     offsetOf (MIOArray# (STArray# c _ _)) = offset (0, c - 1)
     indexIn  (MIOArray# (STArray# c _ _)) = \ i -> i >= 0 && i < c
 
+instance (MonadIO io) => NullableM io (MIOArray# io e)
+  where
+    newNull = pack newNull
+    nowNull = stToMIO . nowNull . unpack
+
+--------------------------------------------------------------------------------
+
+{- BorderedM and LinearM instances. -}
+
 instance (MonadIO io) => BorderedM io (MIOArray# io e) Int
   where
     getIndexOf = return ... indexOf . unpack
@@ -1020,15 +1044,9 @@ instance (MonadIO io) => BorderedM io (MIOArray# io e) Int
     getUpper   = return . upper . unpack
     getLower _ = return 0
 
---------------------------------------------------------------------------------
-
-{- LinearM and SplitM instances. -}
-
 instance (MonadIO io) => LinearM io (MIOArray# io e) e
   where
-    newNull = pack newNull
     singleM = pack . singleM
-    nowNull = stToMIO . nowNull . unpack
     getHead = stToMIO . getHead . unpack
     getLast = stToMIO . getLast . unpack
     
@@ -1070,9 +1088,7 @@ instance (MonadIO io) => LinearM io (MIOArray# io e) e
     foldlM f base arr =
       let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
       in  go (sizeOf arr - 1)
-
-instance (MonadIO io) => SplitM io (MIOArray# io e) e
-  where
+    
     takeM n = pack . takeM n . unpack
     dropM n = pack . dropM n . unpack
     keepM n = pack . keepM n . unpack
@@ -1095,7 +1111,9 @@ instance (MonadIO io) => SplitM io (MIOArray# io e) e
 
 instance (MonadIO io) => MapM io (MIOArray# io e) Int e
   where
-    newMap' defvalue ascs = fromAssocs' (ascsBounds ascs) defvalue ascs
+    newMap' e ascs = fromAssocs' (ascsBounds ascs) e ascs
+    
+    writeM' es = stToMIO ... writeM' (unpack es)
     
     (>!) = (!#>)
     
@@ -1107,8 +1125,6 @@ instance (MonadIO io) => IndexedM io (MIOArray# io e) Int e
   where
     fromAssocs  bnds = pack  .  fromAssocs  bnds
     fromAssocs' bnds = pack ... fromAssocs' bnds
-    
-    writeM' es = stToMIO ... writeM' (unpack es)
     
     fromIndexed' = pack . fromIndexed'
     
@@ -1125,6 +1141,8 @@ instance (MonadIO io) => SortM io (MIOArray# io e) e
 
 --------------------------------------------------------------------------------
 
+{- Thaw and Freeze instances. -}
+
 instance (MonadIO io) => Thaw io (SArray# e) (MIOArray# io e)
   where
     unsafeThaw = pack . unsafeThaw
@@ -1137,6 +1155,17 @@ instance (MonadIO io) => Freeze io (MIOArray# io e) (SArray# e)
 
 --------------------------------------------------------------------------------
 
+{- Thaw and Freeze instances. -}
+
+instance (Storable e) => Thaw IO (SArray# e) (Int, Ptr e)
+  where
+    thaw (SArray# n o arr#) = do
+      ptr <- callocArray n
+      forM_ [o .. n + o - 1] $ \ i@(I# i#) ->
+        let (# e #) = indexArray# arr# i#
+        in  pokeElemOff ptr i e
+      return (n, ptr)
+
 instance (Storable e) => Freeze IO (Int, Ptr e) (SArray# e)
   where
     freeze (n, ptr) = do
@@ -1147,13 +1176,6 @@ instance (Storable e) => Freeze IO (Int, Ptr e) (SArray# e)
         freeze es'
       where
         err = undEx "freeze {(Int, Ptr e) => SArray# e}" `asProxyTypeOf` ptr
-
-instance (Storable e) => Thaw IO (SArray# e) (Int, Ptr e)
-  where
-    thaw (SArray# n o arr#) = do
-      ptr <- callocArray n
-      forM_ [o .. n + o - 1] $ \ i@(I# i#) -> let (# e #) = indexArray# arr# i# in pokeElemOff ptr i e
-      return (n, ptr)
 
 --------------------------------------------------------------------------------
 
@@ -1242,4 +1264,7 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
+
+
 

@@ -18,10 +18,11 @@
 module SDP.LinearM
 (
   -- * Exports
+  module SDP.NullableM,
   module SDP.Linear,
   
   -- * BorderedM class
-  BorderedM (..), BorderedM1, BorderedM2,
+  module SDP.BorderedM,
   
   -- * LinearM class
   LinearM (..), LinearM1, LinearM2,
@@ -33,16 +34,15 @@ module SDP.LinearM
 #if __GLASGOW_HASKELL__ >= 806
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
-  BorderedM', BorderedM'', LinearM', LinearM'',
+  LinearM', LinearM''
 #endif
-  
-  -- ** SplitM class
-  SplitM (..), SplitM1
 )
 where
 
 import Prelude ()
 import SDP.SafePrelude
+import SDP.BorderedM
+import SDP.NullableM
 import SDP.Linear
 import SDP.Map
 
@@ -55,65 +55,15 @@ infixl 5 !#>
 
 --------------------------------------------------------------------------------
 
--- | 'BorderedM' is 'Bordered' version for mutable data structures.
-class (Monad m, Index i) => BorderedM m b i | b -> m, b -> i
-  where
-    {-# MINIMAL (getBounds|getLower, getUpper) #-}
-    
-    -- | 'getBounds' returns 'bounds' of mutable data structure.
-    getBounds :: b -> m (i, i)
-    getBounds es = liftA2 (,) (getLower es) (getUpper es)
-    
-    -- | 'getLower' returns 'lower' bound of mutable data structure.
-    getLower :: b -> m i
-    getLower =  fsts . getBounds
-    
-    -- | 'getUpper' returns 'upper' bound of mutable data structure.
-    getUpper :: b -> m i
-    getUpper =  snds . getBounds
-    
-    -- | 'getSizeOf' returns 'size' of mutable data structure.
-    getSizeOf :: b -> m Int
-    getSizeOf =  fmap size . getBounds
-    
-    -- | 'getSizesOf' returns 'sizes' of mutable data structure.
-    getSizesOf :: b -> m [Int]
-    getSizesOf =  fmap sizes . getBounds
-    
-    -- | 'nowIndexIn' is 'indexIn' version for mutable structures.
-    nowIndexIn :: b -> i -> m Bool
-    nowIndexIn es i = flip inRange i <$> getBounds es
-    
-    -- | 'getOffsetOf' is 'offsetOf' version for mutable structures.
-    getOffsetOf :: b -> i -> m Int
-    getOffsetOf es i = flip offset i <$> getBounds es
-    
-    -- | 'getIndexOf' is 'indexOf' version for mutable structures.
-    getIndexOf :: b -> Int -> m i
-    getIndexOf es i = flip index i <$> getBounds es
-    
-    -- | 'getIndices' returns 'indices' of mutable data structure.
-    getIndices :: b -> m [i]
-    getIndices =  fmap range . getBounds
-
---------------------------------------------------------------------------------
-
 {- |
   'LinearM' is 'Linear' version for mutable data structures. This class is
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m) => LinearM m l e | l -> m, l -> e
+class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
   where
-    {-# MINIMAL (newLinear|fromFoldableM), (getLeft|getRight), (!#>), writeM, copyTo #-}
-    
-    -- | Monadic 'single'.
-    newNull :: m l
-    newNull =  newLinear []
-    
-    -- | Monadic 'isNull'.
-    nowNull :: l -> m Bool
-    nowNull =  fmap isNull . getLeft
+    {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
+        (getLeft|getRight), (!#>), writeM, copyTo #-}
     
     -- | Monadic 'single'.
     singleM :: e -> m l
@@ -174,7 +124,7 @@ class (Monad m) => LinearM m l e | l -> m, l -> e
     getRight :: l -> m [e]
     getRight =  fmap reverse . getLeft
     
-    -- | (!#>) is unsafe monadic offset-based reader.
+    -- | @('!#>')@ is unsafe monadic offset-based reader.
     (!#>) :: l -> Int -> m e
     
     -- | Unsafe monadic offset-based writer.
@@ -194,14 +144,15 @@ class (Monad m) => LinearM m l e | l -> m, l -> e
     {-# INLINE reversed #-}
     reversed :: l -> m l
     reversed =  newLinear <=< getRight
-
+    
     {- |
       @since 0.2.1
-      
       Monadic in-place 'reverse', reverse elements of given structure.
     -}
     reversed' :: l -> m ()
-    reversed' es = mapM_ (uncurry $ writeM es) . assocs =<< getRight es
+    reversed' es = do
+      xs <- getRight es
+      assocs xs `forM_` (uncurry $ writeM es)
     
     -- | Monadic 'concat'.
     merged :: (Foldable f) => f l -> m l
@@ -212,10 +163,7 @@ class (Monad m) => LinearM m l e | l -> m, l -> e
     filled :: Int -> e -> m l
     filled n = newLinearN n . replicate n
     
-    {- |
-      @since 0.2.1
-      @'removed' n es@ removes element with offset @n@ from @es@.
-    -}
+    -- | @'removed' n es@ removes element with offset @n@ from @es@.
     removed :: Int -> l -> m l
     removed n es = newLinear . remove n =<< getLeft es
     
@@ -271,65 +219,48 @@ class (Monad m) => LinearM m l e | l -> m, l -> e
     foldlM' :: (r -> e -> m r) -> r -> l -> m r
     foldlM' f = foldlM (\ !r e -> f r e)
     
-    {- |
-      @since 0.2.1
-      'foldrM1' is 'foldrM' version with 'last' element as base.
-    -}
+    -- | 'foldrM1' is 'foldrM' version with 'last' element as base.
     foldrM1 :: (e -> e -> m e) -> l -> m e
     foldrM1 f = getLeft >=> \ (es :< e) -> foldr ((=<<) . f) (pure e) es
     
-    {- |
-      @since 0.2.1
-      'foldlM1' is 'foldlM' version with 'head' element as base.
-    -}
+    -- | 'foldlM1' is 'foldlM' version with 'head' element as base.
     foldlM1 :: (e -> e -> m e) -> l -> m e
     foldlM1 f = getLeft >=> \ (e :> es) -> foldl (flip $ (=<<) . flip f) (pure e) es
     
     -- | Just swap two elements.
     swapM :: l -> Int -> Int -> m ()
     swapM es i j = do ei <- es !#> i; writeM es i =<< es !#> j; writeM es j ei
-
---------------------------------------------------------------------------------
-
-{- |
-  'SplitM' is 'Split' version for mutable data structures. This class is
-  designed with the possibility of in-place implementation, so many operations
-  from 'Split' have no analogues here.
--}
-class (LinearM m s e) => SplitM m s e
-  where
-    {-# MINIMAL (takeM|sansM), (dropM|keepM) #-}
     
     {- |
       @takeM n es@ returns a reference to the @es@, keeping first @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    takeM :: Int -> s -> m s
-    default takeM :: (BorderedM m s i) => Int -> s -> m s
+    takeM :: Int -> l -> m l
+    default takeM :: (BorderedM m l i) => Int -> l -> m l
     takeM n es = do s <- getSizeOf es; sansM (s - n) es
     
     {- |
       @dropM n es@ returns a reference to the @es@, discarding first @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    dropM :: Int -> s -> m s
-    default dropM :: (BorderedM m s i) => Int -> s -> m s
+    dropM :: Int -> l -> m l
+    default dropM :: (BorderedM m l i) => Int -> l -> m l
     dropM n es = do s <- getSizeOf es; keepM (s - n) es
     
     {- |
       @keepM n es@ returns a reference to the @es@, keeping last @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    keepM :: Int -> s -> m s
-    default keepM :: (BorderedM m s i) => Int -> s -> m s
+    keepM :: Int -> l -> m l
+    default keepM :: (BorderedM m l i) => Int -> l -> m l
     keepM n es = do s <- getSizeOf es; dropM (s - n) es
     
     {- |
       @sansM n es@ returns a reference to the @es@, discarding last @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    sansM :: Int -> s -> m s
-    default sansM :: (BorderedM m s i) => Int -> s -> m s
+    sansM :: Int -> l -> m l
+    default sansM :: (BorderedM m l i) => Int -> l -> m l
     sansM n es = do s <- getSizeOf es; takeM (s - n) es
     
     {- |
@@ -337,7 +268,7 @@ class (LinearM m s e) => SplitM m s e
       discarding first @n@ elements. Changes in the source and result must be
       synchronous.
     -}
-    splitM  :: Int -> s -> m (s, s)
+    splitM :: Int -> l -> m (l, l)
     splitM n es = liftA2 (,) (takeM n es) (dropM n es)
     
     {- |
@@ -345,14 +276,14 @@ class (LinearM m s e) => SplitM m s e
       keeping last @n@ elements. Changes in the source and results must be
       synchronous.
     -}
-    divideM :: Int -> s -> m (s, s)
+    divideM :: Int -> l -> m (l, l)
     divideM n es = liftA2 (,) (sansM n es) (keepM n es)
     
     {- |
       @splitM ns es@ returns the sequence of @es@ prefix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    splitsM :: (Foldable f) => f Int -> s -> m [s]
+    splitsM :: (Foldable f) => f Int -> l -> m [l]
     splitsM ns es =
       let f ds' n = do ds <- ds'; (d,d') <- splitM n (head ds); pure (d':d:ds)
       in  reverse <$> foldl f (pure [es]) ns
@@ -361,7 +292,7 @@ class (LinearM m s e) => SplitM m s e
       @dividesM ns es@ returns the sequence of @es@ suffix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    dividesM :: (Foldable f) => f Int -> s -> m [s]
+    dividesM :: (Foldable f) => f Int -> l -> m [l]
     dividesM ns es =
       let f n ds' = do ds <- ds'; (d, d') <- divideM n (head ds); pure (d':d:ds)
       in  foldr f (pure [es]) ns
@@ -370,37 +301,37 @@ class (LinearM m s e) => SplitM m s e
       @partsM n es@ returns the sequence of @es@ prefix references, splitted by
       offsets in @es@. Changes in the source and results must be synchronous.
     -}
-    partsM :: (Foldable f) => f Int -> s -> m [s]
+    partsM :: (Foldable f) => f Int -> l -> m [l]
     partsM =  splitsM . go . toList where go is = zipWith (-) is (0 : is)
     
     {- |
       @chunksM n es@ returns the sequence of @es@ prefix references of length
       @n@. Changes in the source and results must be synchronous.
     -}
-    chunksM :: Int -> s -> m [s]
+    chunksM :: Int -> l -> m [l]
     chunksM n es = do (t, d) <- splitM n es; nowNull d ?^ pure [t] $ (t :) <$> chunksM n d
     
     {- |
       @eachM n es@ returns new sequence of @es@ elements with step @n@. eachM
       shouldn't return references to @es@.
     -}
-    eachM :: Int -> s -> m s
+    eachM :: Int -> l -> m l
     eachM n = newLinearN n . each n <=< getLeft
     
     -- | @prefixM p es@ returns the longest @es@ prefix size, satisfying @p@.
-    prefixM :: (e -> Bool) -> s -> m Int
+    prefixM :: (e -> Bool) -> l -> m Int
     prefixM p = fmap (prefix p) . getLeft
     
     -- | @suffixM p es@ returns the longest @es@ suffix size, satisfying @p@.
-    suffixM :: (e -> Bool) -> s -> m Int
+    suffixM :: (e -> Bool) -> l -> m Int
     suffixM p = fmap (suffix p) . getLeft
     
     -- | @mprefix p es@ returns the longest @es@ prefix size, satisfying @p@.
-    mprefix :: (e -> m Bool) -> s -> m Int
+    mprefix :: (e -> m Bool) -> l -> m Int
     mprefix p = foldr (\ e c -> do b <- p e; b ? succ <$> c $ pure 0) (pure 0) <=< getLeft
     
     -- | @msuffix p es@ returns the longest @es@ suffix size, satisfying @p@.
-    msuffix :: (e -> m Bool) -> s -> m Int
+    msuffix :: (e -> m Bool) -> l -> m Int
     msuffix p = foldl (\ c e -> do b <- p e; b ? succ <$> c $ pure 0) (pure 0) <=< getLeft
 
 --------------------------------------------------------------------------------
@@ -537,33 +468,20 @@ pattern n :~= field = Prop (Delete n field)
 
 --------------------------------------------------------------------------------
 
--- | 'BorderedM' contraint for @(Type -> Type)@-kind types.
-type BorderedM1 m l i e = BorderedM m (l e) i
-
--- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
-type BorderedM2 m l i e = BorderedM m (l i e) i
-
 -- | 'LinearM' contraint for @(Type -> Type)@-kind types.
 type LinearM1 m l e = LinearM m (l e) e
 
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM2 m l i e = LinearM m (l i e) e
 
--- | Kind @(Type -> Type)@ 'SplitM' structure.
-type SplitM1 m l e = SplitM m (l e) e
-
 #if __GLASGOW_HASKELL__ >= 806
--- | 'BorderedM' contraint for @(Type -> Type)@-kind types.
-type BorderedM' m l i = forall e . BorderedM m (l e) i
-
--- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
-type BorderedM'' m l = forall i e . BorderedM m (l i e) i
 
 -- | 'LinearM' contraint for @(Type -> Type)@-kind types.
 type LinearM' m l = forall e . LinearM m (l e) e
 
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
+
 #endif
 
 

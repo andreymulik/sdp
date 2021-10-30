@@ -1,5 +1,5 @@
 name:          sdp
-version:       0.2.1.2
+version:       0.3
 category:      Data Structures
 
 synopsis:      Simple Data Processing
@@ -51,7 +51,7 @@ source-repository head
 Library
   default-language: Haskell2010
   hs-source-dirs:   src
-
+  
   build-tools: cpphs >=1.19
   ghc-options: -O2 -Wall -Wcompat -pgmPcpphs -optP--cpp -optP-traditional
   
@@ -80,6 +80,10 @@ Library
     SDP.SortM
     
     -- Classes
+    SDP.Forceable
+    SDP.NullableM
+    SDP.BorderedM
+    SDP.Bordered
     SDP.IndexedM
     SDP.LinearM
     SDP.Indexed
@@ -129,11 +133,6 @@ Library
     Control.Concurrent.SDP.TUnlist
     Control.Concurrent.SDP.TUnrolled
     
-    -- Deprecated
-    Control.Concurent.SDP.TArray
-    Control.Concurent.SDP.TUnlist
-    Control.Concurent.SDP.TUnrolled
-    
     -- Service definitions
     Control.Exception.SDP
     
@@ -142,4 +141,5 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
+
 

@@ -45,12 +45,6 @@ default ()
 
 --------------------------------------------------------------------------------
 
-{-# WARNING updates' "deprecated in favor of 'update', will be removed in sdp-0.3" #-}
-{-# WARNING update'  "will be moved to SDP.Map.Map class in sdp-0.3" #-}
-{-# WARNING write'   "will be moved to SDP.Map.Map class in sdp-0.3" #-}
-
---------------------------------------------------------------------------------
-
 -- | 'Indexed' is class of ordered associative arrays with static bounds.
 class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
   where
@@ -74,19 +68,6 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     
     -- | 'fromIndexed' converts this indexed structure to another one.
     fromIndexed :: (Indexed m j e) => m -> v
-    
-    -- | Safe index-based immutable writer.
-    {-# INLINE write' #-}
-    write' :: v -> i -> e -> v
-    write' es = write es . offsetOf es
-    
-    -- | Update element by given function.
-    update' :: v -> (e -> e) -> i -> v
-    update' es f i = write' es i . f $ es!i
-    
-    -- | Create new structure from old by mapping with index.
-    updates' :: v -> (i -> e -> e) -> v
-    updates' es f = bounds es `assoc` [ (i, f i e) | (i, e) <- assocs es ]
     
     {- |
       @'accum' f es ies@ create a new structure from @es@ elements selectively
@@ -151,8 +132,7 @@ type Freeze'' m v' v = forall i e . Freeze m (v' i e) (v i e)
 
 instance Indexed [e] Int e
   where
-    assoc' bnds e = toMap' e . filter (inRange bnds . fst)
-    
+    assoc' bnds  e = toMap' e . filter (inRange bnds . fst)
     fromIndexed es = (es !) <$> indices es
 
 --------------------------------------------------------------------------------

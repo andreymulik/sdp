@@ -18,11 +18,11 @@ module SDP.Unboxed
   
   -- ** Kind @(Type -> Type)@ proxies
   fromProxy, psizeof#, psizeof, pnewUnboxed, pcopyUnboxed, pcopyUnboxedM,
-  pcloneUnboxed, pcloneUnboxedM, pthawUnboxed, pfreezeUnboxed,
+  pcloneUnboxed, pcloneUnboxedM, pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#,
   
   -- ** Kind @(Type -> Type -> Type)@ proxies
   fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
-  cloneUnboxed1#, pcloneUnboxedM1,
+  pcloneUnboxedM1,
   
   -- Wrap helper
   Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#,
@@ -85,7 +85,7 @@ class (Eq e) => Unboxed e
     writeByteArray# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
     
     {-# INLINE fillByteArray# #-}
-    -- | Procedure for filling the array with the default value (like calloc).
+    -- | Procedure for filling the array with the default value.
     fillByteArray# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
     fillByteArray# mbytes# n# e = I# n# > 0 ? go (n# -# 1#) $ \ s1# -> s1#
       where

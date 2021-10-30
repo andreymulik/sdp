@@ -60,7 +60,8 @@ default ()
 -}
 class (Nullable s) => SetWith s o | s -> o
   where
-    {-# MINIMAL intersectionWith, unionWith, differenceWith, lookupLTWith, lookupGTWith #-}
+    {-# MINIMAL intersectionWith, unionWith, differenceWith,
+      lookupLTWith, lookupGTWith #-}
     
     {- Creation functions. -}
     
@@ -374,7 +375,6 @@ instance SetWith [o] o
     lookupGEWith _ _ _ = Nothing
     
     groupSetWith cmp f = map (foldr1 f) . groupBy ((== EQ) ... cmp) . sortBy cmp
-
 
 
 
