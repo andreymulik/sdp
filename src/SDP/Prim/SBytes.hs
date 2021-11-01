@@ -183,6 +183,13 @@ instance Bordered (SBytes# e) Int
   where
     lower = const 0
     
+    rebound bnds es@(SBytes# c o bytes#)
+        | n < 0 = Z
+        | n >= c = es
+        | True = SBytes# n o bytes#
+      where
+        n = size bnds
+    
     sizeOf   (SBytes# c _ _) = c
     upper    (SBytes# c _ _) = c - 1
     bounds   (SBytes# c _ _) = (0, c - 1)
@@ -610,6 +617,13 @@ instance Bordered (STBytes# s e) Int
   where
     bounds (STBytes# c _ _) = (0, c - 1)
     sizeOf (STBytes# c _ _) = c
+    
+    rebound bnds es@(STBytes# c o bytes#)
+        | n < 0 = STBytes# 0 0 bytes#
+        | n < c = STBytes# n o bytes#
+        | True  = es
+      where
+        n = size bnds
 
 --------------------------------------------------------------------------------
 
@@ -838,6 +852,8 @@ instance Estimate (MIOBytes# io e)
 instance Bordered (MIOBytes# io e) Int
   where
     lower = const 0
+    
+    rebound bnds (MIOBytes# es) = MIOBytes# (rebound bnds es)
     
     sizeOf   (MIOBytes# (STBytes# c _ _)) = c
     upper    (MIOBytes# (STBytes# c _ _)) = c - 1
@@ -1131,5 +1147,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
 

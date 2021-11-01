@@ -71,6 +71,8 @@ instance Bordered (TArray# e) Int
     indexOf  (TArray# arr) = index (0, upper arr)
     offsetOf (TArray# arr) = offset (0, upper arr)
     indexIn  (TArray# arr) = \ i -> i >= 0 && i < sizeOf arr
+    
+    rebound bnds (TArray# arr) = TArray# (rebound bnds arr)
 
 --------------------------------------------------------------------------------
 
@@ -213,4 +215,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
 

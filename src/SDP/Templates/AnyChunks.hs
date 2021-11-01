@@ -232,6 +232,14 @@ instance (Bordered1 rep Int e) => Bordered (AnyChunks rep e) Int
     lower   _ = 0
     upper  es = sizeOf es - 1
     bounds es = (0, sizeOf es - 1)
+    
+    rebound bnds es = AnyChunks (size bnds `go` toChunks es)
+      where
+        go c (x : xs) = let s = sizeOf x in case c <=> s of
+          LT -> [defaultBounds c `rebound` x]
+          GT -> x : go (c - s) xs
+          EQ -> [x]
+        go _    []    = []
 
 instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
   where
@@ -647,4 +655,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
+
 

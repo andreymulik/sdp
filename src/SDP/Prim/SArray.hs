@@ -348,6 +348,7 @@ instance Traversable SArray#
 instance Bordered (SArray# e) Int
   where
     lower _ = 0
+    rebound = take . size
     
     sizeOf   (SArray# c _ _) = c
     upper    (SArray# c _ _) = c - 1
@@ -787,6 +788,13 @@ instance Bordered (STArray# s e) Int
     indexOf  (STArray# c _ _) = index (0, c - 1)
     offsetOf (STArray# c _ _) = offset (0, c - 1)
     indexIn  (STArray# c _ _) = \ i -> i >= 0 && i < c
+    
+    rebound bnds es@(STArray# c o arr#)
+        | n < 0 = STArray# 0 0 arr#
+        | n < c = STArray# n o arr#
+        | True  = es
+      where
+        n = size bnds
 
 --------------------------------------------------------------------------------
 
@@ -1007,7 +1015,6 @@ instance Estimate (MIOArray# io e)
     (.>=.) = on (>=)  sizeOf
     (.>.)  = on (>)   sizeOf
     (.<.)  = on (<)   sizeOf
-    
     (<.=>) = (<=>) . sizeOf
     (.>=)  = (>=)  . sizeOf
     (.<=)  = (<=)  . sizeOf
@@ -1017,6 +1024,7 @@ instance Estimate (MIOArray# io e)
 instance Bordered (MIOArray# io e) Int
   where
     lower _ = 0
+    rebound bnds (MIOArray# es) = MIOArray# (rebound bnds es)
     
     sizeOf   (MIOArray# (STArray# c _ _)) = c
     upper    (MIOArray# (STArray# c _ _)) = c - 1
@@ -1264,7 +1272,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
-
-
 

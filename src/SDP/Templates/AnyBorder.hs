@@ -250,6 +250,8 @@ instance (Index i) => Bordered (AnyBorder rep i e) i
     indexOf  (AnyBorder l u _) = index   (l, u)
     indexIn  (AnyBorder l u _) = inRange (l, u)
     offsetOf (AnyBorder l u _) = offset  (l, u)
+    
+    rebound bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
 
 instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep i e) e
   where
@@ -617,4 +619,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
+
 

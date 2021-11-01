@@ -30,8 +30,11 @@ module SDP.Bordered
 )
 where
 
-import SDP.Estimate
+import Prelude ()
+import SDP.SafePrelude
 import SDP.Index
+
+import qualified Data.List as L
 
 default ()
 
@@ -40,7 +43,7 @@ default ()
 -- | Class of bordered data structures.
 class (Index i, Estimate b) => Bordered b i | b -> i
   where
-    {-# MINIMAL (bounds|(lower, upper)) #-}
+    {-# MINIMAL (bounds|(lower, upper)), rebound #-}
     
     {-# INLINE bounds #-}
     {- |
@@ -89,6 +92,25 @@ class (Index i, Estimate b) => Bordered b i | b -> i
     -- | Returns index offset in structure bounds.
     offsetOf :: b -> i -> Int
     offsetOf =  offset . bounds
+    
+    {- |
+      @since 0.3
+      
+      @'rebound' es bnds@ changes structure bounds, if possible - in place.
+      
+      * If given bounds is empty, returns an empty structure (with *any* empty
+      bounds).
+      * If the new range is lesser than the current size of the structure,
+      bounds of a suitable size must be set
+      * If the new range is larger than the current size of the structure, an
+      'UnacceptableExpansion' exception occurs
+      * If the transferred boundaries cannot be set for other reasons,
+      boundaries of the same size should be set.
+      
+      You can calculate new boundaries if given cannot be set in any way. Unless
+      otherwise stated, @'defaultBounds' ('size' bnds)@ is implied.
+    -}
+    rebound :: (i, i) -> b -> b
 
 --------------------------------------------------------------------------------
 
@@ -100,6 +122,7 @@ instance (Index i) => Bordered (i, i) i
     
     indices = range
     indexIn = inRange
+    rebound = const
     
     sizeOf   = size
     indexOf  = index
@@ -107,8 +130,9 @@ instance (Index i) => Bordered (i, i) i
 
 instance Bordered [e] Int
   where
-    sizeOf = length
-    lower  = const 0
+    sizeOf  = length
+    lower   = const 0
+    rebound = L.take . size
     
     upper es = length es - 1
 
@@ -127,4 +151,5 @@ type Bordered' l i = forall e . Bordered (l e) i
 -- | 'Bordered' contraint for @(Type -> Type -> Type)@-kind types.
 type Bordered'' l = forall i e . Bordered (l i e) i
 #endif
+
 
