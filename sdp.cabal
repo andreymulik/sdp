@@ -41,11 +41,14 @@ source-repository head
 ---           | |____ _| |_ | |_/ /| |\ \ | | | || |\ \   | |                ---
 ---           \_____/ \___/ \____/ \_| \_|\_| |_/\_| \_|  \_/                ---
 
+
 Library
   default-language: Haskell2010
   hs-source-dirs:   src
-  
-  ghc-options:      -O2 -Wall -Wcompat
+
+  build-tools: cpphs >=1.19
+
+  ghc-options:    -O2 -Wall -Wcompat -pgmPcpphs -optP--cpp -optP-traditional
   
   build-depends:
     base               >= 4.9 && <   5,
