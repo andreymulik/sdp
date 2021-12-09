@@ -1,5 +1,5 @@
 name:          sdp
-version:       0.2.1
+version:       0.2.1.1
 category:      Data Structures
 
 synopsis:      Simple Data Processing
@@ -137,7 +137,4 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
-
-
-
 

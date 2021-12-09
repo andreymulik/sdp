@@ -1,3 +1,7 @@
+# Version 0.2.1.1
+
+`sdp-0.2.1.1` patch includes macOS `sdp.cabal` fix by flurie.
+
 # Version 0.2.1
 
 `sdp-0.2.1` is the first minor version of `sdp-0.2` that fixes some bugs,
