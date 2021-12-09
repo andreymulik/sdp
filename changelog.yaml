@@ -27,6 +27,16 @@
 
 ---
 
+- version: 0.2.1.1
+  # important
+  dependencies:
+    - package: ghc-prim
+      since: 0.5.3
+      upto: 0.9
+
+  fixes:
+    - macOS build issue (by flurie)
+
 - version: 0.2.1
   # important
   dependencies:

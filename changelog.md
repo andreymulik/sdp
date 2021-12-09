@@ -1,3 +1,10 @@
+# Version 0.2.1.1
+
+`sdp-0.2.1.1` patch includes macOS `sdp.cabal` fix by flurie.
+
+Relaxes `ghc-prim` version restrictions: `ghc-prim-0.7` and `ghc-prim-0.8` are
+now also supported.
+
 # Version 0.2.1
 
 `sdp-0.2.1` is the first minor version of `sdp-0.2` that fixes some bugs,
@@ -74,3 +81,5 @@ the need to proofread a large amount of text in a non-native language.
 Versions below `sdp-0.2` are terrible, so they aren't published and exist only
 in the repository. All changes are documented starting from version `sdp-0.2`,
 `@since` tags - from version `sdp-0.2.1`.
+
+
