@@ -1,5 +1,5 @@
-{-# LANGUAGE Trustworthy, TypeFamilies, TypeOperators #-}
-{-# LANGUAGE UndecidableInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE Trustworthy, UndecidableInstances, FlexibleInstances #-}
 
 {- |
     Module      :  SDP.Finite
@@ -37,7 +37,10 @@ import SDP.SafePrelude
 import SDP.Nullable
 
 import Data.Default.Class
+import Data.Typeable
+import Data.Data
 
+import GHC.Generics
 import GHC.Types
 import GHC.Read
 
@@ -53,7 +56,7 @@ default ()
 {- Zero-dimensional type. -}
 
 -- | Service type, that represents zero-dimensional index.
-data E = E deriving ( Eq, Ord, Show, Read )
+data E = E deriving ( Eq, Ord, Show, Read, Typeable, Data, Generic )
 
 instance Default E where def = E
 
@@ -75,7 +78,7 @@ instance Nullable E where lzero = E; isNull = const True
   N-dimensional index type. The type (head :& tail) allows working with any
   finite dimension number.
 -}
-data tail :& head = !tail :& !head deriving ( Eq, Ord )
+data tail :& head = !tail :& !head deriving ( Eq, Ord, Typeable, Data, Generic )
 
 instance (Enum i) => Enum (E :& i)
   where
@@ -204,7 +207,4 @@ unsnoc :: [i] -> ([i], i)
 unsnoc    [i]   = ([], i)
 unsnoc (i : is) = (i :) `first` unsnoc is
 unsnoc     _    = throw $ UnexpectedRank "in SDP.Finite.fromList"
-
-
-
 
