@@ -76,12 +76,14 @@ class (Eq e) => Unboxed e
     sizeof# :: e -> Int# -> Int#
     sizeof# e c# = case sizeof e (I# c#) of I# n# -> n#
     
+    -- | @since 0.3 Unboxed version of 'chunkof'.
     chunkof# :: e -> (# Int#, Int# #)
     chunkof# e =
       let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 64# l#
       in  (# quotInt# l# d#, quotInt# 64# d# #)
     
     {- |
+      @since 0.3
       The size of the minimum block of memory (in 8-byte words) and the maximum
       number of values in it for a given type.
       
@@ -943,6 +945,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :&
 
 --------------------------------------------------------------------------------
 
+-- | @since 0.3
 instance (Unboxed e) => Unboxed (Maybe e)
   where
     sizeof# e n# = case n# <# 1# of {1# -> 0#; _ -> q# *# cr# +# b# *# cf# +# psizeof# e r#}
@@ -1691,5 +1694,7 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
+
 
 
