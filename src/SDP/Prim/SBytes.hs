@@ -1033,9 +1033,8 @@ fromSBytes# es@(SBytes# c@(I# c#) o@(I# o#) src#) =
 unsafeCoerceSBytes# :: (Unboxed a, Unboxed b) => SBytes# a -> SBytes# b
 unsafeCoerceSBytes# pa@(SBytes# n o arr#) = pb
   where
-    n' = n * s1 `div` s2; s1 = psizeof pa 8
-    o' = o * s1 `div` s2; s2 = psizeof pb 8
-    pb = SBytes# n' o' arr#
+    pb = SBytes# ((n * s1) `div` s2) ((o * s1) `div` s2) arr#
+    s1 = psizeof pa n; s2 = psizeof pb n
 
 -- | 'unpackSTBytes#' returns 'MutableByteArray#' field of 'STBytes#'.
 unpackSTBytes# :: (Unboxed e) => STBytes# s e -> MutableByteArray# s
@@ -1061,9 +1060,8 @@ fromSTBytes# es = \ s1# -> case cloneSTBytes# es of
 unsafeCoerceSTBytes# :: (Unboxed a, Unboxed b) => STBytes# s a -> STBytes# s b
 unsafeCoerceSTBytes# pa@(STBytes# n o arr#) = pb
   where
-    n' = n * s1 `div` s2; s1 = psizeof pa 8
-    o' = o * s1 `div` s2; s2 = psizeof pb 8
-    pb = STBytes# n' o' arr#
+    pb = STBytes# (n * s1 `div` s2) (o * s1 `div` s2) arr#
+    s1 = psizeof pa 8; s2 = psizeof pb 8
 
 {- |
   @'unsafeSBytesToPtr#' es@ byte-wise stores 'SBytes#' content to 'Ptr'. Returns
@@ -1147,4 +1145,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
+
 
