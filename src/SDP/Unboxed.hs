@@ -17,8 +17,9 @@ module SDP.Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
-  fromProxy, psizeof#, psizeof, pnewUnboxed, pcopyUnboxed, pcopyUnboxedM,
-  pcloneUnboxed, pcloneUnboxedM, pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#,
+  psizeof#, psizeof, pchunkof, pchunkof#, pcloneUnboxed, pcloneUnboxedM,
+  fromProxy, pnewUnboxed, pcopyUnboxed, pcopyUnboxedM,
+  pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#,
   
   -- ** Kind @(Type -> Type -> Type)@ proxies
   fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
@@ -63,8 +64,8 @@ class (Eq e) => Unboxed e
     {-# MINIMAL (sizeof#|sizeof), (!#), (!>#), writeByteArray#, newUnboxed #-}
     
     {- |
-      @sizeof e n@ returns the length (in bytes) of primitive, where @n@ - count
-      of elements, @e@ - type parameter.
+      @sizeof e n@ returns the length (in whole bytes with padding) of primitive,
+      where @n@ - count of elements, @e@ - type parameter.
     -}
     {-# INLINE sizeof #-}
     sizeof :: e -> Int -> Int
@@ -74,6 +75,32 @@ class (Eq e) => Unboxed e
     {-# INLINE sizeof# #-}
     sizeof# :: e -> Int# -> Int#
     sizeof# e c# = case sizeof e (I# c#) of I# n# -> n#
+    
+    chunkof# :: e -> (# Int#, Int# #)
+    chunkof# e =
+      let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 64# l#
+      in  (# quotInt# l# d#, quotInt# 64# d# #)
+    
+    {- |
+      The size of the minimum block of memory (in 8-byte words) and the maximum
+      number of values in it for a given type.
+      
+      @
+        -- two 64-bit words, one value
+        chunkof (undefined :: Ratio Int64) === (2, 1)
+        
+        -- one 64-bit word, one value
+        chunkof (undefined :: Int64) === (1, 1)
+        chunkof (undefined :: Int32) === (1, 2)
+        chunkof (undefined ::  Char) === (1, 2)
+        
+        -- one 64-bit word, 64 values
+        chunkof (undefined ::  Bool) === (1, 64)
+      @
+    -}
+    {-# INLINE chunkof #-}
+    chunkof :: e -> (Int, Int)
+    chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
     
     -- | Unsafe 'ByteArray#' reader with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
@@ -214,6 +241,14 @@ psizeof# =  sizeof# . fromProxy
 psizeof :: (Unboxed e) => proxy e -> Int -> Int
 psizeof =  sizeof . fromProxy
 
+-- | @since 0.3 'pchunkof' is proxy version of 'chunkof'.
+pchunkof :: (Unboxed e) => proxy e -> (Int, Int)
+pchunkof =  chunkof . fromProxy
+
+-- | @since 0.3 'pchunkof#' is proxy version of 'chunkof#'.
+pchunkof# :: (Unboxed e) => proxy e -> (# Int#, Int# #)
+pchunkof# e = chunkof# (fromProxy e)
+
 {- |
   @since 0.2
   Kind @(Type -> Type)@ proxy version of 'newUnboxed'.
@@ -333,6 +368,14 @@ instance Unboxed Int
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
+#if SIZEOF_HSWORD == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#elif SIZEOF_HSWORD == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+#endif
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I# (indexIntArray# bytes# i#)
     
@@ -350,6 +393,9 @@ instance Unboxed Int8
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
+    
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 8# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I8# (indexInt8Array# bytes# i#)
@@ -369,6 +415,9 @@ instance Unboxed Int16
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
     
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 4# #)
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I16# (indexInt16Array# bytes# i#)
     
@@ -386,6 +435,9 @@ instance Unboxed Int32
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
+    
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I32# (indexInt32Array# bytes# i#)
@@ -405,6 +457,9 @@ instance Unboxed Int64
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
     
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I64# (indexInt64Array# bytes# i#)
     
@@ -422,6 +477,14 @@ instance Unboxed Word
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
+    
+#if SIZEOF_HSWORD == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#elif SIZEOF_HSWORD == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+#endif
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W# (indexWordArray# bytes# i#)
@@ -441,6 +504,9 @@ instance Unboxed Word8
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
     
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 8# #)
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = W8# (indexWord8Array# bytes# i#)
     
@@ -458,6 +524,9 @@ instance Unboxed Word16
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
+    
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 4# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W16# (indexWord16Array# bytes# i#)
@@ -477,6 +546,9 @@ instance Unboxed Word32
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = W32# (indexWord32Array# bytes# i#)
     
@@ -494,6 +566,9 @@ instance Unboxed Word64
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
+    
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W64# (indexWord64Array# bytes# i#)
@@ -513,6 +588,11 @@ instance Unboxed Float
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSFLOAT
     
+#if SIZEOF_HSFLOAT == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#endif
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = F# (indexFloatArray# bytes# i#)
     
@@ -530,6 +610,11 @@ instance Unboxed Double
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSDOUBLE
+    
+#if SIZEOF_HSDOUBLE == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#endif
     
     {-# INLINE (!#) #-}
     bytes# !# i# = D# (indexDoubleArray# bytes# i#)
@@ -588,6 +673,14 @@ instance Unboxed (Ptr a)
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
+#if SIZEOF_HSWORD == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#elif SIZEOF_HSWORD == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+#endif
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = Ptr (indexAddrArray# bytes# i#)
     
@@ -606,6 +699,14 @@ instance Unboxed (FunPtr a)
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
+#if SIZEOF_HSWORD == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#elif SIZEOF_HSWORD == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+#endif
+    
     {-# INLINE (!#) #-}
     bytes#  !#  i# = FunPtr (indexAddrArray# bytes# i#)
     
@@ -623,6 +724,14 @@ instance Unboxed (StablePtr a)
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
+    
+#if SIZEOF_HSWORD == 4
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
+#elif SIZEOF_HSWORD == 8
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 1# #)
+#endif
     
     {-# INLINE (!#) #-}
     bytes# !# i# = StablePtr (indexStablePtrArray# bytes# i#)
@@ -698,6 +807,9 @@ instance Unboxed Bool
     {-# INLINE sizeof #-}
     sizeof _ c = d == 0 ? n $ n + 1 where (n, d) = max 0 c `divMod` 8
     
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 64# #)
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = isTrue# ((indexWordArray# bytes# (bool_index i#) `and#` bool_bit i#) `neWord#` int2Word# 0#)
     
@@ -756,6 +868,9 @@ instance Unboxed Char
   where
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
+    
+    {-# INLINE chunkof# #-}
+    chunkof# _ = (# 1#, 2# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = C# (indexWideCharArray# bytes# i#)
@@ -1468,6 +1583,10 @@ pconcat = concat# . fromProxy
 rank# :: (Shape i) => i -> Int#
 rank# i = case rank i of I# r# -> r#
 
+gcd# :: Int# -> Int# -> Int#
+gcd# a# 0# = a#
+gcd# a# b# = gcd# b# (remInt# a# b#)
+
 {-# INLINE bool_scale #-}
 bool_scale :: Int# -> Int#
 bool_scale n# = (n# +# 7#) `uncheckedIShiftRA#` 3#
@@ -1491,5 +1610,6 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
 
 
