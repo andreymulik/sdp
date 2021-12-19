@@ -943,6 +943,79 @@ instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :&
 
 --------------------------------------------------------------------------------
 
+instance (Unboxed e) => Unboxed (Maybe e)
+  where
+    sizeof# e n# = case n# <# 1# of {1# -> 0#; _ -> q# *# cr# +# b# *# cf# +# psizeof# e r#}
+      where
+        !(# q#, r# #) = n# `quotRemInt#` 64#; b# = r# /=# 0#
+        !(# l#, c# #) = pchunkof# e
+        
+        cd# = 8# *# l# *# quotInt# co# c# -- data bytes
+        cf# = 8# *# quotInt# co# 64#      -- flag bytes
+        co# = lcm# c# 64#
+        cr# = cf# +# cd#
+    
+    bytes# !# i# = go undefined
+      where
+        go e = if bytes# !# off1# then Just (bytes# !# off2#) else asTypeOf Z e
+          where
+            !(# q#, r# #) = quotRemInt# i# 64#
+            !(#  _, c# #) = chunkof# e
+            
+            off2# = off1# +# quotInt# (lcm# c# 64#) 64#
+            off1# = sizeof# e q# *# 64# +# r#
+    
+    mbytes# !># i# = go undefined
+      where
+        go e = \ s1# -> case (!>#) mbytes# off1# s1# of
+          (# s2#, b #) -> case b of
+            False -> (# s2#, Nothing #)
+            True  -> case (!>#) mbytes# off2# s2# of
+              (# s3#, res #) -> (# s3#, res `asTypeOf` e #)
+          where
+            !(# q#, r# #) = quotRemInt# i# 64#
+            !(#  _, c# #) = chunkof# e
+            
+            off2# = off1# +# quotInt# (lcm# c# 64#) 64#
+            off1# = sizeof# e q# *# 64# +# r#
+    
+    fillByteArray# mbytes# n# e@Nothing = setByteArray# mbytes# 0# (sizeof# e n#) 0x00#
+    
+    fillByteArray# mbytes# n# e@(Just x) =
+      \ s1# -> case setByteArray# mbytes# 0# (sizeof# e n#) 0xff# s1# of
+        s2# -> if isTrue# (n# ># 0#) then go (n# -# 1#) s2# else s2#
+      where
+        go 0# s1# = writeByteArray# mbytes# off# x s1#
+          where
+            off# = lcm# co# 64# `quotInt#` 64#
+            !(# _, co# #) = pchunkof# e
+        
+        go i# s1# = go (i# -# 1#) (writeByteArray# mbytes# off# e s1#)
+          where
+            off# = sizeof# e q# *# 8# +# r# +# quotInt# (lcm# c# 64#) 64#
+            
+            !(# q#, r# #) = quotRemInt# i# 64#
+            !(#  _, c# #) = chunkof# e
+    
+    writeByteArray# mbytes# i# e@Nothing = writeByteArray# mbytes# off1# False
+      where
+        !(# q#, r# #) = quotRemInt# i# 64#
+        off1# = sizeof# e q# *# 64# +# r#
+    
+    writeByteArray# mbytes# i# e@(Just x) =
+        \ s1# -> case writeByteArray# mbytes# off1# True s1# of
+          s2# -> writeByteArray# mbytes# off2# x s2#
+      where
+        !(# q#, r# #) = quotRemInt# i# 64#
+        !(#  _, c# #) = chunkof# e
+        
+        off2# = off1# +# quotInt# (lcm# c# 64#) 64#
+        off1# = sizeof# e q# *# 64# +# r#
+    
+    newUnboxed = newUnboxed' . asTypeOf Nothing
+
+--------------------------------------------------------------------------------
+
 {- Tuple instances. -}
 
 instance Unboxed ()
@@ -1580,12 +1653,20 @@ pconcat = concat# . fromProxy
 
 --------------------------------------------------------------------------------
 
+{-# INLINE rank# #-}
 rank# :: (Shape i) => i -> Int#
 rank# i = case rank i of I# r# -> r#
 
+{-# INLINE gcd# #-}
 gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
+
+{-# INLINE lcm# #-}
+lcm# :: Int# -> Int# -> Int#
+lcm# _  0# = 0#
+lcm# 0#  _ = 0#
+lcm# x# y# = quotInt# x# (gcd# x# y#) *# y#
 
 {-# INLINE bool_scale #-}
 bool_scale :: Int# -> Int#
@@ -1610,6 +1691,5 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
 
 
