@@ -145,7 +145,7 @@ instance Bordered [e] Int
 {-# RULES
   "select/Just"  select  Just = listL;
   "select'/Just" select' Just = id;
-#-}
+  #-}
 
 {- |
   Class of list-like data structures, which
