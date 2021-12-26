@@ -656,7 +656,7 @@ instance (Unboxed e) => LinearM (ST s) (STBytes# s e) e
     getRight es@(STBytes# n _ _) = (es !#>) `mapM` [n - 1, n - 2 .. 0]
     
     {-# INLINE (!#>) #-}
-    STBytes# _ (I# o#) marr# !#> I# i# = ST $ marr# !># (o# +# i#)
+    STBytes# _ (I# o#) marr# !#> I# i# = ST $ readUnboxed# marr# (o# +# i#)
     
     writeM = writeM'
     
@@ -772,7 +772,7 @@ instance (Unboxed e) => MapM (ST s) (STBytes# s e) Int e
     
     {-# INLINE writeM' #-}
     writeM' (STBytes# _ (I# o#) marr#) = \ (I# i#) e -> ST $
-      \ s1# -> case writeByteArray# marr# (o# +# i#) e s1# of
+      \ s1# -> case writeUnboxed# marr# (o# +# i#) e s1# of
         s2# -> (# s2#, () #)
     
     (>!) = (!#>)
@@ -1095,7 +1095,7 @@ unsafePtrToSBytes# (c, ptr) = do
   
   forM_ [0 .. n - 1] $ \ i@(I# i#) -> do
     e <- peekByteOff ptr i :: IO Word8
-    stToIO $ ST $ \ s1# -> case writeByteArray# arr# i# e s1# of
+    stToIO $ ST $ \ s1# -> case writeUnboxed# arr# i# e s1# of
       s2# -> (# s2#, () #)
   
   stToIO (done es)

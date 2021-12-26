@@ -17,8 +17,8 @@ module SDP.Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
-  psizeof#, psizeof, pchunkof, pchunkof#, pcloneUnboxed, pcloneUnboxedM,
-  fromProxy, pnewUnboxed, pcopyUnboxed, pcopyUnboxedM,
+  fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
+  pnewUnboxed, pcopyUnboxed, pcopyUnboxedM, pcloneUnboxed, pcloneUnboxedM,
   pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#,
   
   -- ** Kind @(Type -> Type -> Type)@ proxies
@@ -26,7 +26,7 @@ module SDP.Unboxed
   pcloneUnboxedM1,
   
   -- Wrap helper
-  Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#,
+  Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#, calloc#,
   newLinear#, newLinearN#, fromFoldableM#, concat#, pconcat
 )
 where
@@ -55,18 +55,57 @@ default ()
 
 --------------------------------------------------------------------------------
 
+{-# DEPRECATED (!>#) "in favor of readUnboxed#, will be removed in sdp-0.4" #-}
+{-# DEPRECATED writeByteArray# "in favor of writeUnboxed#, will be removed in sdp-0.4" #-}
+
 {- |
   'Unboxed' is a layer between untyped raw data and parameterized unboxed data
   structures. Also it prevents direct interaction with primitives.
 -}
 class (Eq e) => Unboxed e
   where
-    {-# MINIMAL (sizeof#|sizeof), (!#), (!>#), writeByteArray#, newUnboxed #-}
+    {-# MINIMAL (sizeof#|sizeof), (!#), ((!>#)|readUnboxed#|readUnboxedOff#),
+                (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
     
     {- |
-      @sizeof e n@ returns the length (in whole bytes with padding) of primitive,
-      where @n@ - count of elements, @e@ - type parameter.
+      @since 0.3
+      
+      Default value for clearing memory.
+      
+      @
+        'newUnboxed'' 'filler' = 'newUnboxed' (x `'asTypeOf'` 'filler')
+        -- ^ forall x, but 'newUnboxed' can be faster
+      @
     -}
+    filler :: e
+    filler =
+      let res = runST $ ST $ \ s1# -> case newUnboxed res 1# s1# of
+            (# s2#, marr# #) -> readUnboxed# marr# 0# s2#
+      in  res
+    
+    {- |
+      @since 0.3
+      
+      @offsetof# e o#@ returns the index of the element in the unboxed array
+      that the offset @o#@ corresponds to (in bytes).
+      
+      @
+        offsetof# e (sizeof# e (8# *# i#)) === 8# *# i#
+        
+        offsetof#       False   3# === 24#
+        offsetof# (0 :: Int32) 12# ===  3#
+      @
+    -}
+    {-# INLINE offsetof# #-}
+    offsetof# :: e -> Int# -> Int#
+    offsetof# e i# = case i# ># 0# of {1# -> (8# *# i#) `quotInt#` sizeof# e 8#; _ -> 0#}
+    
+    -- | @since 0.3 See 'offsetof#'.
+    {-# INLINE offsetof #-}
+    offsetof :: e -> Int -> Int
+    offsetof e (I# i#) = I# (offsetof# e i#)
+    
+    -- | See 'sizeof#'.
     {-# INLINE sizeof #-}
     sizeof :: e -> Int -> Int
     sizeof e (I# c#) = I# (sizeof# e c#)
@@ -76,56 +115,106 @@ class (Eq e) => Unboxed e
     sizeof# :: e -> Int# -> Int#
     sizeof# e c# = case sizeof e (I# c#) of I# n# -> n#
     
-    -- | @since 0.3 Unboxed version of 'chunkof'.
-    chunkof# :: e -> (# Int#, Int# #)
-    chunkof# e =
-      let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 64# l#
-      in  (# quotInt# l# d#, quotInt# 64# d# #)
-    
     {- |
       @since 0.3
+      
       The size of the minimum block of memory (in 8-byte words) and the maximum
       number of values in it for a given type.
       
       @
         -- two 64-bit words, one value
-        chunkof (undefined :: Ratio Int64) === (2, 1)
+        chunkof# (undefined :: Ratio Int64) === (# 2#, 1# #)
         
         -- one 64-bit word, one value
-        chunkof (undefined :: Int64) === (1, 1)
-        chunkof (undefined :: Int32) === (1, 2)
-        chunkof (undefined ::  Char) === (1, 2)
+        chunkof# (undefined :: Int64) === (# 1#, 1# #)
+        chunkof# (undefined :: Int32) === (# 1#, 2# #)
+        chunkof# (undefined ::  Char) === (# 1#, 2# #)
         
         -- one 64-bit word, 64 values
-        chunkof (undefined ::  Bool) === (1, 64)
+        chunkof# (undefined ::  Bool) === (# 1#, 64# #)
       @
     -}
+    chunkof# :: e -> (# Int#, Int# #)
+    chunkof# e =
+      let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 64# l#
+      in  (# quotInt# l# d#, quotInt# 64# d# #)
+    
     {-# INLINE chunkof #-}
+    -- | @since 0.3 See 'chunkof#'.
     chunkof :: e -> (Int, Int)
     chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
     
-    -- | Unsafe 'ByteArray#' reader with overloaded result type.
+    -- | Unsafe 'ByteArray#' reader (by index) with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
     
-    -- | Unsafe 'MutableByteArray#' reader with overloaded result type.
-    (!>#) :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
+    {- |
+      @since 0.3
+      
+      Unsafe 'ByteArray#' (by offset) reader with overloaded result type.
+    -}
+    indexUnboxedOff# :: ByteArray# -> Int# -> e
+    indexUnboxedOff# bytes# o# = let e = bytes# !# (offsetof# e o#) in e
     
-    -- | Unsafe 'MutableByteArray#' writer.
+    {- |
+      Unsafe reader for unboxed data (by index). Defined only on non-negative
+      indices not exceeding the number of elements in the given array.
+    -}
+    (!>#) :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
+    (!>#) =  readUnboxed#
+    
+    {- |
+      @since 0.3
+      
+      Unsafe reader for unboxed data (by index). Defined only on non-negative
+      indices not exceeding the number of elements in the given array.
+    -}
+    readUnboxed# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
+    readUnboxed# mbytes# i# = go undefined
+      where
+        go e = \ s1# -> case readUnboxedOff# mbytes# (sizeof# e i#) s1# of
+          (# s2#, res #) -> (# s2#, res `asTypeOf` e #)
+    
+    {- |
+      @sinze 0.3
+      
+      Unsafe reader for unboxed data (by offset).
+    -}
+    {-# INLINE readUnboxedOff# #-}
+    readUnboxedOff# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
+    readUnboxedOff# mbytes# o# = go undefined
+      where
+        go e = \ s1# -> case (!>#) mbytes# (offsetof# e o#) s1# of
+          (# s2#, res #) -> (# s2#, res `asTypeOf` e #)
+    
+    {-# INLINE writeByteArray# #-}
+    -- | Unsafe 'MutableByteArray#' writer (by index).
     writeByteArray# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
+    writeByteArray# =  writeUnboxed#
+    
+    {-# INLINE writeUnboxed# #-}
+    -- | @since 0.3 Unsafe unboxed writer (by index).
+    writeUnboxed# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
+    writeUnboxed# =  writeByteArray#
+    
+    {-# INLINE writeUnboxedOff# #-}
+    -- | @since 0.3 Unsafe unboxed writer (by offset).
+    writeUnboxedOff# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
+    writeUnboxedOff# mbytes# o# e = writeUnboxed# mbytes# (offsetof# e o#) e
     
     {-# INLINE fillByteArray# #-}
     -- | Procedure for filling the array with the default value.
     fillByteArray# :: MutableByteArray# s -> Int# -> e -> State# s -> State# s
     fillByteArray# mbytes# n# e = I# n# > 0 ? go (n# -# 1#) $ \ s1# -> s1#
       where
-        go 0# s2# = writeByteArray# mbytes# 0# e s2#
-        go c# s2# = go (c# -# 1#) (writeByteArray# mbytes# c# e s2#)
+        go 0# s2# = writeUnboxed# mbytes# 0# e s2#
+        go c# s2# = go (c# -# 1#) (writeUnboxed# mbytes# c# e s2#)
     
     {- |
       'newUnboxed' creates new 'MutableByteArray#' of given count of elements.
       First argument used as type variable.
     -}
     newUnboxed :: e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
+    newUnboxed =  newUnboxed' . asTypeOf filler
     
     {-# INLINE newUnboxed' #-}
     {- |
@@ -251,6 +340,12 @@ pchunkof =  chunkof . fromProxy
 pchunkof# :: (Unboxed e) => proxy e -> (# Int#, Int# #)
 pchunkof# e = chunkof# (fromProxy e)
 
+poffsetof# :: (Unboxed e) => proxy e -> Int# -> Int#
+poffsetof# e = offsetof# (fromProxy e)
+
+poffsetof :: (Unboxed e) => proxy e -> Int -> Int
+poffsetof =  offsetof . fromProxy
+
 {- |
   @since 0.2
   Kind @(Type -> Type)@ proxy version of 'newUnboxed'.
@@ -367,6 +462,8 @@ pcloneUnboxedM1 =  cloneUnboxedM# . fromProxy1
 
 instance Unboxed Int
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
@@ -378,105 +475,130 @@ instance Unboxed Int
     chunkof# _ = (# 1#, 1# #)
 #endif
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I# (indexIntArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readIntArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readIntArray# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, I# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (I# e#) = writeIntArray# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (I# e#) = writeIntArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Int)
+    newUnboxed = calloc#
 
 instance Unboxed Int8
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 8# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I8# (indexInt8Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readInt8Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readInt8Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, I8# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (I8# e#) = writeInt8Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (I8# e#) = writeInt8Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Int8)
+    newUnboxed = calloc#
 
 instance Unboxed Int16
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 4# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I16# (indexInt16Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readInt16Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readInt16Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, I16# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (I16# e#) = writeInt16Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (I16# e#) = writeInt16Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Int16)
+    newUnboxed = calloc#
 
 instance Unboxed Int32
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I32# (indexInt32Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readInt32Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readInt32Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, I32# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (I32# e#) = writeInt32Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (I32# e#) = writeInt32Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Int32)
+    newUnboxed = calloc#
 
 instance Unboxed Int64
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = I64# (indexInt64Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readInt64Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readInt64Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, I64# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (I64# e#) = writeInt64Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (I64# e#) = writeInt64Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Int64)
+    newUnboxed = calloc#
 
 instance Unboxed Word
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
@@ -488,21 +610,26 @@ instance Unboxed Word
     chunkof# _ = (# 1#, 1# #)
 #endif
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = W# (indexWordArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWordArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWordArray# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, W# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (W# e#) = writeWordArray# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (W# e#) = writeWordArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Word)
+    newUnboxed = calloc#
 
 instance Unboxed Word8
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
     
@@ -512,18 +639,23 @@ instance Unboxed Word8
     {-# INLINE (!#) #-}
     bytes# !# i# = W8# (indexWord8Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, W8# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (W8#  e#) = writeWord8Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (W8#  e#) = writeWord8Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Word8)
+    newUnboxed = calloc#
 
 instance Unboxed Word16
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
     
@@ -533,60 +665,75 @@ instance Unboxed Word16
     {-# INLINE (!#) #-}
     bytes# !# i# = W16# (indexWord16Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, W16# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (W16# e#) = writeWord16Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (W16# e#) = writeWord16Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Word16)
+    newUnboxed = calloc#
 
 instance Unboxed Word32
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = W32# (indexWord32Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord32Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord32Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, W32# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (W32# e#) = writeWord32Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (W32# e#) = writeWord32Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Word32)
+    newUnboxed = calloc#
 
 instance Unboxed Word64
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = W64# (indexWord64Array# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord64Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord64Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, W64# e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (W64# e#) = writeWord64Array# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (W64# e#) = writeWord64Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Word64)
+    newUnboxed = calloc#
 
 instance Unboxed Float
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSFLOAT
     
@@ -595,21 +742,26 @@ instance Unboxed Float
     chunkof# _ = (# 1#, 2# #)
 #endif
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSFLOAT#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = F# (indexFloatArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readFloatArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readFloatArray# mbytes# i# s1# of
       (# s2#, f# #) -> (# s2#, F# f# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (F# e#) = writeFloatArray# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (F# e#) = writeFloatArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Float)
+    newUnboxed = calloc#
 
 instance Unboxed Double
   where
+    filler = 0
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSDOUBLE
     
@@ -618,50 +770,57 @@ instance Unboxed Double
     chunkof# _ = (# 1#, 2# #)
 #endif
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSDOUBLE#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = D# (indexDoubleArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readDoubleArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readDoubleArray# mbytes# i# s1# of
       (# s2#, d# #) -> (# s2#, D# d# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (D# e#) = writeDoubleArray# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (D# e#) = writeDoubleArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' (0 :: Double)
+    newUnboxed = calloc#
 
 instance (Unboxed a, Integral a) => Unboxed (Ratio a)
   where
+    filler = 0 :% 0
+    
     sizeof e n = 2 * psizeof e n
     
     bytes# !# i# = bytes# !# i2# :% (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
     
-    mbytes# !># i# = let i2# = 2# *# i# in \ s1# -> case (!>#) mbytes# i2# s1# of
-      (# s2#, n #) -> case (!>#) mbytes# (i2# +# 1#) s2# of
-        (# s3#, d #) -> (# s3#, n :% d #)
+    readUnboxed# mbytes# i# = let i2# = 2# *# i# in
+      \ s1# -> case readUnboxed# mbytes# i2# s1# of
+        (# s2#, n #) -> case readUnboxed# mbytes# (i2# +# 1#) s2# of
+          (# s3#, d #) -> (# s3#, n :% d #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# i# (n :% d) = let i2# = 2# *# i# in
-      \ s1# -> case writeByteArray# mbytes# i2# n s1# of
-        s2# -> writeByteArray# mbytes# (i2# +# 1#) d s2#
-    
-    {-# INLINE newUnboxed #-}
-    newUnboxed e n# = pnewUnboxed e (2# *# n#)
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# i# (n :% d) = let i2# = 2# *# i# in
+      \ s1# -> case writeUnboxed# mbytes# i2# n s1# of
+        s2# -> writeUnboxed# mbytes# (i2# +# 1#) d s2#
 
 instance (Unboxed a, Num a) => Unboxed (Complex a)
   where
+    filler = 0 :+ 0
+    
     sizeof e n = 2 * psizeof e n
     
     bytes#  !#  i# = bytes# !# i2# :+ (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
-    mbytes# !># i# = let i2# = 2# *# i# in \ s1# -> case (!>#) mbytes# i2# s1# of
-      (# s2#, n #) -> case (!>#) mbytes# (i2# +# 1#) s2# of
-        (# s3#, d #) -> (# s3#, n :+ d #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# i# (n :+ d) = let i2# = 2# *# i# in
-      \ s1# -> case writeByteArray# mbytes# i2# n s1# of
-        s2# -> writeByteArray# mbytes# (i2# +# 1#) d s2#
+    readUnboxed# mbytes# i# = let i2# = 2# *# i# in
+      \ s1# -> case readUnboxed# mbytes# i2# s1# of
+        (# s2#, n #) -> case readUnboxed# mbytes# (i2# +# 1#) s2# of
+          (# s3#, d #) -> (# s3#, n :+ d #)
+    
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# i# (n :+ d) = let i2# = 2# *# i# in
+      \ s1# -> case writeUnboxed# mbytes# i2# n s1# of
+        s2# -> writeUnboxed# mbytes# (i2# +# 1#) d s2#
     
     {-# INLINE newUnboxed #-}
     newUnboxed e n# = pnewUnboxed e (2# *# n#)
@@ -672,6 +831,8 @@ instance (Unboxed a, Num a) => Unboxed (Complex a)
 
 instance Unboxed (Ptr a)
   where
+    filler = NULL
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
@@ -682,22 +843,27 @@ instance Unboxed (Ptr a)
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
 #endif
+    
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = Ptr (indexAddrArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readAddrArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readAddrArray# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, Ptr e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (Ptr e) = writeAddrArray# mbytes# n# e
-
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (Ptr e) = writeAddrArray# mbytes# n# e
+    
     {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' nullPtr
+    newUnboxed = calloc#
 
 instance Unboxed (FunPtr a)
   where
+    filler = NULL
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
@@ -708,22 +874,27 @@ instance Unboxed (FunPtr a)
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
 #endif
+    
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = FunPtr (indexAddrArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readAddrArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readAddrArray# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, FunPtr e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (FunPtr e) = writeAddrArray# mbytes# n# e
-
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (FunPtr e) = writeAddrArray# mbytes# n# e
+    
     {-# INLINE newUnboxed #-}
-    newUnboxed e = newUnboxed' (NULL `asTypeOf` e)
+    newUnboxed = calloc#
 
 instance Unboxed (StablePtr a)
   where
+    filler = NULL
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * SIZEOF_HSWORD
     
@@ -735,18 +906,21 @@ instance Unboxed (StablePtr a)
     chunkof# _ = (# 1#, 1# #)
 #endif
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = StablePtr (indexStablePtrArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readStablePtrArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readStablePtrArray# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, StablePtr e# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (StablePtr e) = writeStablePtrArray# mbytes# n# e
-
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (StablePtr e) = writeStablePtrArray# mbytes# n# e
+    
     {-# INLINE newUnboxed #-}
-    newUnboxed e = newUnboxed' (NULL `asTypeOf` e)
+    newUnboxed = calloc#
 
 --------------------------------------------------------------------------------
 
@@ -755,10 +929,11 @@ instance Unboxed (StablePtr a)
 #define deriving_instance_Unboxed(Type)\
 instance Unboxed Type where\
 {\
+  filler = Type filler;\
   sizeof e = sizeof (consSizeof Type e);\
   arr# !# i# = Type ( arr# !# i# );\
-  marr# !># i# = \ s1# -> case (!>#) marr# i# s1# of {(# s2#, e #) -> (# s2#, Type e #)};\
-  writeByteArray# marr# i# (Type e) = writeByteArray# marr# i# e;\
+  readUnboxed# marr# i# = \ s1# -> case readUnboxed# marr# i# s1# of {(# s2#, e #) -> (# s2#, Type e #)};\
+  writeUnboxed# marr# i# (Type e) = writeUnboxed# marr# i# e;\
   fillByteArray#  marr# i# (Type e) = fillByteArray#  marr# i# e;\
   newUnboxed  (Type e) = newUnboxed  e;\
   newUnboxed' (Type e) = newUnboxed' e;\
@@ -806,38 +981,43 @@ deriving_instance_Unboxed(CSigAtomic)
 
 instance Unboxed Bool
   where
+    filler = False
+    
     {-# INLINE sizeof #-}
     sizeof _ c = d == 0 ? n $ n + 1 where (n, d) = max 0 c `divMod` 8
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 64# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> 8# *# i#; _ -> 0#}
+    
+    {-# INLINE newUnboxed #-}
+    newUnboxed = calloc#
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = isTrue# ((indexWordArray# bytes# (bool_index i#) `and#` bool_bit i#) `neWord#` int2Word# 0#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWordArray# mbytes# (bool_index i#) s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWordArray# mbytes# (bool_index i#) s1# of
       (# s2#, e# #) -> (# s2#, isTrue# ((e# `and#` bool_bit i#) `neWord#` int2Word# 0#) #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# e = \ s1# -> case readWordArray# mbytes# i# s1# of
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# e = \ s1# -> case readWordArray# mbytes# i# s1# of
         (# s2#, old_byte# #) -> writeWordArray# mbytes# i# (bitWrite old_byte#) s2#
       where
         bitWrite old_byte# = if e then old_byte# `or#` bool_bit n# else old_byte# `and#` bool_not_bit n#
         i# = bool_index n#
     
-    {-# INLINE newUnboxed #-}
-    newUnboxed _ = newUnboxed' False
-    
     fillByteArray# mbytes# n# e =
       setByteArray# mbytes# 0# (bool_scale n#) (if e then 0xff# else 0#)
     
     copyUnboxed# e bytes# o1# mbytes# o2# c# = isTrue# (c# <# 1#) ? (\ s1# -> s1#) $
-      \ s1# -> case writeByteArray# mbytes# o2# ((bytes# !# o1#) `asTypeOf` e) s1# of
+      \ s1# -> case writeUnboxed# mbytes# o2# ((bytes# !# o1#) `asTypeOf` e) s1# of
         s2# -> copyUnboxed# e bytes# (o1# +# 1#) mbytes# (o2# +# 1#) (c# -# 1#) s2#
     
-    copyUnboxedM# e src# o1# mbytes# o2# n# = \ s1# -> case (!>#) src# o1# s1# of
-      (# s2#, x #) -> case writeByteArray# mbytes# o2# (x `asTypeOf` e) s2# of
+    copyUnboxedM# e src# o1# mbytes# o2# n# = \ s1# -> case readUnboxed# src# o1# s1# of
+      (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
         s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
     hashUnboxedWith e len# off# bytes#
@@ -868,52 +1048,63 @@ instance Unboxed Bool
 
 instance Unboxed Char
   where
+    filler = '\0'
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    
     {-# INLINE (!#) #-}
     bytes# !# i# = C# (indexWideCharArray# bytes# i#)
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWideCharArray# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWideCharArray# mbytes# i# s1# of
       (# s2#, c# #) -> (# s2#, C# c# #)
     
-    {-# INLINE writeByteArray# #-}
-    writeByteArray# mbytes# n# (C# e#) = writeWideCharArray# mbytes# n# e#
+    {-# INLINE writeUnboxed# #-}
+    writeUnboxed# mbytes# n# (C# e#) = writeWideCharArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed e n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-      (# s2#, mbytes# #) -> case fillByteArray# mbytes# n# '\0' s2# of
-        s3# -> (# s3#, mbytes# #)
+    newUnboxed = calloc#
 
 instance Unboxed E
   where
+    filler = E
+    
     {-# INLINE sizeof #-}
     sizeof _ _ = 0
     
+    {-# INLINE offsetof# #-}
+    offsetof# _ _ = 0#
+    
     {-# INLINE (!#) #-}
-    (!>#) = \ _ _ s# -> (# s#, E #)
+    readUnboxed# = \ _ _ s# -> (# s#, E #)
     (!#)  = \ _ _ -> E
     
     newUnboxed  _ _ = newByteArray# 0#
     newUnboxed' _ _ = newByteArray# 0#
     
-    writeByteArray# _ _ = \ _ s# -> s#
+    writeUnboxed#   _ _ = \ _ s# -> s#
     fillByteArray#  _ _ = \ _ s# -> s#
 
 instance (Unboxed e) => Unboxed (I1 e)
   where
+    filler = E :& filler
+    
     sizeof# = psizeof#
     sizeof  = psizeof
     
-    bytes# !#  i# = E :& (bytes# !# i#)
-    bytes# !># i# = \ s1# -> case (!>#) bytes# i# s1# of
+    bytes# !# i# = E :& (bytes# !# i#)
+    
+    readUnboxed# bytes# i# = \ s1# -> case readUnboxed# bytes# i# s1# of
       (# s2#, e #) -> (# s2#, E :& e #)
     
-    writeByteArray# bytes# n# (E :& e) = writeByteArray# bytes# n# e
+    writeUnboxed# bytes# n# (E :& e) = writeUnboxed# bytes# n# e
     fillByteArray#  bytes# n# (E :& e) = fillByteArray#  bytes# n# e
     
     newUnboxed' = \ (E :& i) -> newUnboxed i
@@ -921,6 +1112,8 @@ instance (Unboxed e) => Unboxed (I1 e)
 
 instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e)) => Unboxed (e' :& e :& e)
   where
+    filler = filler :& filler
+    
     sizeof# e n# = psizeof# e (rank# e *# n#)
     sizeof  e  n = psizeof  e (rank  e *   n)
     
@@ -930,92 +1123,18 @@ instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :&
           let r# = rank# t; o# = i#*#r# +# i#
           in  ((bytes# !# o#) `asTypeOf` t) :& (bytes# !# (o# +# r#))
     
-    bytes# !># i# = go undefined
+    readUnboxed# bytes# i# = go undefined
       where
         go t = let r# = rank# t; o# = i#*#r# +# i# in
-          \ s1# -> case (!>#) bytes# o# s1# of
-            (# s2#, es #) -> case (!>#) bytes# (o# +# r#) s2# of
+          \ s1# -> case readUnboxed# bytes# o# s1# of
+            (# s2#, es #) -> case readUnboxed# bytes# (o# +# r#) s2# of
               (# s3#, e #) -> (# s3#, (es `asTypeOf` t) :& e #)
     
-    writeByteArray# bytes# i# (es :& e) = let r# = rank# es; o# = i#*#r# +# i# in
-      \ s1# -> case writeByteArray# bytes# o# es s1# of
-        s2# -> writeByteArray# bytes# (o# +# r#) e s2#
+    writeUnboxed# bytes# i# (es :& e) = let r# = rank# es; o# = i#*#r# +# i# in
+      \ s1# -> case writeUnboxed# bytes# o# es s1# of
+        s2# -> writeUnboxed# bytes# (o# +# r#) e s2#
     
     newUnboxed e n# = pnewUnboxed e (rank# e *# n#)
-
---------------------------------------------------------------------------------
-
--- | @since 0.3
-instance (Unboxed e) => Unboxed (Maybe e)
-  where
-    sizeof# e n# = case n# <# 1# of {1# -> 0#; _ -> q# *# cr# +# b# *# cf# +# psizeof# e r#}
-      where
-        !(# q#, r# #) = n# `quotRemInt#` 64#; b# = r# /=# 0#
-        !(# l#, c# #) = pchunkof# e
-        
-        cd# = 8# *# l# *# quotInt# co# c# -- data bytes
-        cf# = 8# *# quotInt# co# 64#      -- flag bytes
-        co# = lcm# c# 64#
-        cr# = cf# +# cd#
-    
-    bytes# !# i# = go undefined
-      where
-        go e = if bytes# !# off1# then Just (bytes# !# off2#) else asTypeOf Z e
-          where
-            !(# q#, r# #) = quotRemInt# i# 64#
-            !(#  _, c# #) = chunkof# e
-            
-            off2# = off1# +# quotInt# (lcm# c# 64#) 64#
-            off1# = sizeof# e q# *# 64# +# r#
-    
-    mbytes# !># i# = go undefined
-      where
-        go e = \ s1# -> case (!>#) mbytes# off1# s1# of
-          (# s2#, b #) -> case b of
-            False -> (# s2#, Nothing #)
-            True  -> case (!>#) mbytes# off2# s2# of
-              (# s3#, res #) -> (# s3#, res `asTypeOf` e #)
-          where
-            !(# q#, r# #) = quotRemInt# i# 64#
-            !(#  _, c# #) = chunkof# e
-            
-            off2# = off1# +# quotInt# (lcm# c# 64#) 64#
-            off1# = sizeof# e q# *# 64# +# r#
-    
-    fillByteArray# mbytes# n# e@Nothing = setByteArray# mbytes# 0# (sizeof# e n#) 0x00#
-    
-    fillByteArray# mbytes# n# e@(Just x) =
-      \ s1# -> case setByteArray# mbytes# 0# (sizeof# e n#) 0xff# s1# of
-        s2# -> if isTrue# (n# ># 0#) then go (n# -# 1#) s2# else s2#
-      where
-        go 0# s1# = writeByteArray# mbytes# off# x s1#
-          where
-            off# = lcm# co# 64# `quotInt#` 64#
-            !(# _, co# #) = pchunkof# e
-        
-        go i# s1# = go (i# -# 1#) (writeByteArray# mbytes# off# e s1#)
-          where
-            off# = sizeof# e q# *# 8# +# r# +# quotInt# (lcm# c# 64#) 64#
-            
-            !(# q#, r# #) = quotRemInt# i# 64#
-            !(#  _, c# #) = chunkof# e
-    
-    writeByteArray# mbytes# i# e@Nothing = writeByteArray# mbytes# off1# False
-      where
-        !(# q#, r# #) = quotRemInt# i# 64#
-        off1# = sizeof# e q# *# 64# +# r#
-    
-    writeByteArray# mbytes# i# e@(Just x) =
-        \ s1# -> case writeByteArray# mbytes# off1# True s1# of
-          s2# -> writeByteArray# mbytes# off2# x s2#
-      where
-        !(# q#, r# #) = quotRemInt# i# 64#
-        !(#  _, c# #) = chunkof# e
-        
-        off2# = off1# +# quotInt# (lcm# c# 64#) 64#
-        off1# = sizeof# e q# *# 64# +# r#
-    
-    newUnboxed = newUnboxed' . asTypeOf Nothing
 
 --------------------------------------------------------------------------------
 
@@ -1023,17 +1142,19 @@ instance (Unboxed e) => Unboxed (Maybe e)
 
 instance Unboxed ()
   where
+    filler = ()
+    
     {-# INLINE sizeof #-}
     sizeof _ _ = 0
     
     {-# INLINE (!#) #-}
-    (!>#) = \ _ _ s# -> (# s#, () #)
+    readUnboxed# = \ _ _ s# -> (# s#, () #)
     (!#)  = \ _ _ -> ()
     
     newUnboxed  _ _ = newByteArray# 0#
     newUnboxed' _ _ = newByteArray# 0#
     
-    writeByteArray# _ _ = \ _ s# -> s#
+    writeUnboxed# _ _ = \ _ s# -> s#
     fillByteArray#  _ _ = \ _ s# -> s#
 
 instance (Unboxed e) => Unboxed (T2 e)
@@ -1041,14 +1162,16 @@ instance (Unboxed e) => Unboxed (T2 e)
     sizeof  e2 n  = psizeof  e2 (2  *   n)
     sizeof# e2 n# = psizeof# e2 (2# *# n#)
     
-    bytes# !#  n# = let o# = 2# *# n# in (bytes# !# o#, bytes# !# (o#+#1#))
-    bytes# !># n# = let o# = 2# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> (# s3#, (e1,e2) #)
+    bytes# !# n# = let o# = 2# *# n# in (bytes# !# o#, bytes# !# (o#+#1#))
     
-    writeByteArray# mbytes# n# (e1,e2) = let o# = 2# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> writeByteArray# mbytes# (o# +# 1#) e2 s2#
+    readUnboxed# bytes# n# = let o# = 2# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> (# s3#, (e1,e2) #)
+    
+    writeUnboxed# mbytes# n# (e1,e2) = let o# = 2# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> writeUnboxed# mbytes# (o# +# 1#) e2 s2#
     
     newUnboxed e n# = pnewUnboxed e (2# *# n#)
 
@@ -1061,15 +1184,16 @@ instance (Unboxed e) => Unboxed (T3 e)
       let o# = 3# *# n#
       in  (bytes# !# o#, bytes# !# (o#+#1#), bytes# !# (o#+#2#))
     
-    bytes# !># n# = let o# = 3# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> (# s4#, (e1,e2,e3) #)
+    readUnboxed# bytes# n# = let o# = 3# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> (# s4#, (e1,e2,e3) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3) = let o# = 3# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> writeByteArray# mbytes# (o# +# 2#) e3 s3#
+    writeUnboxed# mbytes# n# (e1,e2,e3) = let o# = 3# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> writeUnboxed# mbytes# (o# +# 2#) e3 s3#
     
     newUnboxed e n# = pnewUnboxed e (3# *# n#)
 
@@ -1082,17 +1206,18 @@ instance (Unboxed e) => Unboxed (T4 e)
       let o# = 4# *# n#
       in  (bytes# !# o#, bytes# !# (o#+#1#), bytes# !# (o#+#2#), bytes# !# (o#+#3#))
     
-    bytes# !># n# = let o# = 4# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> (# s5#, (e1,e2,e3,e4) #)
+    readUnboxed# bytes# n# = let o# = 4# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> (# s5#, (e1,e2,e3,e4) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4) = let o# = 4# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> writeByteArray# mbytes# (o# +# 3#) e4 s4#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4) = let o# = 4# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> writeUnboxed# mbytes# (o# +# 3#) e4 s4#
     
     newUnboxed e n# = pnewUnboxed e (4# *# n#)
 
@@ -1109,19 +1234,20 @@ instance (Unboxed e) => Unboxed (T5 e)
           bytes# !# (o#+#3#), bytes# !# (o#+#4#)
         )
     
-    bytes# !># n# = let o# = 5# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> (# s6#, (e1,e2,e3,e4,e5) #)
+    readUnboxed# bytes# n# = let o# = 5# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> (# s6#, (e1,e2,e3,e4,e5) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5) = let o# = 5# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> writeByteArray# mbytes# (o# +# 4#) e5 s5#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5) = let o# = 5# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> writeUnboxed# mbytes# (o# +# 4#) e5 s5#
     
     newUnboxed e n# = pnewUnboxed e (5# *# n#)
 
@@ -1138,21 +1264,22 @@ instance (Unboxed e) => Unboxed (T6 e)
           bytes# !# (o#+#3#), bytes# !# (o#+#4#), bytes# !# (o#+#5#)
         )
     
-    bytes# !># n# = let o# = 6# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> (# s7#, (e1,e2,e3,e4,e5,e6) #)
+    readUnboxed# bytes# n# = let o# = 6# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> (# s7#, (e1,e2,e3,e4,e5,e6) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6) = let o# = 6# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> writeByteArray# mbytes# (o# +# 5#) e6 s6#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6) = let o# = 6# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> writeUnboxed# mbytes# (o# +# 5#) e6 s6#
     
     newUnboxed e n# = pnewUnboxed e (6# *# n#)
 
@@ -1170,23 +1297,24 @@ instance (Unboxed e) => Unboxed (T7 e)
           bytes# !# (o#+#6#)
         )
     
-    bytes# !># n# = let o# = 7# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> (# s8#, (e1,e2,e3,e4,e5,e6,e7) #)
+    readUnboxed# bytes# n# = let o# = 7# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> (# s8#, (e1,e2,e3,e4,e5,e6,e7) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7) = let o# = 7# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> writeByteArray# mbytes# (o# +# 6#) e7 s7#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7) = let o# = 7# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> writeUnboxed# mbytes# (o# +# 6#) e7 s7#
     
     newUnboxed e n# = pnewUnboxed e (7# *# n#)
 
@@ -1204,25 +1332,26 @@ instance (Unboxed e) => Unboxed (T8 e)
           bytes# !# (o#+#6#), bytes# !# (o#+#7#)
         )
     
-    bytes# !># n# = let o# = 8# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> (# s9#, (e1,e2,e3,e4,e5,e6,e7,e8) #)
+    readUnboxed# bytes# n# = let o# = 8# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> (# s9#, (e1,e2,e3,e4,e5,e6,e7,e8) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8) = let o# = 8# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> writeByteArray# mbytes# (o# +# 7#) e8 s8#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8) = let o# = 8# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> writeUnboxed# mbytes# (o# +# 7#) e8 s8#
     
     newUnboxed e n# = pnewUnboxed e (8# *# n#)
 
@@ -1240,27 +1369,28 @@ instance (Unboxed e) => Unboxed (T9 e)
           bytes# !# (o#+#6#), bytes# !# (o#+#7#), bytes# !# (o#+#8#)
         )
     
-    bytes# !># n# = let o# = 9# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> (# s10#, (e1,e2,e3,e4,e5,e6,e7,e8,e9) #)
+    readUnboxed# bytes# n# = let o# = 9# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> (# s10#, (e1,e2,e3,e4,e5,e6,e7,e8,e9) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9) = let o# = 9# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> writeByteArray# mbytes# (o# +# 8#) e9 s9#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9) = let o# = 9# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> writeUnboxed# mbytes# (o# +# 8#) e9 s9#
     
     newUnboxed e n# = pnewUnboxed e (9# *# n#)
 
@@ -1279,29 +1409,30 @@ instance (Unboxed e) => Unboxed (T10 e)
           bytes# !# (o#+#9#)
         )
     
-    bytes# !># n# = let o# = 10# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> (# s11#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10) #)
+    readUnboxed# bytes# n# = let o# = 10# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> (# s11#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10) = let o# = 10# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> writeByteArray# mbytes# (o# +# 9#) e10 s10#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10) = let o# = 10# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> writeUnboxed# mbytes# (o# +# 9#) e10 s10#
     
     newUnboxed e n# = pnewUnboxed e (10# *# n#)
 
@@ -1320,31 +1451,32 @@ instance (Unboxed e) => Unboxed (T11 e)
           bytes# !# (o#+#9#), bytes# !# (o#+#10#)
         )
     
-    bytes# !># n# = let o# = 11# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> case (!>#) bytes# (o# +# 10#) s11# of
-                          (# s12#, e11 #) -> (# s12#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11) #)
+    readUnboxed# bytes# n# = let o# = 11# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> case readUnboxed# bytes# (o# +# 10#) s11# of
+                            (# s12#, e11 #) -> (# s12#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11) = let o# = 11# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> case writeByteArray# mbytes# (o# +# 9#) e10 s10# of
-                          s11# -> writeByteArray# mbytes# (o# +# 10#) e11 s11#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11) = let o# = 11# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> case writeUnboxed# mbytes# (o# +# 9#) e10 s10# of
+                          s11# -> writeUnboxed# mbytes# (o# +# 10#) e11 s11#
     
     newUnboxed e n# = pnewUnboxed e (11# *# n#)
 
@@ -1363,33 +1495,34 @@ instance (Unboxed e) => Unboxed (T12 e)
           bytes# !# (o#+#9#), bytes# !# (o#+#10#), bytes# !# (o#+#11#)
         )
     
-    bytes# !># n# = let o# = 12# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> case (!>#) bytes# (o# +# 10#) s11# of
-                          (# s12#, e11 #) -> case (!>#) bytes# (o# +# 11#) s12# of
-                            (# s13#, e12 #) -> (# s13#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12) #)
+    readUnboxed# bytes# n# = let o# = 12# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> case readUnboxed# bytes# (o# +# 10#) s11# of
+                            (# s12#, e11 #) -> case readUnboxed# bytes# (o# +# 11#) s12# of
+                              (# s13#, e12 #) -> (# s13#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12) = let o# = 12# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> case writeByteArray# mbytes# (o# +# 9#) e10 s10# of
-                          s11# -> case writeByteArray# mbytes# (o# +# 10#) e11 s11# of
-                            s12# -> writeByteArray# mbytes# (o# +# 11#) e12 s12#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12) = let o# = 12# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> case writeUnboxed# mbytes# (o# +# 9#) e10 s10# of
+                          s11# -> case writeUnboxed# mbytes# (o# +# 10#) e11 s11# of
+                            s12# -> writeUnboxed# mbytes# (o# +# 11#) e12 s12#
     
     newUnboxed e n# = pnewUnboxed e (12# *# n#)
 
@@ -1409,35 +1542,36 @@ instance (Unboxed e) => Unboxed (T13 e)
           bytes# !# (o#+#12#)
         )
     
-    bytes# !># n# = let o# = 13# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> case (!>#) bytes# (o# +# 10#) s11# of
-                          (# s12#, e11 #) -> case (!>#) bytes# (o# +# 11#) s12# of
-                            (# s13#, e12 #) -> case (!>#) bytes# (o# +# 12#) s13# of
-                              (# s14#, e13 #) -> (# s14#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13) #)
+    readUnboxed# bytes# n# = let o# = 13# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> case readUnboxed# bytes# (o# +# 10#) s11# of
+                            (# s12#, e11 #) -> case readUnboxed# bytes# (o# +# 11#) s12# of
+                              (# s13#, e12 #) -> case readUnboxed# bytes# (o# +# 12#) s13# of
+                                (# s14#, e13 #) -> (# s14#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13) = let o# = 13# *# n# in
-      \ s1# -> case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> case writeByteArray# mbytes# (o# +# 9#) e10 s10# of
-                          s11# -> case writeByteArray# mbytes# (o# +# 10#) e11 s11# of
-                            s12# -> case writeByteArray# mbytes# (o# +# 11#) e12 s12# of
-                              s13# -> writeByteArray# mbytes# (o# +# 12#) e13 s13#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13) = let o# = 13# *# n# in
+      \ s1# -> case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> case writeUnboxed# mbytes# (o# +# 9#) e10 s10# of
+                          s11# -> case writeUnboxed# mbytes# (o# +# 10#) e11 s11# of
+                            s12# -> case writeUnboxed# mbytes# (o# +# 11#) e12 s12# of
+                              s13# -> writeUnboxed# mbytes# (o# +# 12#) e13 s13#
     
     newUnboxed e n# = pnewUnboxed e (13# *# n#)
 
@@ -1457,37 +1591,38 @@ instance (Unboxed e) => Unboxed (T14 e)
           bytes# !# (o#+#12#), bytes# !# (o#+#13#)
         )
     
-    bytes# !># n# = let o# = 14# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> case (!>#) bytes# (o# +# 10#) s11# of
-                          (# s12#, e11 #) -> case (!>#) bytes# (o# +# 11#) s12# of
-                            (# s13#, e12 #) -> case (!>#) bytes# (o# +# 12#) s13# of
-                              (# s14#, e13 #) -> case (!>#) bytes# (o# +# 13#) s14# of
-                                (# s15#, e14 #) -> (# s15#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14) #)
+    readUnboxed# bytes# n# = let o# = 14# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> case readUnboxed# bytes# (o# +# 10#) s11# of
+                            (# s12#, e11 #) -> case readUnboxed# bytes# (o# +# 11#) s12# of
+                              (# s13#, e12 #) -> case readUnboxed# bytes# (o# +# 12#) s13# of
+                                (# s14#, e13 #) -> case readUnboxed# bytes# (o# +# 13#) s14# of
+                                  (# s15#, e14 #) -> (# s15#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14) =
-      \ s1# -> let o# = 14# *# n# in case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> case writeByteArray# mbytes# (o# +# 9#) e10 s10# of
-                          s11# -> case writeByteArray# mbytes# (o# +# 10#) e11 s11# of
-                            s12# -> case writeByteArray# mbytes# (o# +# 11#) e12 s12# of
-                              s13# -> case writeByteArray# mbytes# (o# +# 12#) e13 s13# of
-                                s14# -> writeByteArray# mbytes# (o# +# 13#) e14 s14#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14) =
+      \ s1# -> let o# = 14# *# n# in case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> case writeUnboxed# mbytes# (o# +# 9#) e10 s10# of
+                          s11# -> case writeUnboxed# mbytes# (o# +# 10#) e11 s11# of
+                            s12# -> case writeUnboxed# mbytes# (o# +# 11#) e12 s12# of
+                              s13# -> case writeUnboxed# mbytes# (o# +# 12#) e13 s13# of
+                                s14# -> writeUnboxed# mbytes# (o# +# 13#) e14 s14#
     
     newUnboxed e n# = pnewUnboxed e (14# *# n#)
 
@@ -1507,39 +1642,40 @@ instance (Unboxed e) => Unboxed (T15 e)
           bytes# !# (o#+#12#), bytes# !# (o#+#13#), bytes# !# (o#+#14#)
         )
     
-    bytes# !># n# = let o# = 15# *# n# in \ s1# -> case (!>#) bytes# o# s1# of
-      (# s2#, e1 #) -> case (!>#) bytes# (o# +# 1#) s2# of
-        (# s3#, e2 #) -> case (!>#) bytes# (o# +# 2#) s3# of
-          (# s4#, e3 #) -> case (!>#) bytes# (o# +# 3#) s4# of
-            (# s5#, e4 #) -> case (!>#) bytes# (o# +# 4#) s5# of
-              (# s6#, e5 #) -> case (!>#) bytes# (o# +# 5#) s6# of
-                (# s7#, e6 #) -> case (!>#) bytes# (o# +# 6#) s7# of
-                  (# s8#, e7 #) -> case (!>#) bytes# (o# +# 7#) s8# of
-                    (# s9#, e8 #) -> case (!>#) bytes# (o# +# 8#) s9# of
-                      (# s10#, e9 #) -> case (!>#) bytes# (o# +# 9#) s10# of
-                        (# s11#, e10 #) -> case (!>#) bytes# (o# +# 10#) s11# of
-                          (# s12#, e11 #) -> case (!>#) bytes# (o# +# 11#) s12# of
-                            (# s13#, e12 #) -> case (!>#) bytes# (o# +# 12#) s13# of
-                              (# s14#, e13 #) -> case (!>#) bytes# (o# +# 13#) s14# of
-                                (# s15#, e14 #) -> case (!>#) bytes# (o# +# 14#) s15# of
-                                  (# s16#, e15 #) -> (# s16#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15) #)
+    readUnboxed# bytes# n# = let o# = 15# *# n# in
+      \ s1# -> case readUnboxed# bytes# o# s1# of
+        (# s2#, e1 #) -> case readUnboxed# bytes# (o# +# 1#) s2# of
+          (# s3#, e2 #) -> case readUnboxed# bytes# (o# +# 2#) s3# of
+            (# s4#, e3 #) -> case readUnboxed# bytes# (o# +# 3#) s4# of
+              (# s5#, e4 #) -> case readUnboxed# bytes# (o# +# 4#) s5# of
+                (# s6#, e5 #) -> case readUnboxed# bytes# (o# +# 5#) s6# of
+                  (# s7#, e6 #) -> case readUnboxed# bytes# (o# +# 6#) s7# of
+                    (# s8#, e7 #) -> case readUnboxed# bytes# (o# +# 7#) s8# of
+                      (# s9#, e8 #) -> case readUnboxed# bytes# (o# +# 8#) s9# of
+                        (# s10#, e9 #) -> case readUnboxed# bytes# (o# +# 9#) s10# of
+                          (# s11#, e10 #) -> case readUnboxed# bytes# (o# +# 10#) s11# of
+                            (# s12#, e11 #) -> case readUnboxed# bytes# (o# +# 11#) s12# of
+                              (# s13#, e12 #) -> case readUnboxed# bytes# (o# +# 12#) s13# of
+                                (# s14#, e13 #) -> case readUnboxed# bytes# (o# +# 13#) s14# of
+                                  (# s15#, e14 #) -> case readUnboxed# bytes# (o# +# 14#) s15# of
+                                    (# s16#, e15 #) -> (# s16#, (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15) #)
     
-    writeByteArray# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15) =
-      \ s1# -> let o# = 15# *# n# in case writeByteArray# mbytes# o# e1 s1# of
-        s2# -> case writeByteArray# mbytes# (o# +# 1#) e2 s2# of
-          s3# -> case writeByteArray# mbytes# (o# +# 2#) e3 s3# of
-            s4# -> case writeByteArray# mbytes# (o# +# 3#) e4 s4# of
-              s5# -> case writeByteArray# mbytes# (o# +# 4#) e5 s5# of
-                s6# -> case writeByteArray# mbytes# (o# +# 5#) e6 s6# of
-                  s7# -> case writeByteArray# mbytes# (o# +# 6#) e7 s7# of
-                    s8# -> case writeByteArray# mbytes# (o# +# 7#) e8 s8# of
-                      s9# -> case writeByteArray# mbytes# (o# +# 8#) e9 s9# of
-                        s10# -> case writeByteArray# mbytes# (o# +# 9#) e10 s10# of
-                          s11# -> case writeByteArray# mbytes# (o# +# 10#) e11 s11# of
-                            s12# -> case writeByteArray# mbytes# (o# +# 11#) e12 s12# of
-                              s13# -> case writeByteArray# mbytes# (o# +# 12#) e13 s13# of
-                                s14# -> case writeByteArray# mbytes# (o# +# 13#) e14 s14# of
-                                  s15# -> writeByteArray# mbytes# (o# +# 14#) e15 s15#
+    writeUnboxed# mbytes# n# (e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15) =
+      \ s1# -> let o# = 15# *# n# in case writeUnboxed# mbytes# o# e1 s1# of
+        s2# -> case writeUnboxed# mbytes# (o# +# 1#) e2 s2# of
+          s3# -> case writeUnboxed# mbytes# (o# +# 2#) e3 s3# of
+            s4# -> case writeUnboxed# mbytes# (o# +# 3#) e4 s4# of
+              s5# -> case writeUnboxed# mbytes# (o# +# 4#) e5 s5# of
+                s6# -> case writeUnboxed# mbytes# (o# +# 5#) e6 s6# of
+                  s7# -> case writeUnboxed# mbytes# (o# +# 6#) e7 s7# of
+                    s8# -> case writeUnboxed# mbytes# (o# +# 7#) e8 s8# of
+                      s9# -> case writeUnboxed# mbytes# (o# +# 8#) e9 s9# of
+                        s10# -> case writeUnboxed# mbytes# (o# +# 9#) e10 s10# of
+                          s11# -> case writeUnboxed# mbytes# (o# +# 10#) e11 s11# of
+                            s12# -> case writeUnboxed# mbytes# (o# +# 11#) e12 s12# of
+                              s13# -> case writeUnboxed# mbytes# (o# +# 12#) e13 s13# of
+                                s14# -> case writeUnboxed# mbytes# (o# +# 13#) e14 s14# of
+                                  s15# -> writeUnboxed# mbytes# (o# +# 14#) e15 s15#
     
     newUnboxed e n# = pnewUnboxed e (15# *# n#)
 
@@ -1610,7 +1746,7 @@ newLinearN# :: (Unboxed e) => Int# -> [e] -> State# s ->
 newLinearN# c# es = \ s1# -> case pnewUnboxed es n# s1# of
     (# s2#, marr# #) ->
       let
-        go y r = \ i# s4# -> case writeByteArray# marr# i# y s4# of
+        go y r = \ i# s4# -> case writeUnboxed# marr# i# y s4# of
           s5# -> if isTrue# (i# ==# n# -# 1#) then s5# else r (i# +# 1#) s5#
       in case if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# of
           s3# -> (# s3#, marr# #)
@@ -1626,7 +1762,7 @@ fromFoldableM# :: (Foldable f, Unboxed e) => f e -> State# s ->
 fromFoldableM# es = \ s1# -> case pnewUnboxed es n# s1# of
     (# s2#, marr# #) ->
       let
-        go y r = \ i# s4# -> case writeByteArray# marr# i# y s4# of
+        go y r = \ i# s4# -> case writeUnboxed# marr# i# y s4# of
           s5# -> if isTrue# (i# ==# n# -# 1#) then s5# else r (i# +# 1#) s5#
       in case if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# of
           s3# -> (# s3#, n, marr# #)
@@ -1654,6 +1790,11 @@ pconcat :: (Unboxed e) => proxy e ->
   State# s -> (# State# s, Int#, MutableByteArray# s #)
 pconcat = concat# . fromProxy
 
+calloc# :: (Unboxed e) => e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
+calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
+  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
+    s3# -> (# s3#, mbytes# #)
+
 --------------------------------------------------------------------------------
 
 {-# INLINE rank# #-}
@@ -1664,13 +1805,13 @@ rank# i = case rank i of I# r# -> r#
 gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
-
+{-
 {-# INLINE lcm# #-}
 lcm# :: Int# -> Int# -> Int#
 lcm# _  0# = 0#
 lcm# 0#  _ = 0#
 lcm# x# y# = quotInt# x# (gcd# x# y#) *# y#
-
+-}
 {-# INLINE bool_scale #-}
 bool_scale :: Int# -> Int#
 bool_scale n# = (n# +# 7#) `uncheckedIShiftRA#` 3#
@@ -1694,7 +1835,6 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
 
 
 

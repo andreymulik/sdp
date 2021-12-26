@@ -73,82 +73,97 @@ instance Read WordAs64 where readPrec = WordAs64 <$> readPrec
 
 instance Unboxed WordAs8
   where
+    filler = 0
+    
+    {-# INLINE newUnboxed #-}
+    newUnboxed = calloc#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
+    
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = WordAs8 (W# (indexWord8Array# bytes# i#))
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, WordAs8 (W# e#) #)
     
     writeByteArray# mbytes# n# (WordAs8 (W# e#)) = writeWord8Array# mbytes# n# e#
-    
-    newUnboxed e n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-      (# s2#, mbytes# #) -> case fillByteArray# mbytes# n# (0 :: WordAs8) s2# of
-        s3# -> (# s3#, mbytes# #)
 
 instance Unboxed WordAs16
   where
+    filler = 0
+    
+    {-# INLINE newUnboxed #-}
+    newUnboxed = calloc#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = WordAs16 (W# (indexWord16Array# bytes# i#))
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, WordAs16 (W# e#) #)
     
     writeByteArray# mbytes# n# (WordAs16 (W# e#)) = writeWord16Array# mbytes# n# e#
-    
-    newUnboxed e n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-      (# s2#, mbytes# #) -> case fillByteArray# mbytes# n# (0 :: WordAs16) s2# of
-        s3# -> (# s3#, mbytes# #)
 
 instance Unboxed WordAs32
   where
+    filler = 0
+    
+    {-# INLINE newUnboxed #-}
+    newUnboxed = calloc#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = WordAs32 (W# (indexWord32Array# bytes# i#))
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord32Array# mbytes# i# s1# of
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord32Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, WordAs32 (W# e#) #)
     
     writeByteArray# mbytes# n# (WordAs32 (W# e#)) = writeWord32Array# mbytes# n# e#
-    
-    newUnboxed e n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-      (# s2#, mbytes# #) -> case fillByteArray# mbytes# n# (0 :: WordAs32) s2# of
-        s3# -> (# s3#, mbytes# #)
 
 instance Unboxed WordAs64
   where
+    filler = 0
+    
+    {-# INLINE newUnboxed #-}
+    newUnboxed = calloc#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = WordAs64 (W# (indexWord64Array# bytes# i#))
     
-    {-# INLINE (!>#) #-}
-    mbytes# !># i# = \ s1# -> case readWord64Array# mbytes# i# s1# of
+    {-# INLINE offsetof# #-}
+    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    
+    {-# INLINE readUnboxed# #-}
+    readUnboxed# mbytes# i# = \ s1# -> case readWord64Array# mbytes# i# s1# of
       (# s2#, e# #) -> (# s2#, WordAs64 (W# e#) #)
     
     writeByteArray# mbytes# n# (WordAs64 (W# e#)) = writeWord64Array# mbytes# n# e#
-    
-    newUnboxed e n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-      (# s2#, mbytes# #) -> case fillByteArray# mbytes# n# (0 :: WordAs64) s2# of
-        s3# -> (# s3#, mbytes# #)
 
 --------------------------------------------------------------------------------
 
 instance Storable WordAs8
   where
-    sizeOf    _ = SIZEOF_WORD8
-    alignment _ = ALIGNMENT_WORD8
+    sizeOf _ = SIZEOF_WORD8; alignment _ = ALIGNMENT_WORD8
     
     peekElemOff (Ptr p#) (I# i#) = IO $
       \ s1# -> case readWord8OffAddr# p# i# s1# of
@@ -159,8 +174,7 @@ instance Storable WordAs8
 
 instance Storable WordAs16
   where
-    sizeOf    _ = SIZEOF_WORD16
-    alignment _ = ALIGNMENT_WORD16
+    sizeOf _ = SIZEOF_WORD16; alignment _ = ALIGNMENT_WORD16
     
     peekElemOff (Ptr p#) (I# i#) = IO $
       \ s1# -> case readWord16OffAddr# p# i# s1# of
@@ -171,8 +185,7 @@ instance Storable WordAs16
 
 instance Storable WordAs32
   where
-    sizeOf    _ = SIZEOF_WORD32
-    alignment _ = ALIGNMENT_WORD32
+    sizeOf _ = SIZEOF_WORD32; alignment _ = ALIGNMENT_WORD32
     
     peekElemOff (Ptr p#) (I# i#) = IO $
       \ s1# -> case readWord32OffAddr# p# i# s1# of
@@ -183,8 +196,7 @@ instance Storable WordAs32
 
 instance Storable WordAs64
   where
-    sizeOf    _ = SIZEOF_WORD64
-    alignment _ = ALIGNMENT_WORD64
+    sizeOf _ = SIZEOF_WORD64; alignment _ = ALIGNMENT_WORD64
     
     peekElemOff (Ptr p#) (I# i#) = IO $
       \ s1# -> case readWord64OffAddr# p# i# s1# of
@@ -192,4 +204,7 @@ instance Storable WordAs64
     
     pokeElemOff (Ptr p#) (I# i#) (WordAs64 (W# x)) = IO $
       \ s1# -> case writeWord64OffAddr# p# i# x s1# of s2 -> (# s2, () #)
+
+
+
 
