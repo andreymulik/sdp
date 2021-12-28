@@ -15,11 +15,12 @@ module SDP.Unboxed
 (
   -- * Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
+  bytewiseEqUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
   fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
   pnewUnboxed, pcopyUnboxed, pcopyUnboxedM, pcloneUnboxed, pcloneUnboxedM,
-  pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#,
+  pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#, peqUnboxed,
   
   -- ** Kind @(Type -> Type -> Type)@ proxies
   fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
@@ -65,7 +66,7 @@ default ()
 class (Eq e) => Unboxed e
   where
     {-# MINIMAL (sizeof#|sizeof), (!#), ((!>#)|readUnboxed#|readUnboxedOff#),
-                (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
+        eqUnboxed#, (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
     
     {- |
       @since 0.3
@@ -143,6 +144,14 @@ class (Eq e) => Unboxed e
     -- | @since 0.3 See 'chunkof#'.
     chunkof :: e -> (Int, Int)
     chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
+    
+    {- |
+      @since 0.3
+      
+      @eqUnboxed# e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
+      @xs#@ and @ys#@ beginning from @ox#@ and @oy#@ elements resp.
+    -}
+    eqUnboxed# :: e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
     
     -- | Unsafe 'ByteArray#' reader (by index) with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
@@ -346,6 +355,9 @@ poffsetof# e = offsetof# (fromProxy e)
 poffsetof :: (Unboxed e) => proxy e -> Int -> Int
 poffsetof =  offsetof . fromProxy
 
+peqUnboxed :: (Unboxed e) => proxy e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
+peqUnboxed =  eqUnboxed# . fromProxy
+
 {- |
   @since 0.2
   Kind @(Type -> Type)@ proxy version of 'newUnboxed'.
@@ -464,8 +476,10 @@ instance Unboxed Int
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSWORD
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    
+    eqUnboxed# = bytewiseEqUnboxed#
     
 #if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
@@ -495,8 +509,10 @@ instance Unboxed Int8
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 8# #)
@@ -521,8 +537,10 @@ instance Unboxed Int16
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 2
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 4# #)
@@ -547,8 +565,10 @@ instance Unboxed Int32
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 4
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
@@ -573,8 +593,10 @@ instance Unboxed Int64
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 8
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
@@ -599,8 +621,10 @@ instance Unboxed Word
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSWORD
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
 #if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
@@ -630,8 +654,10 @@ instance Unboxed Word8
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 8# #)
@@ -656,8 +682,10 @@ instance Unboxed Word16
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 2
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 4# #)
@@ -682,8 +710,10 @@ instance Unboxed Word32
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 4
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
@@ -708,8 +738,10 @@ instance Unboxed Word64
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 8
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 1# #)
@@ -734,8 +766,10 @@ instance Unboxed Float
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSFLOAT
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSFLOAT#; _ -> 0#}
     
 #if SIZEOF_HSFLOAT == 4
     {-# INLINE chunkof# #-}
@@ -762,8 +796,10 @@ instance Unboxed Double
   where
     filler = 0
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSDOUBLE
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSDOUBLE#; _ -> 0#}
     
 #if SIZEOF_HSDOUBLE == 8
     {-# INLINE chunkof# #-}
@@ -790,6 +826,11 @@ instance (Unboxed a, Integral a) => Unboxed (Ratio a)
   where
     filler = 0 :% 0
     
+    {-# INLINE sizeof# #-}
+    sizeof# e n# = 2# *# psizeof# e n#
+    
+    eqUnboxed# = bytewiseEqUnboxed#
+    
     sizeof e n = 2 * psizeof e n
     
     bytes# !# i# = bytes# !# i2# :% (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
@@ -808,9 +849,12 @@ instance (Unboxed a, Num a) => Unboxed (Complex a)
   where
     filler = 0 :+ 0
     
-    sizeof e n = 2 * psizeof e n
+    eqUnboxed# = bytewiseEqUnboxed#
     
-    bytes#  !#  i# = bytes# !# i2# :+ (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
+    {-# INLINE sizeof# #-}
+    sizeof# e n# = 2# *# psizeof# e n#
+    
+    bytes# !# i# = bytes# !# i2# :+ (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
     
     readUnboxed# mbytes# i# = let i2# = 2# *# i# in
       \ s1# -> case readUnboxed# mbytes# i2# s1# of
@@ -833,8 +877,10 @@ instance Unboxed (Ptr a)
   where
     filler = NULL
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSWORD
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
 #if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
@@ -864,8 +910,10 @@ instance Unboxed (FunPtr a)
   where
     filler = NULL
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSWORD
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
 #if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
@@ -895,8 +943,10 @@ instance Unboxed (StablePtr a)
   where
     filler = NULL
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * SIZEOF_HSWORD
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
 #if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
@@ -930,8 +980,9 @@ instance Unboxed (StablePtr a)
 instance Unboxed Type where\
 {\
   filler = Type filler;\
-  sizeof e = sizeof (consSizeof Type e);\
+  eqUnboxed# = bytewiseEqUnboxed#;\
   arr# !# i# = Type ( arr# !# i# );\
+  sizeof e = sizeof (consSizeof Type e);\
   readUnboxed# marr# i# = \ s1# -> case readUnboxed# marr# i# s1# of {(# s2#, e #) -> (# s2#, Type e #)};\
   writeUnboxed# marr# i# (Type e) = writeUnboxed# marr# i# e;\
   fillByteArray#  marr# i# (Type e) = fillByteArray#  marr# i# e;\
@@ -983,8 +1034,10 @@ instance Unboxed Bool
   where
     filler = False
     
-    {-# INLINE sizeof #-}
-    sizeof _ c = d == 0 ? n $ n + 1 where (n, d) = max 0 c `divMod` 8
+    eqUnboxed# = undefined -- TODO
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 64# #)
@@ -1050,8 +1103,10 @@ instance Unboxed Char
   where
     filler = '\0'
     
-    {-# INLINE sizeof #-}
-    sizeof _ n = max 0 n * 4
+    eqUnboxed# = bytewiseEqUnboxed#
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 2# #)
@@ -1076,8 +1131,10 @@ instance Unboxed E
   where
     filler = E
     
-    {-# INLINE sizeof #-}
-    sizeof _ _ = 0
+    eqUnboxed# _ _ _ _ _ _ = True
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ _ = 0#
     
     {-# INLINE offsetof# #-}
     offsetof# _ _ = 0#
@@ -1096,6 +1153,8 @@ instance (Unboxed e) => Unboxed (I1 e)
   where
     filler = E :& filler
     
+    eqUnboxed# = peqUnboxed
+    
     sizeof# = psizeof#
     sizeof  = psizeof
     
@@ -1113,6 +1172,8 @@ instance (Unboxed e) => Unboxed (I1 e)
 instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e)) => Unboxed (e' :& e :& e)
   where
     filler = filler :& filler
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = let r# = rank# e in peqUnboxed e xs# (o1# *# r#) ys# (o2# *# r#) (n# *# r#)
     
     sizeof# e n# = psizeof# e (rank# e *# n#)
     sizeof  e  n = psizeof  e (rank  e *   n)
@@ -1144,8 +1205,10 @@ instance Unboxed ()
   where
     filler = ()
     
-    {-# INLINE sizeof #-}
-    sizeof _ _ = 0
+    eqUnboxed# _ _ _ _ _ _ = True
+    
+    {-# INLINE sizeof# #-}
+    sizeof# _ _ = 0#
     
     {-# INLINE (!#) #-}
     readUnboxed# = \ _ _ s# -> (# s#, () #)
@@ -1161,6 +1224,8 @@ instance (Unboxed e) => Unboxed (T2 e)
   where
     sizeof  e2 n  = psizeof  e2 (2  *   n)
     sizeof# e2 n# = psizeof# e2 (2# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 2#) ys# (o2# *# 2#) (n# *# 2#)
     
     bytes# !# n# = let o# = 2# *# n# in (bytes# !# o#, bytes# !# (o#+#1#))
     
@@ -1179,6 +1244,8 @@ instance (Unboxed e) => Unboxed (T3 e)
   where
     sizeof  e2 n  = psizeof  e2 (3  *   n)
     sizeof# e2 n# = psizeof# e2 (3# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 3#) ys# (o2# *# 3#) (n# *# 3#)
     
     bytes# !# n# =
       let o# = 3# *# n#
@@ -1201,6 +1268,8 @@ instance (Unboxed e) => Unboxed (T4 e)
   where
     sizeof  e2 n  = psizeof  e2 (4  *   n)
     sizeof# e2 n# = psizeof# e2 (4# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 4#) ys# (o2# *# 4#) (n# *# 4#)
     
     bytes# !# n# =
       let o# = 4# *# n#
@@ -1225,6 +1294,8 @@ instance (Unboxed e) => Unboxed (T5 e)
   where
     sizeof  e2 n  = psizeof  e2 (5  *   n)
     sizeof# e2 n# = psizeof# e2 (5# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 5#) ys# (o2# *# 5#) (n# *# 5#)
     
     bytes# !# n# =
       let o# = 5# *# n#
@@ -1255,6 +1326,8 @@ instance (Unboxed e) => Unboxed (T6 e)
   where
     sizeof  e2 n  = psizeof  e2 (6  *   n)
     sizeof# e2 n# = psizeof# e2 (6# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 6#) ys# (o2# *# 6#) (n# *# 6#)
     
     bytes# !# n# =
       let o# = 6# *# n#
@@ -1287,6 +1360,8 @@ instance (Unboxed e) => Unboxed (T7 e)
   where
     sizeof  e2 n  = psizeof  e2 (7  *   n)
     sizeof# e2 n# = psizeof# e2 (7# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 7#) ys# (o2# *# 7#) (n# *# 7#)
     
     bytes# !# n# =
       let o# = 7# *# n#
@@ -1322,6 +1397,8 @@ instance (Unboxed e) => Unboxed (T8 e)
   where
     sizeof  e2 n  = psizeof  e2 (8  *   n)
     sizeof# e2 n# = psizeof# e2 (8# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 8#) ys# (o2# *# 8#) (n# *# 8#)
     
     bytes# !# n# =
       let o# = 8# *# n#
@@ -1359,6 +1436,8 @@ instance (Unboxed e) => Unboxed (T9 e)
   where
     sizeof  e2 n  = psizeof  e2 (9  *   n)
     sizeof# e2 n# = psizeof# e2 (9# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 9#) ys# (o2# *# 9#) (n# *# 9#)
     
     bytes# !# n# =
       let o# = 9# *# n#
@@ -1398,6 +1477,8 @@ instance (Unboxed e) => Unboxed (T10 e)
   where
     sizeof  e2 n  = psizeof  e2 (10  *   n)
     sizeof# e2 n# = psizeof# e2 (10# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 10#) ys# (o2# *# 10#) (n# *# 10#)
     
     bytes# !# n# =
       let o# = 10# *# n#
@@ -1440,6 +1521,8 @@ instance (Unboxed e) => Unboxed (T11 e)
   where
     sizeof  e2 n  = psizeof  e2 (11  *   n)
     sizeof# e2 n# = psizeof# e2 (11# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 11#) ys# (o2# *# 11#) (n# *# 11#)
     
     bytes# !# n# =
       let o# = 11# *# n#
@@ -1484,6 +1567,8 @@ instance (Unboxed e) => Unboxed (T12 e)
   where
     sizeof  e2 n  = psizeof  e2 (12  *   n)
     sizeof# e2 n# = psizeof# e2 (12# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 12#) ys# (o2# *# 12#) (n# *# 12#)
     
     bytes# !# n# =
       let o# = 12# *# n#
@@ -1530,6 +1615,8 @@ instance (Unboxed e) => Unboxed (T13 e)
   where
     sizeof  e2 n  = psizeof  e2 (13  *   n)
     sizeof# e2 n# = psizeof# e2 (13# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 13#) ys# (o2# *# 13#) (n# *# 13#)
     
     bytes# !# n# =
       let o# = 13# *# n#
@@ -1579,6 +1666,8 @@ instance (Unboxed e) => Unboxed (T14 e)
   where
     sizeof  e2 n  = psizeof  e2 (14  *   n)
     sizeof# e2 n# = psizeof# e2 (14# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 14#) ys# (o2# *# 14#) (n# *# 14#)
     
     bytes# !# n# =
       let o# = 14# *# n#
@@ -1630,6 +1719,8 @@ instance (Unboxed e) => Unboxed (T15 e)
   where
     sizeof  e2 n  = psizeof  e2 (15  *   n)
     sizeof# e2 n# = psizeof# e2 (15# *# n#)
+    
+    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 15#) ys# (o2# *# 15#) (n# *# 15#)
     
     bytes# !# n# =
       let o# = 15# *# n#
@@ -1795,6 +1886,11 @@ calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
 
+bytewiseEqUnboxed# :: (Unboxed e) => e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
+bytewiseEqUnboxed# e xs# o1# ys# o2# c# =
+  let i1# = sizeof# e o1#; i2# = sizeof# e o2#; n# = sizeof# e c#
+  in  case c# <# 0# of {1# -> True; _ -> isTrue# (compareByteArrays# xs# i1# ys# i2# n# ==# 0#)}
+
 --------------------------------------------------------------------------------
 
 {-# INLINE rank# #-}
@@ -1835,6 +1931,5 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
 
 

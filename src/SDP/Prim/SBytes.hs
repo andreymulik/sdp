@@ -96,9 +96,8 @@ type role SBytes# representational
 
 instance (Unboxed e) => Eq (SBytes# e)
   where
-    xs@(SBytes# c1 _ _) == ys@(SBytes# c2 _ _) =
-      let eq' i = i == c1 || (xs!^i) == (ys!^i) && eq' (i + 1)
-      in  c1 == c2 && eq' 0
+    xs@(SBytes# c1@(I# c#) (I# o1#) xs#) == (SBytes# c2 (I# o2#) ys#) =
+      c1 == c2 && peqUnboxed xs xs# o1# ys# o2# c#
 
 --------------------------------------------------------------------------------
 
@@ -1145,6 +1144,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
 
 
 

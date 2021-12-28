@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Unboxed.WordAs
-    Copyright   :  (c) Andrey Mulik 2020
+    Copyright   :  (c) Andrey Mulik 2020-2021
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -78,6 +78,9 @@ instance Unboxed WordAs8
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
     
+    {-# INLINE eqUnboxed# #-}
+    eqUnboxed# = bytewiseEqUnboxed#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n
     
@@ -99,6 +102,9 @@ instance Unboxed WordAs16
     
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
+    
+    {-# INLINE eqUnboxed# #-}
+    eqUnboxed# = bytewiseEqUnboxed#
     
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 2
@@ -122,6 +128,9 @@ instance Unboxed WordAs32
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
     
+    {-# INLINE eqUnboxed# #-}
+    eqUnboxed# = bytewiseEqUnboxed#
+    
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 4
     
@@ -143,6 +152,9 @@ instance Unboxed WordAs64
     
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
+    
+    {-# INLINE eqUnboxed# #-}
+    eqUnboxed# = bytewiseEqUnboxed#
     
     {-# INLINE sizeof #-}
     sizeof _ n = max 0 n * 8
@@ -204,7 +216,5 @@ instance Storable WordAs64
     
     pokeElemOff (Ptr p#) (I# i#) (WordAs64 (W# x)) = IO $
       \ s1# -> case writeWord64OffAddr# p# i# x s1# of s2 -> (# s2, () #)
-
-
 
 
