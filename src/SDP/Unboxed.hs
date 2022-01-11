@@ -66,7 +66,7 @@ default ()
 class (Eq e) => Unboxed e
   where
     {-# MINIMAL (sizeof#|sizeof), (!#), ((!>#)|readUnboxed#|readUnboxedOff#),
-        eqUnboxed#, (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
+        (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
     
     {- |
       @since 0.3
@@ -152,6 +152,12 @@ class (Eq e) => Unboxed e
       @xs#@ and @ys#@ beginning from @ox#@ and @oy#@ elements resp.
     -}
     eqUnboxed# :: e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
+    eqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
+      where
+        go  _   _  _  0# = False
+        go  _   _  0# b# = isTrue# b#
+        go xo# yo# i# b# = go (xo# +# 1#) (yo# +# 1#) (i# -# 1#)
+          (case asTypeOf (xs# !# xo#) e == (ys# !# yo#) of {True -> b#; _ -> 0#})
     
     -- | Unsafe 'ByteArray#' reader (by index) with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
@@ -1034,8 +1040,6 @@ instance Unboxed Bool
   where
     filler = False
     
-    eqUnboxed# = undefined -- TODO
-    
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}; _ -> 0#}
     
@@ -1074,10 +1078,10 @@ instance Unboxed Bool
         s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
     hashUnboxedWith e len# off# bytes#
-        | isTrue#   (len# <# 1#)    = \ salt# -> salt#
-        | isTrue#   (off# <# 0#)    = hashUnboxedWith e len# 0# bytes#
-        | isTrue# (bit_off# ==# 0#) = go0 byte_cnt# byte_off#
-        |            True           = goo byte_cnt# (byte_off# +# 1#) (indexWord8Array# bytes# byte_off#)
+        | 1# <- len# <# 1# = \ salt# -> salt#
+        | 1# <- off# <# 0# = hashUnboxedWith e len# 0# bytes#
+        | 0# <-   bit_off# = go0 byte_cnt# byte_off#
+        |             True = goo byte_cnt# (byte_off# +# 1#) (indexWord8Array# bytes# byte_off#)
       where
         go0 0# _  salt# = salt#
         go0 1# o# salt# = hash# salt# (indexWord8Array# bytes# o# `and#` mask#)
@@ -1093,10 +1097,9 @@ instance Unboxed Bool
         hash# = \ s# v# -> word2Int# (int2Word# (s# *# 16777619#) `xor#` v#)
         mask# = int2Word# 0xff# `shiftRL#` bit_rest#
         
-        !(I# byte_off#, I# bit_off#) = I# off# `divMod` 8
-        !(I# bit_len#) = I# len# `mod` 8
+        !(# byte_off#, bit_off# #) = off# `quotRemInt#` 8#
         
-        bit_rest# = if isTrue# (bit_len# ==# 0#) then 0# else 8# -# bit_len#
+        bit_rest# = 8# -# remInt# len# 8#
         byte_cnt# = sizeof# e len#
 
 instance Unboxed Char
@@ -1126,6 +1129,8 @@ instance Unboxed Char
     
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
+
+--------------------------------------------------------------------------------
 
 instance Unboxed E
   where
@@ -1901,13 +1906,7 @@ rank# i = case rank i of I# r# -> r#
 gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
-{-
-{-# INLINE lcm# #-}
-lcm# :: Int# -> Int# -> Int#
-lcm# _  0# = 0#
-lcm# 0#  _ = 0#
-lcm# x# y# = quotInt# x# (gcd# x# y#) *# y#
--}
+
 {-# INLINE bool_scale #-}
 bool_scale :: Int# -> Int#
 bool_scale n# = (n# +# 7#) `uncheckedIShiftRA#` 3#
@@ -1931,5 +1930,6 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
 
 
