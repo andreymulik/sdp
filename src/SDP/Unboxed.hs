@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Unboxed
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -79,10 +79,9 @@ class (Eq e) => Unboxed e
       @
     -}
     filler :: e
-    filler =
-      let res = runST $ ST $ \ s1# -> case newUnboxed res 1# s1# of
-            (# s2#, marr# #) -> readUnboxed# marr# 0# s2#
-      in  res
+    filler =  let res = runST $ ST $ \ s1# -> case newUnboxed res 1# s1# of
+                    (# s2#, marr# #) -> readUnboxed# marr# 0# s2#
+              in  res
     
     {- |
       @since 0.3
@@ -119,26 +118,28 @@ class (Eq e) => Unboxed e
     {- |
       @since 0.3
       
-      The size of the minimum block of memory (in 8-byte words) and the maximum
-      number of values in it for a given type.
+      The size of the minimal block of memory (in bytes) and the maximum number
+      of values in it for a given type.
       
       @
-        -- two 64-bit words, one value
-        chunkof# (undefined :: Ratio Int64) === (# 2#, 1# #)
+        -- 16 bytes (8 bytes for each component) and one value
+        chunkof# (undefined :: Ratio Int64) === (# 16#, 1# #)
         
-        -- one 64-bit word, one value
-        chunkof# (undefined :: Int64) === (# 1#, 1# #)
-        chunkof# (undefined :: Int32) === (# 1#, 2# #)
-        chunkof# (undefined ::  Char) === (# 1#, 2# #)
+        -- 8 bytes, one value
+        chunkof# (undefined :: Int64) === (# 8#, 1# #)
         
-        -- one 64-bit word, 64 values
-        chunkof# (undefined ::  Bool) === (# 1#, 64# #)
+        -- 4 bytes, one value
+        chunkof# (undefined :: Int32) === (# 4#, 1# #)
+        chunkof# (undefined ::  Char) === (# 4#, 1# #)
+        
+        -- 1 byte, 8 values
+        chunkof# (undefined ::  Bool) === (# 1#, 8# #)
       @
     -}
     chunkof# :: e -> (# Int#, Int# #)
     chunkof# e =
-      let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 64# l#
-      in  (# quotInt# l# d#, quotInt# 64# d# #)
+      let l# = sizeof# e 64# `quotInt#` 8#; d# = gcd# 8# l#
+      in  (# quotInt# l# d#, quotInt# 8# d# #)
     
     {-# INLINE chunkof #-}
     -- | @since 0.3 See 'chunkof#'.
@@ -487,13 +488,8 @@ instance Unboxed Int
     
     eqUnboxed# = bytewiseEqUnboxed#
     
-#if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#elif SIZEOF_HSWORD == 8
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
@@ -521,7 +517,7 @@ instance Unboxed Int8
     sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 8# #)
+    chunkof# _ = (# 1#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
@@ -549,7 +545,7 @@ instance Unboxed Int16
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 4# #)
+    chunkof# _ = (# 2#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
@@ -577,7 +573,7 @@ instance Unboxed Int32
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
+    chunkof# _ = (# 4#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
@@ -605,7 +601,7 @@ instance Unboxed Int64
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
+    chunkof# _ = (# 8#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
@@ -632,13 +628,8 @@ instance Unboxed Word
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-#if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#elif SIZEOF_HSWORD == 8
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
@@ -666,7 +657,7 @@ instance Unboxed Word8
     sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 8# #)
+    chunkof# _ = (# 1#, 1# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W8# (indexWord8Array# bytes# i#)
@@ -694,7 +685,7 @@ instance Unboxed Word16
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 4# #)
+    chunkof# _ = (# 2#, 1# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W16# (indexWord16Array# bytes# i#)
@@ -722,7 +713,7 @@ instance Unboxed Word32
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
+    chunkof# _ = (# 4#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
@@ -750,7 +741,7 @@ instance Unboxed Word64
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
+    chunkof# _ = (# 8#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
@@ -777,10 +768,8 @@ instance Unboxed Float
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSFLOAT#; _ -> 0#}
     
-#if SIZEOF_HSFLOAT == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSFLOAT#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSFLOAT#; _ -> 0#}
@@ -807,10 +796,8 @@ instance Unboxed Double
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSDOUBLE#; _ -> 0#}
     
-#if SIZEOF_HSDOUBLE == 8
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSDOUBLE#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSDOUBLE#; _ -> 0#}
@@ -888,13 +875,8 @@ instance Unboxed (Ptr a)
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-#if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#elif SIZEOF_HSWORD == 8
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
@@ -921,13 +903,8 @@ instance Unboxed (FunPtr a)
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-#if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#elif SIZEOF_HSWORD == 8
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
@@ -954,13 +931,8 @@ instance Unboxed (StablePtr a)
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-#if SIZEOF_HSWORD == 4
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
-#elif SIZEOF_HSWORD == 8
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
-#endif
+    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
@@ -1044,7 +1016,7 @@ instance Unboxed Bool
     sizeof# _ n# = case n# ># 0# of {1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 64# #)
+    chunkof# _ = (# 1#, 8# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> 8# *# i#; _ -> 0#}
@@ -1112,7 +1084,7 @@ instance Unboxed Char
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
     {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 2# #)
+    chunkof# _ = (# 4#, 1# #)
     
     {-# INLINE offsetof# #-}
     offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
@@ -1930,6 +1902,4 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
-
 
