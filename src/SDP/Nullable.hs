@@ -37,7 +37,9 @@ import GHC.Stable
 import GHC.Base
 import GHC.Exts
 
+#if !MIN_VERSION_base(4,15,0)
 import Control.Exception.SDP
+#endif
 
 default ()
 
@@ -154,7 +156,5 @@ instance Nullable (StablePtr e) where lzero = StablePtr (unsafeCoerce# 0#)
 
 -- | @since 0.2.1
 instance Nullable (FunPtr e) where lzero = nullFunPtr
-
-
 
 

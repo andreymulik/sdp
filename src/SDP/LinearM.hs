@@ -1,9 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
+{-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, RankNTypes #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, GADTs, ViewPatterns, PatternSynonyms #-}
-{-# LANGUAGE ConstraintKinds, DefaultSignatures #-}
 
 #if __GLASGOW_HASKELL__ >= 806
-{-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 #endif
 
 {- |
@@ -24,7 +24,11 @@ module SDP.LinearM
   BorderedM (..), BorderedM1, BorderedM2,
   
   -- * LinearM class
-  LinearM (..), LinearM1, LinearM2, pattern (:+=), pattern (:=+), pattern (:~=),
+  LinearM (..), LinearM1, LinearM2,
+  
+  -- ** LinearM field
+  -- $fmrNotes
+  pattern (:+=), pattern (:=+), pattern (:~=),
   
 #if __GLASGOW_HASKELL__ >= 806
   -- ** Rank 2 quantified constraints
@@ -401,8 +405,14 @@ class (LinearM m s e) => SplitM m s e
 
 --------------------------------------------------------------------------------
 
-{- fmr-0.2 append, prepend and delete fields. -}
+{- fmr append, prepend and delete fields. -}
 
+{- $fmrNotes
+  Note that @fmr-0.3@ support starts with patch @sdp-0.2.1.2@ and version
+  @sdp-0.3@. @sdp-0.4@ will be the last major release with fmr@-0.2@ support.
+-}
+
+#if !MIN_VERSION_fmr(0,3,0)
 -- | 'FieldLinearM' is a service type used to prepend, append or remove element.
 data FieldLinearM l e m field record
   where
@@ -417,16 +427,17 @@ data FieldLinearM l e m field record
 instance IsProp (FieldLinearM l e)
   where
     performProp record (Append  field e) = setRecord field record =<<
-                              flip append e =<< getRecord field record
+                         flip append e =<< getRecord field record
     
     performProp record (Delete  n field) = setRecord field record =<<
-                              removed n =<< getRecord field record
+                             removed n =<< getRecord field record
     
     performProp record (Prepend e field) = setRecord field record =<<
-                              prepend e =<< getRecord field record
+                             prepend e =<< getRecord field record
 
 {- |
   @since 0.2.1
+  
   @(':+=')@ is @fmr@-compatible 'prepend' element pattern for 'LinearM' fields.
 -}
 pattern (:+=) ::
@@ -438,6 +449,7 @@ pattern e :+= field <- (cast' -> Just (Prepend e field)) where (:+=) = Prop ... 
 
 {- |
   @since 0.2.1
+  
   @(':=+')@ is @fmr@-compatible 'append' element pattern for 'LinearM' fields.
 -}
 pattern (:=+) ::
@@ -449,6 +461,7 @@ pattern field :=+ e <- (cast' -> Just (Append field e)) where (:=+) = Prop ... A
 
 {- |
   @since 0.2.1
+  
   @(':~=')@ is @fmr@-compatible delete element pattern for 'LinearM' fields, see
   'removed'.
 -}
@@ -466,6 +479,57 @@ cast' ::
     LinearM m l e, FieldGet field, FieldSet field
   ) => Prop m field record -> Maybe (FieldLinearM l e m field record)
 cast' =  cast
+#else
+-- | 'FieldLinearM' is a service type used to prepend, append or remove element.
+data FieldLinearM m field record
+  where
+    Prepend :: (FieldModifyM field m record l, LinearM m l e)
+            => !e -> !field -> FieldLinearM m field record
+    
+    Append  :: (FieldModifyM field m record l, LinearM m l e)
+            => !field -> !e -> FieldLinearM m field record
+    
+    Delete  :: (FieldModifyM field m record l, LinearM m l e)
+            => !Int -> !field -> FieldLinearM m field record
+  deriving ( Typeable )
+
+instance IsProp FieldLinearM
+  where
+    performProp record (Prepend e field) = () <$ modifyRecordM field record (prepend  e)
+    performProp record (Append  field e) = () <$ modifyRecordM field record (`append` e)
+    performProp record (Delete  n field) = () <$ modifyRecordM field record (removed  n)
+
+{- |
+  @since 0.2.1
+  
+  @(':+=')@ is @fmr@-compatible 'prepend' element pattern for 'LinearM' fields.
+-}
+pattern (:+=) :: (Monad m, CastableProp field m record)
+              => forall l e. (FieldModifyM field m record l, LinearM m l e)
+              => e -> field -> Prop m field record
+pattern e :+= field = Prop (Prepend e field)
+
+{- |
+  @since 0.2.1
+  
+  @(':=+')@ is @fmr@-compatible 'append' element pattern for 'LinearM' fields.
+-}
+pattern (:=+) :: (Monad m, CastableProp field m record)
+              => forall l e. (FieldModifyM field m record l, LinearM m l e)
+              => field -> e -> Prop m field record
+pattern field :=+ e = Prop (Append field e)
+
+{- |
+  @since 0.2.1
+  
+  @(':~=')@ is @fmr@-compatible delete element pattern for 'LinearM' fields, see
+  'removed'.
+-}
+pattern (:~=) :: (Monad m, CastableProp field m record)
+              => forall l e. (FieldModifyM field m record l, LinearM m l e)
+              => Int -> field -> Prop m field record
+pattern n :~= field = Prop (Delete n field)
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -497,4 +561,5 @@ type LinearM' m l = forall e . LinearM m (l e) e
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 #endif
+
 
