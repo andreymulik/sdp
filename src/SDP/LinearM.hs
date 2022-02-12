@@ -31,6 +31,10 @@ module SDP.LinearM
   -- $fmrNotes
   pattern (:+=), pattern (:=+), pattern (:~=),
   
+#if MIN_VERSION_fmr(0,3,0)
+  (=+:), (+=:), (~=:),
+#endif
+  
 #if __GLASGOW_HASKELL__ >= 806
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
@@ -464,6 +468,28 @@ pattern (:~=) :: (Monad m, CastableProp field m record)
               => forall l e. (FieldModifyM field m record l, LinearM m l e)
               => Int -> field -> Prop m field record
 pattern n :~= field = Prop (Delete n field)
+
+(=+:) ::
+  (
+    LinearM m l e, FieldModifyM field m record l,
+    Typeable field, Typeable m, Typeable record
+  ) => field -> e -> Prop m field record
+field =+: e = Prop (Append  field e)
+
+(+=:) ::
+  (
+    LinearM m l e, FieldModifyM field m record l,
+    Typeable field, Typeable m, Typeable record
+  ) => e -> field -> Prop m field record
+field +=: e = Prop (Prepend field e)
+
+(~=:) ::
+  (
+    LinearM m l e, FieldModifyM field m record l,
+    Typeable m, Typeable record, Typeable field
+  ) => Int -> field -> Prop m field record
+n ~=: field = Prop (Delete  n field)
+
 #endif
 
 --------------------------------------------------------------------------------
@@ -483,6 +509,7 @@ type LinearM' m l = forall e . LinearM m (l e) e
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 #endif
+
 
 
 
