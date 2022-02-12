@@ -77,20 +77,19 @@ instance Exception IndexException
 
 {- |
   A 'UnreachableException' is used as an exception that should never be thrown.
+  UnreachableException is a more specific version of 'undefined' (or just
+  unconditional 'AssertionFailed').
   
-  Example: @newArray#@ requires a default value to fill the newly created array.
-  If the array is guaranteed to be filled with values (for example, in the
-  @replicate@ function), then this value will never be needed and, therefore,
-  calculated. 'UnreachableException' in this case will be a marker of
-  unreachability of this expression.
+  Example: 'Data.Map.Map.lookupLT'' functions whose default definition use
+  'UnreachableException' as the second element of the default tuple that
+  compared with other tuples by 'cmpfst' and will never be returned.
 -}
-data UnreachableException = UnreachableException String deriving (Eq, Typeable)
+newtype UnreachableException = UnreachableException String
+  deriving ( Eq, Typeable )
 
 instance Show UnreachableException
   where
     show (UnreachableException s) = "unreachable exception " ++ s
 
 instance Exception UnreachableException
-
-
 
