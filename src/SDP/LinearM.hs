@@ -408,8 +408,12 @@ class (LinearM m s e) => SplitM m s e
 {- fmr append, prepend and delete fields. -}
 
 {- $fmrNotes
-  Note that @fmr-0.3@ support starts with patch @sdp-0.2.1.2@ and version
-  @sdp-0.3@. @sdp-0.4@ will be the last major release with fmr@-0.2@ support.
+  Note that @fmr-0.3@ support starts with @sdp-0.2.1.2@ patch - previous
+  versions only work with @fmr-0.2@.
+  
+  @fmr-0.3@ introduces new field extensions, so the patterns @(:+=)@, @(:=+)@
+  and @(:~=)@ will be deprecated in @sdp-0.3@ and will be removed in @sdp-0.4@.
+  @sdp-0.3@ will provide new combinators to do the same.
 -}
 
 #if !MIN_VERSION_fmr(0,3,0)
@@ -561,5 +565,6 @@ type LinearM' m l = forall e . LinearM m (l e) e
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 #endif
+
 
 
