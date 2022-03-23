@@ -1,8 +1,9 @@
-{-# LANGUAGE Trustworthy, MagicHash, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE Trustworthy, MagicHash, PatternSynonyms, UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 
 {- |
     Module      :  SDP.Prim.TArray
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable
@@ -13,13 +14,15 @@
 module SDP.Prim.TArray
 (
   -- TArray
-  TArray# (..), STM, TVar
+  MArray# (.., TArray#), TArray#, STM, TVar
 )
 where
 
 import Prelude ()
 import SDP.SafePrelude
-import SDP.Prim.SArray
+import SDP.Prim.SArray hiding ( set )
+
+import Data.Field
 
 import GHC.Conc
 
@@ -30,23 +33,37 @@ default ()
 --------------------------------------------------------------------------------
 
 -- | 'SArray#' of @stm@ 'TVar's.
-newtype TArray# e = TArray# (SArray# (TVar e)) deriving ( Eq )
+type TArray# = MArray# STM
+
+{-# COMPLETE TArray# #-}
+-- | Legacy pattern synonym for @sdp-0.2@ compatibility.
+pattern TArray# :: SArray# (Var STM e) -> TArray# e
+pattern TArray# es = MArray# es
+
+-- | Generalized array of variables.
+newtype MArray# m e = MArray# (SArray# (Var m e))
+
+--------------------------------------------------------------------------------
+
+instance Eq (Var m e) => Eq (MArray# m e)
+  where
+    (==) (MArray# xs) (MArray# ys) = xs == ys
 
 --------------------------------------------------------------------------------
 
 {- Nullable, Estimate and Bordered instances. -}
 
-instance Nullable (TArray# e)
+instance Nullable (MArray# m e)
   where
-    isNull = \ (TArray# es) -> isNull es
-    lzero  = TArray# Z
+    isNull = \ (MArray# es) -> isNull es
+    lzero  = MArray# Z
 
-instance NullableM STM (TArray# e)
+instance Monad m => NullableM m (MArray# m e)
   where
-    newNull = return (TArray# Z)
+    newNull = return (MArray# Z)
     nowNull = return . isNull . unpack
 
-instance Estimate (TArray# e)
+instance Estimate (MArray# m e)
   where
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
@@ -60,25 +77,25 @@ instance Estimate (TArray# e)
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
 
-instance Bordered (TArray# e) Int
+instance Bordered (MArray# m e) Int
   where
     lower _ = 0
+    upper   = upper.unpack
+    sizeOf  = sizeOf.unpack
+    indexIn = \ es i -> i >= 0 && i < sizeOf (unpack es)
     
-    upper    (TArray# arr) = upper arr
-    sizeOf   (TArray# arr) = sizeOf arr
-    bounds   (TArray# arr) = (0, upper arr)
-    indices  (TArray# arr) = [0 .. upper arr]
-    indexOf  (TArray# arr) = index (0, upper arr)
-    offsetOf (TArray# arr) = offset (0, upper arr)
-    indexIn  (TArray# arr) = \ i -> i >= 0 && i < sizeOf arr
+    bounds   (MArray# es) = (0, upper es)
+    indices  (MArray# es) = [0 .. upper es]
+    indexOf  (MArray# es) = index (0, upper es)
+    offsetOf (MArray# es) = offset (0, upper es)
     
-    rebound bnds (TArray# arr) = TArray# (rebound bnds arr)
+    rebound bnds = MArray# . rebound bnds . unpack
 
 --------------------------------------------------------------------------------
 
 {- BorderedM and LinearM instances. -}
 
-instance BorderedM STM (TArray# e) Int
+instance Monad m => BorderedM m (MArray# m e) Int
   where
     getIndexOf = return ... indexOf
     getIndices = return . indices
@@ -87,27 +104,27 @@ instance BorderedM STM (TArray# e) Int
     getUpper   = return . upper
     getLower _ = return 0
 
-instance LinearM STM (TArray# e) e
+instance MonadVar m => LinearM m (MArray# m e) e
   where
-    getHead = readTVar . head . unpack
-    getLast = readTVar . last . unpack
-    singleM = fmap (TArray# . single) . newTVar
+    getHead = get this . head . unpack
+    getLast = get this . last . unpack
+    singleM = fmap (MArray# . single) . var
     
-    prepend e es = TArray# . (:> unpack es) <$> newTVar e
-    append  es e = TArray# . (unpack es :<) <$> newTVar e
+    prepend e es = MArray# . (:> unpack es) <$> var e
+    append  es e = MArray# . (unpack es :<) <$> var e
     
-    newLinear     = fmap (TArray# . fromList) . mapM newTVar
-    newLinearN  n = fmap (TArray# . fromListN n) . mapM newTVar
-    fromFoldableM = fmap (TArray# . fromList) . foldr (liftA2 (:) . newTVar) (return [])
+    newLinear     = fmap (MArray# . fromList) . mapM var
+    newLinearN  n = fmap (MArray# . fromListN n) . mapM var
+    fromFoldableM = fmap (MArray# . fromList) . foldr (liftA2 (:) . var) (return [])
     
-    (!#>)  = readTVar ... (!^) . unpack
+    (!#>)  = get this ... (!^) . unpack
     writeM = writeM'
     
-    getLeft  = mapM readTVar . listL . unpack
-    getRight = mapM readTVar . listR . unpack
-    merged   = return . TArray# . concatMap unpack
-    reversed = return . TArray# . reverse . unpack
-    filled n = fmap (TArray# . fromList) . replicateM n . newTVar
+    getLeft  = mapM (get this) . listL . unpack
+    getRight = mapM (get this) . listR . unpack
+    merged   = return . MArray# . concatMap unpack
+    reversed = return . MArray# . reverse . unpack
+    filled n = fmap (MArray# . fromList) . replicateM n . var
     
     copyTo src so trg to n = when (n > 0) $ do
         when      (so < 0 || to < 0)      $ underEx "copyTo"
@@ -120,16 +137,16 @@ instance LinearM STM (TArray# e) e
         n1 = sizeOf src
         n2 = sizeOf trg
     
-    ofoldlM f base = ofoldl (\ i es -> ($ f i) . (es >>=<<) . readTVar) (return base) . unpack
-    ofoldrM f base = ofoldr (\ i -> ($ f i) ... (>>=<<) . readTVar) (return base) . unpack
+    ofoldlM f base = ofoldl (\ i es -> ($ f i) . (es >>=<<) . get this) (return base) . unpack
+    ofoldrM f base = ofoldr (\ i -> ($ f i) ... (>>=<<) . get this) (return base) . unpack
     
-    foldlM f base = foldl (\ es -> ($ f) . (es >>=<<) . readTVar) (return base) . unpack
-    foldrM f base = foldr (($ f) ... (>>=<<) . readTVar) (return base) . unpack
+    foldlM f base = foldl (\ es -> ($ f) . (es >>=<<) . get this) (return base) . unpack
+    foldrM f base = foldr (($ f) ... (>>=<<) . get this) (return base) . unpack
     
-    takeM n = return . TArray# . take n . unpack
-    dropM n = return . TArray# . drop n . unpack
-    keepM n = return . TArray# . keep n . unpack
-    sansM n = return . TArray# . sans n . unpack
+    takeM n = return . MArray# . take n . unpack
+    dropM n = return . MArray# . drop n . unpack
+    keepM n = return . MArray# . keep n . unpack
+    sansM n = return . MArray# . sans n . unpack
     
     prefixM p es =
       let
@@ -159,12 +176,12 @@ instance LinearM STM (TArray# e) e
 
 {- MapM and IndexedM instances. -}
 
-instance MapM STM (TArray# e) Int e
+instance MonadVar m => MapM m (MArray# m e) Int e
   where
     newMap' defvalue ascs = fromAssocs' (ascsBounds ascs) defvalue ascs
     
     {-# INLINE writeM' #-}
-    writeM' = writeTVar ... (!^) . unpack
+    writeM' = setField this ... (!^) . unpack
     
     (>!) = (!#>)
     
@@ -175,7 +192,7 @@ instance MapM STM (TArray# e) Int e
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
-instance IndexedM STM (TArray# e) Int e
+instance MonadVar m => IndexedM m (MArray# m e) Int e
   where
     fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
     
@@ -195,17 +212,21 @@ instance IndexedM STM (TArray# e) Int e
 
 {- Freeze and Thaw instances. -}
 
-instance Thaw STM (SArray# e) (TArray# e) where thaw = fmap TArray# . mapM newTVar
+instance MonadVar m => Thaw m (SArray# e) (MArray# m e)
+  where
+    thaw = fmap MArray# . mapM var
 
-instance Freeze STM (TArray# e) (SArray# e) where freeze = mapM readTVar . unpack
+instance MonadVar m => Freeze m (MArray# m e) (SArray# e)
+  where
+    freeze = mapM (get this) . unpack
 
 --------------------------------------------------------------------------------
 
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
 ascsBounds =  \ ((x, _) : xs) -> foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
 
-unpack :: TArray# e -> SArray# (TVar e)
-unpack =  \ (TArray# arr) -> arr
+unpack :: MArray# m e -> SArray# (Var m e)
+unpack =  \ (MArray# es) -> es
 
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.TArray."
@@ -215,6 +236,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 
 
