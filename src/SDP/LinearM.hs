@@ -383,7 +383,7 @@ pattern (:+=) ::
   (
     Typeable record, Typeable field, Typeable m, Typeable l, Typeable e,
     LinearM m l e, FieldGet field, FieldSet field
-  ) => e -> field m record l -> Prop m field record
+  ) => e -> field m record l -> Prop m record
 pattern e :+= field <- (cast' -> Just (Prepend e field)) where (:+=) = Prop ... Prepend
 
 {- |
@@ -395,7 +395,7 @@ pattern (:=+) ::
   (
     Typeable record, Typeable field, Typeable m, Typeable l, Typeable e,
     LinearM m l e, FieldGet field, FieldSet field
-  ) => field m record l -> e -> Prop m field record
+  ) => field m record l -> e -> Prop m record
 pattern field :=+ e <- (cast' -> Just (Append field e)) where (:=+) = Prop ... Append
 
 {- |
@@ -408,7 +408,7 @@ pattern (:~=) ::
   (
     Typeable record, Typeable field, Typeable m, Typeable l, Typeable e,
     LinearM m l e, FieldGet field, FieldSet field
-  ) => Int -> field m record l -> Prop m field record
+  ) => Int -> field m record l -> Prop m record
 pattern n :~= field <- (cast' -> Just (Delete n field)) where (:~=) = Prop ... Delete
 
 -- | 'cast'' is just service function for 'Prop' data extraction.
@@ -416,20 +416,20 @@ cast' ::
   (
     Typeable record, Typeable field, Typeable m, Typeable l, Typeable e,
     LinearM m l e, FieldGet field, FieldSet field
-  ) => Prop m field record -> Maybe (FieldLinearM l e m field record)
+  ) => Prop m record -> Maybe (FieldLinearM l e m record)
 cast' =  cast
 #else
 -- | 'FieldLinearM' is a service type used to prepend, append or remove element.
-data FieldLinearM m field record
+data FieldLinearM m record
   where
     Prepend :: (FieldModifyM field m record l, LinearM m l e)
-            => !e -> !field -> FieldLinearM m field record
+            => !e -> !field -> FieldLinearM m record
     
     Append  :: (FieldModifyM field m record l, LinearM m l e)
-            => !field -> !e -> FieldLinearM m field record
+            => !field -> !e -> FieldLinearM m record
     
     Delete  :: (FieldModifyM field m record l, LinearM m l e)
-            => !Int -> !field -> FieldLinearM m field record
+            => !Int -> !field -> FieldLinearM m record
   deriving ( Typeable )
 
 instance IsProp FieldLinearM
@@ -443,9 +443,9 @@ instance IsProp FieldLinearM
   
   @(':+=')@ is @fmr@-compatible 'prepend' element pattern for 'LinearM' fields.
 -}
-pattern (:+=) :: (Monad m, CastableProp field m record)
-              => forall l e. (FieldModifyM field m record l, LinearM m l e)
-              => e -> field -> Prop m field record
+pattern (:+=) :: (Typeable m, Typeable record, Monad m)
+              => (FieldModifyM field m record l, LinearM m l e)
+              => e -> field -> Prop m record
 pattern e :+= field = Prop (Prepend e field)
 
 {- |
@@ -453,9 +453,9 @@ pattern e :+= field = Prop (Prepend e field)
   
   @(':=+')@ is @fmr@-compatible 'append' element pattern for 'LinearM' fields.
 -}
-pattern (:=+) :: (Monad m, CastableProp field m record)
-              => forall l e. (FieldModifyM field m record l, LinearM m l e)
-              => field -> e -> Prop m field record
+pattern (:=+) :: (Typeable m, Typeable record, Monad m)
+              => (FieldModifyM field m record l, LinearM m l e)
+              => field -> e -> Prop m record
 pattern field :=+ e = Prop (Append field e)
 
 {- |
@@ -464,31 +464,31 @@ pattern field :=+ e = Prop (Append field e)
   @(':~=')@ is @fmr@-compatible delete element pattern for 'LinearM' fields, see
   'removed'.
 -}
-pattern (:~=) :: (Monad m, CastableProp field m record)
-              => forall l e. (FieldModifyM field m record l, LinearM m l e)
-              => Int -> field -> Prop m field record
+pattern (:~=) :: (Typeable m, Typeable record, Monad m)
+              => (FieldModifyM field m record l, LinearM m l e)
+              => Int -> field -> Prop m record
 pattern n :~= field = Prop (Delete n field)
 
 (=+:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
     Typeable field, Typeable m, Typeable record
-  ) => field -> e -> Prop m field record
-field =+: e = Prop (Append  field e)
+  ) => field -> e -> Prop m record
+field =+: e = Prop (Append field e)
 
 (+=:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
     Typeable field, Typeable m, Typeable record
-  ) => e -> field -> Prop m field record
+  ) => e -> field -> Prop m record
 field +=: e = Prop (Prepend field e)
 
 (~=:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
     Typeable m, Typeable record, Typeable field
-  ) => Int -> field -> Prop m field record
-n ~=: field = Prop (Delete  n field)
+  ) => Int -> field -> Prop m record
+n ~=: field = Prop (Delete n field)
 
 #endif
 

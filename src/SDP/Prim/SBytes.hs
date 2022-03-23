@@ -23,7 +23,7 @@ module SDP.Prim.SBytes
   MIOBytes# (..), IOBytes#, STBytes#, SBytes#,
   
   -- ** Unpack unboxed arrays
-  fromSBytes#, packSBytes#, unpackSBytes#, offsetSBytes#,
+  fromSBytes#,  packSBytes#,  unpackSBytes#,  offsetSBytes#,
   fromSTBytes#, packSTBytes#, unpackSTBytes#, offsetSTBytes#,
   
   -- ** Coerce unboxed arrays
