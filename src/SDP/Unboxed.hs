@@ -26,9 +26,12 @@ module SDP.Unboxed
   fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
   pcloneUnboxedM1,
   
-  -- Wrap helper
+  -- * Wrap helpers
   Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#, calloc#,
-  newLinear#, newLinearN#, fromFoldableM#, concat#, pconcat
+  newLinear#, newLinearN#, fromFoldableM#, concat#, pconcat,
+  
+  -- * Byte order
+  ByteOrder (..), targetByteOrder
 )
 where
 
@@ -46,10 +49,15 @@ import GHC.Int
 import GHC.Ptr
 import GHC.ST
 
+#if MIN_VERSION_base(4,11,0)
+import GHC.ByteOrder
+#endif
+
 import Data.Complex
 
 import Foreign.C.Types
 
+#include <ghcautoconf.h>
 #include "MachDeps.h"
 
 default ()
@@ -2051,5 +2059,27 @@ bool_index =  (`uncheckedIShiftRA#` 6#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
+--------------------------------------------------------------------------------
+
+-- HINT: GHC.ByteOrder is available since base-4.11.0.0
+#if !MIN_VERSION_base(4,11,0)
+-- | Byte ordering.
+data ByteOrder = BigEndian | LittleEndian deriving ( Eq, Ord, Bounded, Enum, Read, Show )
+
+one# :: Int
+one# =  runST $ ST $ \ s1# -> case newByteArray# 2# s1# of
+  (# s2#, marr# #) -> case writeWord16Array# marr# 0# (int2Word# 0x0001#) s2# of
+    s3# -> case readWord8Array# marr# 0# s3# of
+      (# s4#, i# #) -> (# s4#, I# (word2Int# i#) #)
+
+-- | The byte ordering of the target machine.
+targetByteOrder :: ByteOrder
+#if defined(WORDS_BIGENDIAN)
+targetByteOrder =  BigEndian
+#else
+targetByteOrder =  if one# == 1 then LittleEndian else BigEndian
+#endif
+#endif
 
 
