@@ -990,7 +990,7 @@ instance (Storable e, Unboxed e) => Freeze IO (Int, Ptr e) (SBytes# e)
     freeze (n, ptr) = do
       let !n'@(I# n#) = max 0 n
       es' <- stToIO . ST $ \ s1# -> case pnewUnboxed ptr n# s1# of
-        (# s2#, marr# #) -> (# s2#, MIOBytes# (STBytes# n' 0 marr#) #)
+        (# s2#, marr# #) -> (# s2#, MIOBytes# (STBytes# n' 0 marr#) `asSameProxyOf` ptr #)
       forM_ [0 .. n' - 1] $ \ i -> peekElemOff ptr i >>= writeM es' i
       freeze es'
 
@@ -1106,6 +1106,9 @@ hashSBytesWith# (I# salt#) es@(SBytes# (I# c#) (I# o#) bytes#) =
 
 --------------------------------------------------------------------------------
 
+asSameProxyOf :: f a -> g a -> f a
+asSameProxyOf =  const
+
 {-# INLINE done #-}
 done :: STBytes# s e -> ST s (SBytes# e)
 done (STBytes# n o marr#) = ST $ \ s1# -> case unsafeFreezeByteArray# marr# s1# of
@@ -1144,7 +1147,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-
-
 

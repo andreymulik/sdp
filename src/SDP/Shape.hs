@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, DefaultSignatures, ConstraintKinds #-}
-{-# LANGUAGE CPP, FlexibleInstances, UndecidableInstances, Trustworthy #-}
+{-# LANGUAGE CPP, FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
+{-# LANGUAGE Trustworthy #-}
 
 {- |
     Module      :  SDP.Shape
@@ -232,7 +233,7 @@ instance (Shape i, Enum i, Bounded i, Shape (i' :& i)) => Shape (i' :& i :& i)
     type DimInit (i' :& i :& i) = i' :& i
     type DimLast (i' :& i :& i) = i
     
-    rank = (const . succ . rank :: Shape i' => i' -> (i' :& i) -> Int) undefined
+    rank = (const . succ . rank :: Shape (i' :& i) => i' :& i -> (i' :& i :& i) -> Int) undefined
     
     fromGIndex = id
     toGIndex   = id
@@ -364,7 +365,6 @@ toGBounds =  both toGIndex
 -- | Convert generalized index bounds to any index type bounds.
 fromGBounds :: (Shape i) => (GIndex i, GIndex i) -> (i, i)
 fromGBounds =  both fromGIndex
-
 
 
 

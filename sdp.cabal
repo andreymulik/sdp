@@ -27,14 +27,16 @@ tested-with:
   GHC == 8.2.2,
   -- lts-12.26
   GHC == 8.4.4,
+  -- lts-14.27
+  GHC == 8.6.5,
   -- lts-18.8
   GHC == 8.10.6,
-  -- lts-18.18
+  -- lts-18.24
   GHC == 8.10.7,
-  -- nightly-2021-12-10
-  GHC == 9.0.1,
-  -- nightly-2022-02-01
-  GHC == 9.0.2
+  -- lts-19.0
+  GHC == 9.0.2,
+  -- nightly-2022-03-23
+  GHC == 9.2.2
 
 source-repository head
   type: git
@@ -53,7 +55,7 @@ Library
   hs-source-dirs:   src
   
   build-tools: cpphs >=1.19
-  ghc-options: -O2 -Wall -Wcompat -pgmPcpphs -optP--cpp -optP-traditional
+  ghc-options: -O2 -Wall -Wcompat -Wno-incomplete-uni-patterns -pgmPcpphs -optP--cpp -optP-traditional
   
   build-depends:
     base               >= 4.9 && <   5,
@@ -136,10 +138,8 @@ Library
     -- Service definitions
     Control.Exception.SDP
     
-    SDP.Unboxed.WordAs
-    SDP.Unboxed.IntAs
-    
     Text.Show.SDP
     Text.Read.SDP
+
 
 

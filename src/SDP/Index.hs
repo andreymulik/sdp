@@ -432,7 +432,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i)) => Index (i' :& i :& i)
   where
     defLimit i = lim (error "in defLimit {i' :& i :& i}") (rank i) i
       where
-        lim :: (Index i) => i -> Int -> (i' :& i) -> Integer
+        lim :: (Index i) => i -> Int -> (i' :& i :& i) -> Integer
         lim =  const ... (^) . defLimit
     
     size  (ls :& l, us :& u) = size (l, u) * size (ls, us)

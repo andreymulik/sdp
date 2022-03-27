@@ -1,5 +1,5 @@
+{-# LANGUAGE Trustworthy, UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, DeriveDataTypeable, DeriveGeneric #-}
-{-# LANGUAGE Trustworthy, UndecidableInstances, FlexibleInstances #-}
 
 {- |
     Module      :  SDP.Finite
