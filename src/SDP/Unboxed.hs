@@ -1085,7 +1085,9 @@ instance Unboxed Bool
     filler = False
     
     {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}; _ -> 0#}
+    sizeof# _ n# = case n# ># 0# of
+      1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}
+      _  -> 0#
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# 1#, 8# #)
@@ -1097,29 +1099,37 @@ instance Unboxed Bool
     newUnboxed = calloc#
     
     {-# INLINE (!#) #-}
-    bytes# !# i# = isTrue# ((indexWordArray# bytes# (bool_index i#) `and#` bool_bit i#) `neWord#` int2Word# 0#)
+    bytes# !# i# = isTrue# (b# `neWord#` int2Word# 0#)
+      where
+        b# = and# m# (indexWord8ArrayAsWord# bytes# n#)
+        m# = uncheckedShiftL# (int2Word# 1#) bi#
+        !(# n#, bi# #) = i# `quotRemInt#` 8#
     
     {-# INLINE readUnboxed# #-}
-    readUnboxed# mbytes# i# = \ s1# -> case readWordArray# mbytes# (bool_index i#) s1# of
-      (# s2#, e# #) -> (# s2#, isTrue# ((e# `and#` bool_bit i#) `neWord#` int2Word# 0#) #)
+    readUnboxed# mbytes# i# = \ s1# -> case readWord8ArrayAsWord# mbytes# n# s1# of
+        (# s2#, e# #) -> (# s2#, isTrue# (and# e# b# `neWord#` int2Word# 0#) #)
+      where
+        b# = uncheckedShiftL# (int2Word# 1#) bi#
+        !(# n#, bi# #) = i# `quotRemInt#` 8#
     
     {-# INLINE writeUnboxed# #-}
-    writeUnboxed# mbytes# n# e = \ s1# -> case readWordArray# mbytes# i# s1# of
-        (# s2#, old_byte# #) -> writeWordArray# mbytes# i# (bitWrite old_byte#) s2#
+    writeUnboxed# mbytes# n# e = \ s1# -> case readWord8ArrayAsWord# mbytes# c# s1# of
+        (# s2#, old# #) -> writeWord8ArrayAsWord# mbytes# c# (upd# old#) s2#
       where
-        bitWrite old_byte# = if e then old_byte# `or#` bool_bit n# else old_byte# `and#` bool_not_bit n#
-        i# = bool_index n#
+        upd# old# = if e then or# old# b# else old# `and#` not# b#
+        b# = uncheckedShiftL# (int2Word# 1#) bi#
+        !(# c#, bi# #) = n# `quotRemInt#` 8#
     
-    -- TODO: big-endian?
     fillByteArray# bs# c# e = \ s1# -> case setByteArray# bs# 0# n# val# s1# of
-        s2# -> if isTrue# (b# ==# 0#) then s2# else case readWord8ArrayAsWord# bs# n# s2# of
-          (# s3#, w8# #) -> writeWord8ArrayAsWord# bs# n# (if e then or# w8# (not# mask#) else and# w8# mask#) s3#
+        s2# -> if isTrue# (b# ==# 0#) then s2# else
+          case readWord8ArrayAsWord# bs# n# s2# of
+            (# s3#, w8# #) -> writeWord8ArrayAsWord# bs# n#
+              (if e then or# w8# (not# mask#) else and# w8# mask#) s3#
       where
         mask# = uncheckedShiftL# (int2Word# 0xff#) b#
         val#  = if e then 0xff# else 0x00#
         !(# n#, b# #) = quotRemInt# c# 8#
     
-    -- TODO: big-endian?
     fillByteArrayOff# bs# c# 0# e = fillByteArray# bs# c# e
     fillByteArrayOff# bs# c# o# e
         -- I really don't like to discern arrays like
@@ -1127,11 +1137,12 @@ instance Unboxed Bool
         | 1# <- c# <# 8# = defaultFillByteArrayOff# bs# c# o# e
         -- Normal byte array with whole byte offset
         | 0# <-      bo# = \ s1# -> case setByteArray# bs# no# nc# val# s1# of
-          s2# -> if isTrue# (bc# ==# 0#) then s2# else case readWord8ArrayAsWord# bs# (nc# +# 1#) s2# of
-            (# s3#, w8# #) ->
-              let mask# = uncheckedShiftL# oxff# bc#
-              in  writeWord8ArrayAsWord# bs# (nc# +# 1#)
-                    (if e then or# w8# (not# mask#) else and# w8# mask#) s3#
+          s2# -> if isTrue# (bc# ==# 0#) then s2# else
+            case readWord8ArrayAsWord# bs# (nc# +# 1#) s2# of
+              (# s3#, w8# #) ->
+                let mask# = uncheckedShiftL# oxff# bc#
+                in  writeWord8ArrayAsWord# bs# (nc# +# 1#)
+                      (if e then w8# `or#` not# mask# else and# w8# mask#) s3#
         -- Now deal with incomplete first byte if any
         | True           = \ s1# -> case readWord8ArrayAsWord# bs# no# s1# of
           (# s2#, w8# #) ->
@@ -1144,36 +1155,39 @@ instance Unboxed Bool
         !(# nc#, bc# #) = quotRemInt# c# 8#; oxff# = int2Word# 0xff#
         ob# = 8# -# bo#
     
-    copyUnboxed# e bytes# o1# mbytes# o2# c# = isTrue# (c# <# 1#) ? (\ s1# -> s1#) $
+    copyUnboxed# e bytes# o1# mbytes# o2# c# = if isTrue# (c# <# 1#) then \ s1# -> s1# else
       \ s1# -> case writeUnboxed# mbytes# o2# ((bytes# !# o1#) `asTypeOf` e) s1# of
         s2# -> copyUnboxed# e bytes# (o1# +# 1#) mbytes# (o2# +# 1#) (c# -# 1#) s2#
     
-    copyUnboxedM# e src# o1# mbytes# o2# n# = \ s1# -> case readUnboxed# src# o1# s1# of
-      (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
-        s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
+    copyUnboxedM# e src# o1# mbytes# o2# n# = if isTrue# (n# <# 1#) then \ s1# -> s1# else
+      \ s1# -> case readUnboxed# src# o1# s1# of
+        (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
+          s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
     -- TODO: big-endian?
     hashUnboxedWith e len# off# bytes#
         | 1# <- len# <# 1# = \ salt# -> salt#
         | 1# <- off# <# 0# = hashUnboxedWith e len# 0# bytes#
-        | 0# <-   bit_off# = go0 byte_cnt# byte_off#
-        |             True = goo byte_cnt# (byte_off# +# 1#) (indexWord8ArrayAsWord# bytes# byte_off#)
+        | 0# <-        bi# = go0 byte_cnt# c#
+        |             True = goo byte_cnt# (c# +# 1#)
+          (indexWord8ArrayAsWord# bytes# c#)
       where
         go0 0# _  salt# = salt#
         go0 1# o# salt# = hash# salt# (indexWord8ArrayAsWord# bytes# o# `and#` mask#)
-        go0 n# o# salt# = go0 (n# -# 1#) (o# +# 1#) (salt# `hash#` indexWord8ArrayAsWord# bytes# o#)
+        go0 n# o# salt# = go0 (n# -# 1#) (o# +# 1#)
+          (salt# `hash#` indexWord8ArrayAsWord# bytes# o#)
         
         goo 0# _    _   salt# = salt#
-        goo 1# _  temp# salt# = hash# salt# (shiftRL# temp# bit_off# `and#` mask#)
+        goo 1# _  temp# salt# = hash# salt# (shiftRL# temp# bi# `and#` mask#)
         goo n# o# temp# salt# = goo (n# -# 1#) (o# +# 1#) byte# (hash# salt# curr#)
           where
-            curr# = shiftRL# temp# bit_off# `or#` shiftL# byte# (8# -# bit_off#)
+            curr# = shiftRL# temp# bi# `or#` shiftL# byte# (8# -# bi#)
             byte# = indexWord8ArrayAsWord# bytes# o#
         
         hash# = \ s# v# -> word2Int# (int2Word# (s# *# 16777619#) `xor#` v#)
         mask# = int2Word# 0xff# `shiftRL#` bit_rest#
         
-        !(# byte_off#, bit_off# #) = off# `quotRemInt#` 8#
+        !(# c#, bi# #) = off# `quotRemInt#` 8#
         
         bit_rest# = 8# -# remInt# len# 8#
         byte_cnt# = sizeof# e len#
@@ -1250,11 +1264,13 @@ instance Unboxed e => Unboxed (I1 e)
     newUnboxed' = \ (E :& i) -> newUnboxed i
     newUnboxed  = pnewUnboxed
 
-instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e)) => Unboxed (e' :& e :& e)
+instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e))
+      => Unboxed (e' :& e :& e)
   where
     filler = filler :& filler
     
-    eqUnboxed# e xs# o1# ys# o2# n# = let r# = rank# e in peqUnboxed e xs# (o1# *# r#) ys# (o2# *# r#) (n# *# r#)
+    eqUnboxed# e xs# o1# ys# o2# n# = let r# = rank# e in peqUnboxed e xs#
+      (o1# *# r#) ys# (o2# *# r#) (n# *# r#)
     
     sizeof# e n# = psizeof# e (rank# e *# n#)
     sizeof  e  n = psizeof  e (rank  e *   n)
@@ -2011,6 +2027,25 @@ compareByteArrays# xs# ox# ys# oy# n# = go# 0#
       where
         x# = indexWord8Array# xs# (ox# +# i#)
         y# = indexWord8Array# ys# (oy# +# i#)
+
+-- HINT: GHC.ByteOrder is available since base-4.11.0.0
+
+-- | Byte ordering.
+data ByteOrder = BigEndian | LittleEndian deriving ( Eq, Ord, Bounded, Enum, Read, Show )
+
+one# :: Int
+one# =  runST $ ST $ \ s1# -> case newByteArray# 2# s1# of
+  (# s2#, marr# #) -> case writeWord16Array# marr# 0# (int2Word# 0x0001#) s2# of
+    s3# -> case readWord8Array# marr# 0# s3# of
+      (# s4#, i# #) -> (# s4#, I# (word2Int# i#) #)
+
+-- | The byte ordering of the target machine.
+targetByteOrder :: ByteOrder
+#if defined(WORDS_BIGENDIAN)
+targetByteOrder =  BigEndian
+#else
+targetByteOrder =  if one# == 1 then LittleEndian else BigEndian
+#endif
 #endif
 
 #if !MIN_VERSION_base(4,12,0)
@@ -2040,46 +2075,6 @@ gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
 
-{-# INLINE bool_bit #-}
-bool_bit :: Int# -> Word#
-bool_bit n# = case (SIZEOF_HSWORD * 8 - 1) of
-  W# mask# -> int2Word# 1# `uncheckedShiftL#` word2Int# (int2Word# n# `and#` mask#)
-
-{-# INLINE bool_not_bit #-}
-bool_not_bit :: Int# -> Word#
-bool_not_bit n# = case maxBound of W# mb# -> bool_bit n# `xor#` mb#
-
-{-# INLINE bool_index #-}
-bool_index :: Int# -> Int#
-#if   SIZEOF_HSWORD == 4
-bool_index =  (`uncheckedIShiftRA#` 5#)
-#elif SIZEOF_HSWORD == 8
-bool_index =  (`uncheckedIShiftRA#` 6#)
-#endif
-
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
---------------------------------------------------------------------------------
-
--- HINT: GHC.ByteOrder is available since base-4.11.0.0
-#if !MIN_VERSION_base(4,11,0)
--- | Byte ordering.
-data ByteOrder = BigEndian | LittleEndian deriving ( Eq, Ord, Bounded, Enum, Read, Show )
-
-one# :: Int
-one# =  runST $ ST $ \ s1# -> case newByteArray# 2# s1# of
-  (# s2#, marr# #) -> case writeWord16Array# marr# 0# (int2Word# 0x0001#) s2# of
-    s3# -> case readWord8Array# marr# 0# s3# of
-      (# s4#, i# #) -> (# s4#, I# (word2Int# i#) #)
-
--- | The byte ordering of the target machine.
-targetByteOrder :: ByteOrder
-#if defined(WORDS_BIGENDIAN)
-targetByteOrder =  BigEndian
-#else
-targetByteOrder =  if one# == 1 then LittleEndian else BigEndian
-#endif
-#endif
-
 
