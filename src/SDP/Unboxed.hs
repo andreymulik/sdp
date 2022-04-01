@@ -160,13 +160,9 @@ class Eq e => Unboxed e
       @eqUnboxed# e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
       @xs#@ and @ys#@ beginning from @ox#@ and @oy#@ elements resp.
     -}
+    {-# INLINE eqUnboxed# #-}
     eqUnboxed# :: e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
-    eqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
-      where
-        go  _   _  _  0# = False
-        go  _   _  0# b# = isTrue# b#
-        go xo# yo# i# b# = go (xo# +# 1#) (yo# +# 1#) (i# -# 1#)
-          (case asTypeOf (xs# !# xo#) e == (ys# !# yo#) of {True -> b#; _ -> 0#})
+    eqUnboxed# =  defaultEqUnboxed#
     
     -- | Unsafe 'ByteArray#' reader (by index) with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
@@ -2007,13 +2003,30 @@ defaultFillByteArrayOff# bs# c# o# e = go# o#
 {- |
   @since 0.3
   
-  Default 'eqUnboxed#' implementation.
+  Recommended 'eqUnboxed#' implementation.
 -}
 bytewiseEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int#
-                                     -> ByteArray# -> Int# -> Int# -> Bool
-bytewiseEqUnboxed# e xs# o1# ys# o2# c# =
-  let i1# = sizeof# e o1#; i2# = sizeof# e o2#; n# = sizeof# e c#
-  in  case c# <# 0# of {1# -> True; _ -> isTrue# (compareByteArrays# xs# i1# ys# i2# n# ==# 0#)}
+                                     -> ByteArray# -> Int#
+                                     -> Int# -> Bool
+bytewiseEqUnboxed# e xs# o1# ys# o2# c# = case c# <# 0# of
+  1# -> True
+  _  -> let i1# = sizeof# e o1#; i2# = sizeof# e o2#; n# = sizeof# e c#
+        in  isTrue# (compareByteArrays# xs# i1# ys# i2# n# ==# 0#)
+
+{- |
+  @since 0.3
+  
+  Default 'eqUnboxed#' implemetation.
+-}
+defaultEqUnboxed#  :: Unboxed e => e -> ByteArray# -> Int#
+                                     -> ByteArray# -> Int#
+                                     -> Int# -> Bool
+defaultEqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
+  where
+    go  _   _  _  0# = False
+    go  _   _  0# b# = isTrue# b#
+    go xo# yo# i# b# = go (xo# +# 1#) (yo# +# 1#) (i# -# 1#)
+      (case asTypeOf (xs# !# xo#) e == (ys# !# yo#) of {True -> b#; _ -> 0#})
 
 #if !MIN_VERSION_base(4,11,0)
 compareByteArrays# :: ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Int#
@@ -2022,7 +2035,7 @@ compareByteArrays# xs# ox# ys# oy# n# = go# 0#
     go#  i# = case i# >=# n# of
       1# -> 0#
       _  -> case eqWord# x# y# of
-        1# -> go# (i# -# 1#)
+        1# -> go# (i# +# 1#)
         _  -> case ltWord# x# y# of {1# -> -1#; _ -> 1#}
       where
         x# = indexWord8Array# xs# (ox# +# i#)
@@ -2077,4 +2090,6 @@ gcd# a# b# = gcd# b# (remInt# a# b#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
+
 
