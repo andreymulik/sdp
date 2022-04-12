@@ -286,7 +286,7 @@ class Eq e => Unboxed e
         go o# n# salt# = go (o# +# 1#) (n# -# 1#) (word2Int# hash#)
           where
             prod# = int2Word# (salt# *# 16777619#)
-            elem# = indexWord8ArrayAsWord# bytes# o#
+            elem# = indexWord8Array## bytes# o#
             hash# = prod# `xor#` elem#
     
     sortUnboxed :: Ord e => e -> MutableByteArray# s
@@ -330,11 +330,9 @@ cloneUnboxedM# e mbytes# o# n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# 
 -}
 thawUnboxed# :: Unboxed e => e -> ByteArray# -> Int# ->
   State# s -> (# State# s, MutableByteArray# s #)
-thawUnboxed# e bytes# c# = \ s1# -> case newByteArray# n# s1# of
-    (# s2#, mbytes# #) -> case copyByteArray# bytes# 0# mbytes# 0# n# s2# of
-      s3# -> (# s3#, mbytes# #)
-  where
-    n# = sizeof# e c#
+thawUnboxed# e bytes# c# = let n# = sizeof# e c# in \ s1# -> case newByteArray# n# s1# of
+  (# s2#, mbytes# #) -> case copyByteArray# bytes# 0# mbytes# 0# n# s2# of
+    s3# -> (# s3#, mbytes# #)
 
 {- |
   @since 0.2.1
@@ -564,7 +562,7 @@ instance Unboxed Int8
     chunkof# _ = (# 1#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I8# (indexInt8Array# bytes# i#)
@@ -592,7 +590,7 @@ instance Unboxed Int16
     chunkof# _ = (# 2#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I16# (indexInt16Array# bytes# i#)
@@ -620,7 +618,7 @@ instance Unboxed Int32
     chunkof# _ = (# 4#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I32# (indexInt32Array# bytes# i#)
@@ -648,7 +646,7 @@ instance Unboxed Int64
     chunkof# _ = (# 8#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I64# (indexInt64Array# bytes# i#)
@@ -707,7 +705,7 @@ instance Unboxed Word8
     bytes# !# i# = W8# (indexWord8Array# bytes# i#)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
     
     {-# INLINE readUnboxed# #-}
     readUnboxed# mbytes# i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
@@ -719,24 +717,18 @@ instance Unboxed Word8
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
     
-    sortUnboxed _ bs# n# o# = \ s1# -> case newUnboxed (0 :: Word) 256# s1# of
-        (# s2#, cache# #) -> case count# cache# (n# +# o# -# 1#) s2# of
-          s3# -> write# cache# 0# 0# s3#
+    sortUnboxed _ bs# n# o# = \ s1# -> case radixSortIndex# bs# n# o# 1# 1# s1# of
+        (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
+          (# s3#, c# #) ->
+            let go# v# i# j#
+                  | 1# <-    i# ==# n# = \ s4# -> s4#
+                  | 0# <- word2Int# j# = \ s4# -> case readWordArray# idx# (word2Int# v# +# 1#) s4# of
+                    (# s5#, j'# #) -> go# (plusWord# v# ox01#) i# j'# s5#
+                  |        True        = \ s4# -> case writeWord8Array## bs# i# v# s4# of
+                    s5# -> go# v# (i# +# 1#) (minusWord# j# ox01#) s5#
+            in  go# (int2Word# 0#) 0# c# s3#
       where
-        count# cache# i# = \ s1# -> if isTrue# (i# <# o#) then s1# else
-          case readWord8ArrayAsWord# bs# i# s1# of
-            (# s2#, w8# #) -> let i8# = word2Int# w8# in case readWordArray# cache# i8# s2# of
-              (# s3#, c# #) -> case writeWordArray# cache# i8# (c# `plusWord#` int2Word# 1#) s3# of
-                s4# -> count# cache# (i# -# 1#) s4#
-        
-        write# _      0xff# _  = \ s1# -> s1#
-        write# cache# i#    j# = \ s1# -> case readIntArray# cache# i# s1# of
-          (# s2#, c# #) -> case go# (int2Word# i#) j# c# s2# of
-            s3# -> write# cache# (i# +# 1#) (j# +# c#) s3#
-          where
-            go# _  _  0# = \ s1# -> s1#
-            go# v# k# c# = \ s1# -> case writeWord8ArrayAsWord# bs# k# v# s1# of
-              s2# -> go# v# (k# +# 1#) (c# -# 1#) s2#
+        ox01# = int2Word# 1#
 
 instance Unboxed Word16
   where
@@ -754,7 +746,7 @@ instance Unboxed Word16
     bytes# !# i# = W16# (indexWord16Array# bytes# i#)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
     
     {-# INLINE readUnboxed# #-}
     readUnboxed# mbytes# i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
@@ -779,7 +771,7 @@ instance Unboxed Word32
     chunkof# _ = (# 4#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W32# (indexWord32Array# bytes# i#)
@@ -807,7 +799,7 @@ instance Unboxed Word64
     chunkof# _ = (# 8#, 1# #)
     
     {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W64# (indexWord64Array# bytes# i#)
@@ -1097,20 +1089,20 @@ instance Unboxed Bool
     {-# INLINE (!#) #-}
     bytes# !# i# = isTrue# (b# `neWord#` int2Word# 0#)
       where
-        b# = and# m# (indexWord8ArrayAsWord# bytes# n#)
+        b# = and# m# (indexWord8Array## bytes# n#)
         m# = uncheckedShiftL# (int2Word# 1#) bi#
         !(# n#, bi# #) = i# `quotRemInt#` 8#
     
     {-# INLINE readUnboxed# #-}
-    readUnboxed# mbytes# i# = \ s1# -> case readWord8ArrayAsWord# mbytes# n# s1# of
+    readUnboxed# mbytes# i# = \ s1# -> case readWord8Array## mbytes# n# s1# of
         (# s2#, e# #) -> (# s2#, isTrue# (and# e# b# `neWord#` int2Word# 0#) #)
       where
         b# = uncheckedShiftL# (int2Word# 1#) bi#
         !(# n#, bi# #) = i# `quotRemInt#` 8#
     
     {-# INLINE writeUnboxed# #-}
-    writeUnboxed# mbytes# n# e = \ s1# -> case readWord8ArrayAsWord# mbytes# c# s1# of
-        (# s2#, old# #) -> writeWord8ArrayAsWord# mbytes# c# (upd# old#) s2#
+    writeUnboxed# mbytes# n# e = \ s1# -> case readWord8Array## mbytes# c# s1# of
+        (# s2#, old# #) -> writeWord8Array## mbytes# c# (upd# old#) s2#
       where
         upd# old# = if e then or# old# b# else old# `and#` not# b#
         b# = uncheckedShiftL# (int2Word# 1#) bi#
@@ -1118,38 +1110,45 @@ instance Unboxed Bool
     
     fillByteArray# bs# c# e = \ s1# -> case setByteArray# bs# 0# n# val# s1# of
         s2# -> if isTrue# (b# ==# 0#) then s2# else
-          case readWord8ArrayAsWord# bs# n# s2# of
-            (# s3#, w8# #) -> writeWord8ArrayAsWord# bs# n#
+          case readWord8Array## bs# n# s2# of
+            (# s3#, w8# #) -> writeWord8Array## bs# n#
               (if e then or# w8# (not# mask#) else and# w8# mask#) s3#
       where
         mask# = uncheckedShiftL# (int2Word# 0xff#) b#
         val#  = if e then 0xff# else 0x00#
         !(# n#, b# #) = quotRemInt# c# 8#
     
-    fillByteArrayOff# bs# c# 0# e = fillByteArray# bs# c# e
-    fillByteArrayOff# bs# c# o# e
-        -- I really don't like to discern arrays like
-        -- [**001***], [**110001] or [****0010][110*****]
-        | 1# <- c# <# 8# = defaultFillByteArrayOff# bs# c# o# e
+    fillByteArrayOff# bs# 0# n# e = fillByteArray# bs# n# e
+    fillByteArrayOff# bs# o# n# e
+        | 1# <- n# <# 1# = \ s1# -> s1#
         -- Normal byte array with whole byte offset
         | 0# <-      bo# = \ s1# -> case setByteArray# bs# no# nc# val# s1# of
           s2# -> if isTrue# (bc# ==# 0#) then s2# else
-            case readWord8ArrayAsWord# bs# (nc# +# 1#) s2# of
+            case readWord8Array## bs# (no# +# nc#) s2# of
               (# s3#, w8# #) ->
                 let mask# = uncheckedShiftL# oxff# bc#
-                in  writeWord8ArrayAsWord# bs# (nc# +# 1#)
+                in  writeWord8Array## bs# (no# +# nc#)
                       (if e then w8# `or#` not# mask# else and# w8# mask#) s3#
-        -- Now deal with incomplete first byte if any
-        | True           = \ s1# -> case readWord8ArrayAsWord# bs# no# s1# of
-          (# s2#, w8# #) ->
-            let mask# = uncheckedShiftL# oxff# bo#
-            in  case writeWord8ArrayAsWord# bs# no#
-                  (if e then or# w8# mask# else and# w8# (not# mask#)) s2# of
-                    s3# -> fillByteArrayOff# bs# (c# -# ob#) (o# +# ob#) e s3#
+        
+        -- Single incomplete byte (e.g. [**110***])
+        | 1# <- b# <# 8# = \ s1# -> case readWord8Array## bs# no# s1# of
+            (# s2#, w# #) ->
+              let val'# = and# mask# w# `or#` and# (not# mask#) (int2Word# val#)
+                  mask# = not# (uncheckedShiftL# oxff# b#)
+                         `or#` uncheckedShiftRL# oxff# bo#
+              in  writeWord8Array## bs# no# val'# s2#
+        
+        -- Incomplete byte with optional n-byte tail (e.g. [*****000][...tail])
+        |      True      = \ s1# -> case readWord8Array## bs# no# s1# of
+          (# s2#, w# #) ->
+            let val'# = and# w# (not# mask#) `or#` and# (int2Word# val#) mask#
+                mask# = uncheckedShiftL# oxff# bo#
+            in  case writeWord8Array## bs# no# val'# s2# of
+                  s3# -> fillByteArrayOff# bs# (o# +# ob#) (n# -# ob#) e s3#
       where
         !(# no#, bo# #) = quotRemInt# o# 8#; val#  = if e then 0xff# else 0x00#
-        !(# nc#, bc# #) = quotRemInt# c# 8#; oxff# = int2Word# 0xff#
-        ob# = 8# -# bo#
+        !(# nc#, bc# #) = quotRemInt# n# 8#; oxff# = int2Word# 0xff#
+        ob# = 8# -# bo#; b# = bo# +# n#
     
     copyUnboxed# e bytes# o1# mbytes# o2# c# = if isTrue# (c# <# 1#) then \ s1# -> s1# else
       \ s1# -> case writeUnboxed# mbytes# o2# ((bytes# !# o1#) `asTypeOf` e) s1# of
@@ -1160,25 +1159,31 @@ instance Unboxed Bool
         (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
           s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
-    -- TODO: big-endian?
+    sortUnboxed _ bs# n# o# = case n# <# 2# of
+      1# -> \ s1# -> s1#
+      _  -> \ s1# -> case boolCountM# bs# n# o# s1# of
+        (# s2#, c# #) ->
+          let c'# = n# -# c#
+          in  case fillByteArrayOff# bs# o# c'# False s2# of
+                s3# -> fillByteArrayOff# bs# (o# +# c'#) c'# True s3#
+    
     hashUnboxedWith e len# off# bytes#
         | 1# <- len# <# 1# = \ salt# -> salt#
         | 1# <- off# <# 0# = hashUnboxedWith e len# 0# bytes#
         | 0# <-        bi# = go0 byte_cnt# c#
-        |             True = goo byte_cnt# (c# +# 1#)
-          (indexWord8ArrayAsWord# bytes# c#)
+        |             True = goo byte_cnt# (c# +# 1#) (indexWord8Array## bytes# c#)
       where
         go0 0# _  salt# = salt#
-        go0 1# o# salt# = hash# salt# (indexWord8ArrayAsWord# bytes# o# `and#` mask#)
+        go0 1# o# salt# = hash# salt# (indexWord8Array## bytes# o# `and#` mask#)
         go0 n# o# salt# = go0 (n# -# 1#) (o# +# 1#)
-          (salt# `hash#` indexWord8ArrayAsWord# bytes# o#)
+          (salt# `hash#` indexWord8Array## bytes# o#)
         
         goo 0# _    _   salt# = salt#
         goo 1# _  temp# salt# = hash# salt# (shiftRL# temp# bi# `and#` mask#)
         goo n# o# temp# salt# = goo (n# -# 1#) (o# +# 1#) byte# (hash# salt# curr#)
           where
             curr# = shiftRL# temp# bi# `or#` shiftL# byte# (8# -# bi#)
-            byte# = indexWord8ArrayAsWord# bytes# o#
+            byte# = indexWord8Array## bytes# o#
         
         hash# = \ s# v# -> word2Int# (int2Word# (s# *# 16777619#) `xor#` v#)
         mask# = int2Word# 0xff# `shiftRL#` bit_rest#
@@ -1985,15 +1990,74 @@ calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
 
-{-# INLINE defaultFillByteArrayOff# #-}
+--------------------------------------------------------------------------------
+
+radixSortOffset# :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int#
+                 -> State# s -> (# State# s, MutableByteArray# s #)
+radixSortOffset# bs# n# o# s# c# = \ s'# -> case radixSortIndex# bs# n# o# s# c# s'# of
+  (# s''#, idx# #) ->
+    let go# 0#  _ = \ s1# -> s1#
+        go# i# j# = \ s1# -> case h# 256# j# (int2Word# 0#) s1# of
+            s2# -> go# (i# -# 1#) (j# +# 256#) s2#
+          where
+            h# 0# _  _  = \ s1# -> s1#
+            h# e# k# w# = \ s1# -> case readWordArray# idx# k# s1# of
+              (# s2#, v# #) -> case writeWordArray# idx# k# w# s2# of
+                s3# -> h# (e# -# 1#) (k# +# 1#) (plusWord# v# w#) s3#
+    in  case go# c# 0# s''# of {s'''# -> (# s'''#, idx# #)}
+
+{- |
+  @radixSortIndex# bs# n# o# s#@ creates a 256-element unpacked array (of
+  numbers of type 'Word'), where the value @c@ with key @k@ corresponds to the
+  number of elements of the @n@-element array @bs@, the @(o# +# i# *# s#)th@
+  byte of which is equal to @k@. In other words, @radixSortIndex#@ iterates
+  through all the bytes in the @bs@ array, starting at @o@, with step @s@, and
+  up to @(o + n*s)@.
+  
+  Example:
+  @radixSortIndex# bs# n# 7# 8#@ counts the number of elements with the
+  corresponding last (if target byte order is little endian, then high) bytes of
+  8-byte (64-bit) machine words ('Word64' numbers).
+-}
+radixSortIndex# :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int#
+                -> State# s -> (# State# s, MutableByteArray# s #)
+radixSortIndex# bs# n# o# s# c# = \ s1# -> case calloc# (0 :: Word) (256# *# c#) s1# of
+    (# s2#, idx# #) -> case go# idx# (c# -# 1#) s2# of
+      s3# -> (# s3#, idx# #)
+  where
+    go# _    -1# = \ s1# -> s1#
+    go# idx#  i# = \ s1# ->
+      case writeRadixSortIndex# bs# n# (o# +# i#) s# idx# (i# *# 256#) s1# of
+        s2# -> go# idx# (i# -# 1#) s2#
+
+writeRadixSortIndex# :: MutableByteArray# s -> Int# -> Int# -> Int#
+                     -> MutableByteArray# s -> Int# -> State# s -> State# s
+writeRadixSortIndex# bs# n# o# s# idx# io# =
+    if isTrue# (orI# (n# <# 1#) (o# <# 0#))
+      then \ s1# -> s1#
+      else \ s1# -> go# o# n# s1#
+  where
+    ox01# = int2Word# 0x01#
+    
+    go# _  0# = \ s1# -> s1#
+    go# i# j# = \ s1# -> case readWord8Array## bs# i# s1# of
+      (# s2#, w# #) ->
+        let k# = word2Int# w# +# io#
+        in  case readWordArray# idx# k# s2# of
+              (# s3#, l# #) -> case writeWordArray# idx# k# (plusWord# l# ox01#) s3# of
+                s4# -> go# (i# +# s#) (j# -# 1#) s4#
+
+--------------------------------------------------------------------------------
+
 {- |
   @since 0.3
   
   Default 'fillByteArrayOff#' implementation.
 -}
-defaultFillByteArrayOff# :: Unboxed e => MutableByteArray# s -> Int# -> Int#
-                         -> e -> State# s -> State# s
-defaultFillByteArrayOff# bs# c# o# e = go# o#
+{-# INLINE defaultFillByteArrayOff# #-}
+defaultFillByteArrayOff# :: Unboxed e => MutableByteArray# s -> Int# -> Int# ->
+                                    e -> State# s -> State# s
+defaultFillByteArrayOff# bs# o# c# e = go# o#
   where
     go# i# = \ s1# -> if isTrue# (i# >=# n#) then s1# else
       go# (i# +# 1#) (writeByteArray# bs# i# e s1#)
@@ -2005,9 +2069,7 @@ defaultFillByteArrayOff# bs# c# o# e = go# o#
   
   Recommended 'eqUnboxed#' implementation.
 -}
-bytewiseEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int#
-                                     -> ByteArray# -> Int#
-                                     -> Int# -> Bool
+bytewiseEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
 bytewiseEqUnboxed# e xs# o1# ys# o2# c# = case c# <# 0# of
   1# -> True
   _  -> let i1# = sizeof# e o1#; i2# = sizeof# e o2#; n# = sizeof# e c#
@@ -2018,9 +2080,7 @@ bytewiseEqUnboxed# e xs# o1# ys# o2# c# = case c# <# 0# of
   
   Default 'eqUnboxed#' implemetation.
 -}
-defaultEqUnboxed#  :: Unboxed e => e -> ByteArray# -> Int#
-                                     -> ByteArray# -> Int#
-                                     -> Int# -> Bool
+defaultEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
 defaultEqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
   where
     go  _   _  _  0# = False
@@ -2028,20 +2088,84 @@ defaultEqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1
     go xo# yo# i# b# = go (xo# +# 1#) (yo# +# 1#) (i# -# 1#)
       (case asTypeOf (xs# !# xo#) e == (ys# !# yo#) of {True -> b#; _ -> 0#})
 
+--------------------------------------------------------------------------------
+
+boolCountM# :: MutableByteArray# s -> Int# -> Int#
+            -> State# s -> (# State# s, Int# #)
+boolCountM# bs# n# o#
+    | 1# <- n# <# 1# = \ s1# -> (# s1#, 0# #)
+    | 1# <- o# <# 0# = \ s1# -> (# s1#, 0# #)
+    | 0# <-      bo# = \ s1# -> case byteCount# (cn# -# 1#) 0# s1# of
+      (# s2#, c# #)
+        | 0# <- bn# -> (# s2#, c# #)
+        |   True    -> case readWord8Array## bs# (cn# +# co#) s2# of
+          (# s3#, w# #) ->
+            let w'# = w# `and#` not# (uncheckedShiftL# (int2Word# 0xff#) bn#)
+            in  (# s3#, c# +# word2Int# (popCnt# w'#) #)
+    
+    | 1# <- b# <# 8# = \ s1# -> case readWord8Array## bs# co# s1# of
+      (# s2#, w# #) ->
+        let w'# = w# `and#` not# (uncheckedShiftL# oxff# b#)
+                     `and#` uncheckedShiftRL# oxff# bo#
+        in  (# s2#, word2Int# (popCnt# w'#) #)
+    
+    |      True      = \ s1# -> case readWord8Array## bs# co# s1# of
+      (# s2#, w# #) ->
+        let w'# = w# `and#` uncheckedShiftL# oxff# bo#; b'# = 8# -# bo#
+        in  case boolCountM# bs# (n# -# b'#) (o# +# b'#) s2# of
+              (# s3#, c# #) -> (# s3#, c# +# word2Int# (popCnt# w'#) #)
+  where
+    !(# cn#, bn# #) = quotRemInt# n# 8#; oxff# = int2Word# 0xff#
+    !(# co#, bo# #) = quotRemInt# o# 8#; b#    = bo# +# n#
+    
+    byteCount# -1# c# = \ s1# -> (# s1#, c# #)
+    byteCount#  i# c# = \ s1# -> case readWord8Array## bs# (i# +# co#) s1# of
+      (# s2#, w# #) -> byteCount# (i# -# 1#) (c# +# word2Int# (popCnt# w#)) s2#
+
+--------------------------------------------------------------------------------
+
+radixSortX8Word :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int#
+                -> State# s -> State# s
+radixSortX8Word e bs# n# o# = \ s1'# -> case radixSortOffset# bs# n# o# s# s# s1'# of
+    (# s2'#, idx# #) -> case calloc# e (sizeof# e n#) s2'# of
+      (# s3'#, tmp# #) ->
+        let h#  _  _   _  _  0#  _ = \ s1# -> s1#
+            h# xs# i# ys# j# c# k# = \ s1# -> case go# xs# i# ys# j# n# k# (256# *# k#) s1# of
+              s2# -> h# ys# j# xs# i# (c# -# 1#) (k# +# 1#) s2#
+            
+            go#  _   _   _   _  0#  _    _ = \ s1# -> s1#
+            go# xs# ix# ys# iy# i# bx# io# =
+              \ s1# -> case readWord8Array## xs# bx# s1# of
+                (# s2#, w# #) -> let wo# = word2Int# w# +# io# in case readWordArray# idx# wo# s2# of
+                    (# s3#, off# #) -> case writeWordArray# idx# wo# (off# `plusWord#` ox01#) s3# of
+                      s4# -> case readUnboxed# xs# ix# s4# of
+                        (# s5#, v #) -> case writeUnboxed# ys# (word2Int# off#) (v `asTypeOf` e) s5# of
+                          s6# -> go# xs# (ix# +# 1#) ys# (iy# +# 1#) (i# -# 1#) (bx# +# 2#) io# s6#
+        in  h# bs# o# tmp# 0# s# 0# s3'#
+  where
+    ox01# = int2Word# 1#
+    s#    = sizeof# e 1#
+
+--------------------------------------------------------------------------------
+
+-- HINT: compareByteArrays# and GHC.ByteOrder is available since base 4.11.0.0
+
 #if !MIN_VERSION_base(4,11,0)
+{-
+  NOTE: compareByteArrays# here is used only for equality check, so I don't need
+  to worry about endianness and the encoding of signed and unsigned integers.
+-}
 compareByteArrays# :: ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Int#
 compareByteArrays# xs# ox# ys# oy# n# = go# 0#
   where
-    go#  i# = case i# >=# n# of
-      1# -> 0#
-      _  -> case eqWord# x# y# of
-        1# -> go# (i# +# 1#)
-        _  -> case ltWord# x# y# of {1# -> -1#; _ -> 1#}
+    go# i#
+        | 1# <-     i# >=# n# = 0#
+        | 1# <- eqWord# x# y# = go# (i# +# 1#)
+        | 1# <- ltWord# x# y# = -1#
+        |                True =  1#
       where
         x# = indexWord8Array# xs# (ox# +# i#)
         y# = indexWord8Array# ys# (oy# +# i#)
-
--- HINT: GHC.ByteOrder is available since base-4.11.0.0
 
 -- | Byte ordering.
 data ByteOrder = BigEndian | LittleEndian deriving ( Eq, Ord, Bounded, Enum, Read, Show )
@@ -2061,20 +2185,35 @@ targetByteOrder =  if one# == 1 then LittleEndian else BigEndian
 #endif
 #endif
 
-#if !MIN_VERSION_base(4,12,0)
-{-# INLINE indexWord8ArrayAsWord# #-}
-indexWord8ArrayAsWord# :: ByteArray# -> Int# -> Word#
-indexWord8ArrayAsWord# =  indexWord8Array#
+{-# INLINE indexWord8Array## #-}
+indexWord8Array## :: ByteArray# -> Int# -> Word#
+#if MIN_VERSION_base(4,16,0)
+indexWord8Array## bs# i# = word8ToWord# (indexWord8Array# bs# i#)
+#else
+indexWord8Array## =  indexWord8Array#
+#endif
 
-{-# INLINE readWord8ArrayAsWord# #-}
-readWord8ArrayAsWord# :: MutableByteArray# d -> Int#
-                      -> State# d -> (# State# d, Word# #)
-readWord8ArrayAsWord# =  readWord8Array#
+{-# INLINE readWord8Array## #-}
+readWord8Array## :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+#if MIN_VERSION_base(4,16,0)
+readWord8Array## bs# i# = \ s1# -> case readWord8Array# bs# i# s1# of
+  (# s2#, w8# #) -> (# s2#, word8ToWord# w8# #)
+#else
+readWord8Array## =  readWord8Array#
+#endif
 
-{-# INLINE writeWord8ArrayAsWord# #-}
-writeWord8ArrayAsWord# :: MutableByteArray# d -> Int# -> Word#
-                       -> State# d -> State# d
-writeWord8ArrayAsWord# =  writeWord8Array#
+{-# INLINE writeWord8Array## #-}
+writeWord8Array## :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+#if MIN_VERSION_base(4,16,0)
+writeWord8Array## bs# i# v# = writeWord8Array# bs# i# (wordToWord8# v#)
+#else
+writeWord8Array## =  writeWord8Array#
+#endif
+
+#if !MIN_VERSION_base(4,16,0)
+{-# INLINE word8ToWord# #-}
+word8ToWord# :: Word# -> Word#
+word8ToWord# =  \ w# -> w#
 #endif
 
 --------------------------------------------------------------------------------
@@ -2090,6 +2229,7 @@ gcd# a# b# = gcd# b# (remInt# a# b#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
+
 
 
 
