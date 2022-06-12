@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, BangPatterns, TypeOperators #-}
 {-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 {- |
     Module      :  SDP.Unboxed
@@ -15,7 +16,7 @@ module SDP.Unboxed
 (
   -- * Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
-  bytewiseEqUnboxed#,
+  bytewiseEqUnboxed#, radixSortUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
   fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
@@ -74,7 +75,7 @@ default ()
 class Eq e => Unboxed e
   where
     {-# MINIMAL (sizeof#|sizeof), (!#), ((!>#)|readUnboxed#|readUnboxedOff#),
-        (writeByteArray#|writeUnboxed#), (filler|newUnboxed) #-}
+        (writeByteArray#|writeUnboxed#), (filler|newUnboxed), sortUnboxed# #-}
     
     {- |
       @since 0.3
@@ -289,9 +290,23 @@ class Eq e => Unboxed e
             elem# = indexWord8Array## bytes# o#
             hash# = prod# `xor#` elem#
     
-    sortUnboxed :: Ord e => e -> MutableByteArray# s
-                -> Int# -> Int# -> State# s -> State# s
-    sortUnboxed =  undefined -- TODO: make required
+    sortUnboxed# :: e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+    
+    {- |
+      @since 0.3
+      
+      Prepare mutable array for radix sort.
+    -}
+    fromOrdered# :: e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+    fromOrdered# _ _ _ _ = \ s# -> s#
+    
+    {- |
+      @since 0.3
+      
+      Restore mutable array, prepared by 'fromOrdered#'.
+    -}
+    toOrdered# :: e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+    toOrdered# _ _ _ _ = \ s# -> s#
 
 --------------------------------------------------------------------------------
 
@@ -487,8 +502,9 @@ pnewUnboxed1 =  newUnboxed . fromProxy1
   
   Kind @(Type -> Type -> Type)@ proxy version of 'copyUnboxed#'.
 -}
-pcopyUnboxed1 :: Unboxed e => p (proxy e) -> ByteArray# -> Int# ->
-  MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+pcopyUnboxed1 :: Unboxed e => p (proxy e) -> ByteArray# -> Int#
+              -> MutableByteArray# s -> Int# -> Int#
+              -> State# s -> State# s
 pcopyUnboxed1 =  copyUnboxed# . fromProxy1
 
 {- |
@@ -496,8 +512,8 @@ pcopyUnboxed1 =  copyUnboxed# . fromProxy1
   
   Kind @(Type -> Type -> Type)@ proxy version of 'copyUnboxedM#'.
 -}
-pcopyUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int# ->
-  MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+pcopyUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int#
+               -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
 pcopyUnboxedM1 =  copyUnboxedM# . fromProxy1
 
 {- |
@@ -513,8 +529,8 @@ pcloneUnboxed1 =  cloneUnboxed# . fromProxy1
   
   Kind @(Type -> Type -> Type)@ proxy version of 'cloneUnboxed#'.
 -}
-pcloneUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int# -> Int# ->
-  State# s -> (# State# s, MutableByteArray# s #)
+pcloneUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int# -> Int#
+                -> State# s -> (# State# s, MutableByteArray# s #)
 pcloneUnboxedM1 =  cloneUnboxedM# . fromProxy1
 
 --------------------------------------------------------------------------------
@@ -525,10 +541,19 @@ instance Unboxed Int
   where
     filler = 0
     
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# _  _  0# _  = \ s1# -> s1#
+    toOrdered# e bs# i# o# = \ s1# -> case readWordArray# bs# o# s1# of
+      (# s2#, w# #) -> case writeWordArray# bs# o# (shiftWI# w#) s2# of
+        s3# -> toOrdered# e bs# (i# -# 1#) (o# +# 1#) s3#
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
+    
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
-    
-    eqUnboxed# = bytewiseEqUnboxed#
     
     {-# INLINE chunkof# #-}
     chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
@@ -554,6 +579,19 @@ instance Unboxed Int8
     filler = 0
     
     eqUnboxed# = bytewiseEqUnboxed#
+    
+    sortUnboxed# _ bs# n# o# = \ s1# -> case radixSortIndexInt8# bs# n# o# s1# of
+      (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
+        (# s3#, c# #) ->
+          let go# v# i# j#
+                | 1# <-    i# ==# n# = \ s4# -> s4#
+                | 0# <- word2Int# j# = \ s4# -> case readWordArray# idx# (v# +# 0x81#) s4# of
+                  (# s5#, j'# #) -> go# (v# +# 1#) i# j'# s5#
+                |        True        = \ s4# -> case writeInt8Array## bs# i# v# s4# of
+                  s5# -> go# v# (i# +# 1#) (minusWord# j# ox01#) s5#
+              
+              ox01# = int2Word# 1#
+          in  go# -0x80# 0# c# s3#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
@@ -581,7 +619,16 @@ instance Unboxed Int16
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# _  _  0# _  = \ s1# -> s1#
+    toOrdered# e bs# i# o# = \ s1# -> case readWord16Array# bs# o# s1# of
+      (# s2#, w# #) -> case writeWord16Array# bs# o# (shift16WI# w#) s2# of
+        s3# -> toOrdered# e bs# (i# -# 1#) (o# +# 1#) s3#
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
@@ -609,7 +656,16 @@ instance Unboxed Int32
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# _  _  0# _  = \ s1# -> s1#
+    toOrdered# e bs# i# o# = \ s1# -> case readWord32Array# bs# o# s1# of
+      (# s2#, w# #) -> case writeWord32Array# bs# o# (shift32WI# w#) s2# of
+        s3# -> toOrdered# e bs# (i# -# 1#) (o# +# 1#) s3#
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
@@ -637,7 +693,16 @@ instance Unboxed Int64
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# _  _  0# _  = \ s1# -> s1#
+    toOrdered# e bs# i# o# = \ s1# -> case readWord64Array# bs# o# s1# of
+      (# s2#, w# #) -> case writeWord64Array# bs# o# (shift64WI# w#) s2# of
+        s3# -> toOrdered# e bs# (i# -# 1#) (o# +# 1#) s3#
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
@@ -665,7 +730,8 @@ instance Unboxed Word
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
@@ -717,24 +783,25 @@ instance Unboxed Word8
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
     
-    sortUnboxed _ bs# n# o# = \ s1# -> case radixSortIndex# bs# n# o# 1# 1# s1# of
-        (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
-          (# s3#, c# #) ->
-            let go# v# i# j#
-                  | 1# <-    i# ==# n# = \ s4# -> s4#
-                  | 0# <- word2Int# j# = \ s4# -> case readWordArray# idx# (word2Int# v# +# 1#) s4# of
-                    (# s5#, j'# #) -> go# (plusWord# v# ox01#) i# j'# s5#
-                  |        True        = \ s4# -> case writeWord8Array## bs# i# v# s4# of
-                    s5# -> go# v# (i# +# 1#) (minusWord# j# ox01#) s5#
-            in  go# (int2Word# 0#) 0# c# s3#
-      where
-        ox01# = int2Word# 1#
+    sortUnboxed# _ bs# n# o# = \ s1# -> case radixSortIndex# bs# n# o# 1# s1# of
+      (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
+        (# s3#, c# #) ->
+          let go# v# i# j#
+                | 1# <-    i# ==# n# = \ s4# -> s4#
+                | 0# <- word2Int# j# = \ s4# -> case readWordArray# idx# (word2Int# v# +# 1#) s4# of
+                  (# s5#, j'# #) -> go# (plusWord# v# ox01#) i# j'# s5#
+                |        True        = \ s4# -> case writeWord8Array## bs# i# v# s4# of
+                  s5# -> go# v# (i# +# 1#) (minusWord# j# ox01#) s5#
+              
+              ox01# = int2Word# 1#
+          in  go# (int2Word# 0#) 0# c# s3#
 
 instance Unboxed Word16
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
@@ -762,7 +829,8 @@ instance Unboxed Word32
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
@@ -790,7 +858,8 @@ instance Unboxed Word64
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
@@ -818,7 +887,8 @@ instance Unboxed Float
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSFLOAT#; _ -> 0#}
@@ -846,7 +916,8 @@ instance Unboxed Double
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSDOUBLE#; _ -> 0#}
@@ -870,18 +941,28 @@ instance Unboxed Double
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
 
-instance (Unboxed a, Integral a) => Unboxed (Ratio a)
+instance (Unboxed e, Integral e) => Unboxed (Ratio e)
   where
-    filler = 0 :% 0
+    filler = 0 :% 1
+    
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed# . fromRatio'
+      where
+        {-
+          @('Ratio' e)@ has limitations on stored values and involves additional
+          overhead for checks when creating a value. Sorting for @('Complex' e)@
+          and @('Ratio' e)@ works the same as for @('T2' e)@, but @('T2' e)@ has
+          additional restrictions for typevar @e@.
+        -}
+        fromRatio' :: Ratio e -> Complex e
+        fromRatio' =  undefined
     
     {-# INLINE sizeof# #-}
     sizeof# e n# = 2# *# psizeof# e n#
     
-    eqUnboxed# = bytewiseEqUnboxed#
-    
     sizeof e n = 2 * psizeof e n
     
-    bytes# !# i# = bytes# !# i2# :% (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
+    bytes# !# i# = bytes# !# i2# :% bytes# !# (i2# +# 1#) where i2# = 2# *# i#
     
     readUnboxed# mbytes# i# = let i2# = 2# *# i# in
       \ s1# -> case readUnboxed# mbytes# i2# s1# of
@@ -892,12 +973,21 @@ instance (Unboxed a, Integral a) => Unboxed (Ratio a)
     writeUnboxed# mbytes# i# (n :% d) = let i2# = 2# *# i# in
       \ s1# -> case writeUnboxed# mbytes# i2# n s1# of
         s2# -> writeUnboxed# mbytes# (i2# +# 1#) d s2#
+    
+    toOrdered# e bs# i# o# = toOrdered# (fromRatio' e) bs# (2# *# i#) (2# *# o#)
+      where
+        fromRatio' :: Ratio e -> e
+        fromRatio' =  const undefined
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
 
-instance (Unboxed a, Num a) => Unboxed (Complex a)
+instance (Unboxed e, Num e) => Unboxed (Complex e)
   where
     filler = 0 :+ 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# e n# = 2# *# psizeof# e n#
@@ -916,16 +1006,25 @@ instance (Unboxed a, Num a) => Unboxed (Complex a)
     
     {-# INLINE newUnboxed #-}
     newUnboxed e n# = pnewUnboxed e (2# *# n#)
+    
+    toOrdered# e bs# i# o# = toOrdered# (fromRatio' e) bs# (2# *# i#) (2# *# o#)
+      where
+        fromRatio' :: Complex e -> e
+        fromRatio' =  const undefined
+    
+    {-# INLINE fromOrdered# #-}
+    fromOrdered# = toOrdered#
 
 --------------------------------------------------------------------------------
 
 {- Pointer instances. -}
 
-instance Unboxed (Ptr a)
+instance Unboxed (Ptr e)
   where
     filler = NULL
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
@@ -949,11 +1048,12 @@ instance Unboxed (Ptr a)
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
 
-instance Unboxed (FunPtr a)
+instance Unboxed (FunPtr e)
   where
     filler = NULL
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
@@ -977,11 +1077,12 @@ instance Unboxed (FunPtr a)
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
 
-instance Unboxed (StablePtr a)
+instance Unboxed (StablePtr e)
   where
     filler = NULL
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
@@ -1025,7 +1126,7 @@ instance Unboxed Type where\
   newUnboxed  e = newUnboxed (consSizeof Type e);\
   newUnboxed' (Type e) = newUnboxed' e;\
   \
-  sortUnboxed e bs# n# o# = \ s1# -> sortUnboxed (consSizeof Type e) bs# n# o# s1#;\
+  sortUnboxed# = radixSortUnboxed#;\
 }
 
 deriving_instance_Unboxed(CChar)
@@ -1159,7 +1260,7 @@ instance Unboxed Bool
         (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
           s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
-    sortUnboxed _ bs# n# o# = case n# <# 2# of
+    sortUnboxed# _ bs# n# o# = case n# <# 2# of
       1# -> \ s1# -> s1#
       _  -> \ s1# -> case boolCountM# bs# n# o# s1# of
         (# s2#, c# #) ->
@@ -1197,7 +1298,8 @@ instance Unboxed Char
   where
     filler = '\0'
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed#   = bytewiseEqUnboxed#
+    sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof# #-}
     sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
@@ -1244,12 +1346,15 @@ instance Unboxed E
     
     writeUnboxed#   _ _ = \ _ s# -> s#
     fillByteArray#  _ _ = \ _ s# -> s#
+    
+    sortUnboxed# _ _ _ _ = \ s# -> s#
 
 instance Unboxed e => Unboxed (I1 e)
   where
     filler = E :& filler
     
-    eqUnboxed# = peqUnboxed
+    eqUnboxed#   = peqUnboxed
+    sortUnboxed# = sortUnboxed# . consSizeof (E :&)
     
     sizeof# = psizeof#
     sizeof  = psizeof
@@ -1294,6 +1399,17 @@ instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :&
         s2# -> writeUnboxed# bytes# (o# +# r#) e s2#
     
     newUnboxed e n# = pnewUnboxed e (rank# e *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# e bs# n# o# = fromOrdered# (fromGValue e) bs# (r# *# n#) (r# *# o#)
+      where
+        fromGValue :: es :& e -> e
+        fromGValue =  const undefined
+        
+        r# = rank# e
+    
+    fromOrdered# = toOrdered#
 
 --------------------------------------------------------------------------------
 
@@ -1317,8 +1433,10 @@ instance Unboxed ()
     
     writeUnboxed#  _ _ = \ _ s# -> s#
     fillByteArray# _ _ = \ _ s# -> s#
+    
+    sortUnboxed# _ _ _ _ = \ s# -> s#
 
-instance Unboxed e => Unboxed (T2 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T2 e)
   where
     sizeof  e2 n  = psizeof  e2 (2  *   n)
     sizeof# e2 n# = psizeof# e2 (2# *# n#)
@@ -1337,8 +1455,17 @@ instance Unboxed e => Unboxed (T2 e)
         s2# -> writeUnboxed# mbytes# (o# +# 1#) e2 s2#
     
     newUnboxed e n# = pnewUnboxed e (2# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T2 e -> I2 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T3 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T3 e)
   where
     sizeof  e2 n  = psizeof  e2 (3  *   n)
     sizeof# e2 n# = psizeof# e2 (3# *# n#)
@@ -1361,8 +1488,17 @@ instance Unboxed e => Unboxed (T3 e)
           s3# -> writeUnboxed# mbytes# (o# +# 2#) e3 s3#
     
     newUnboxed e n# = pnewUnboxed e (3# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T3 e -> I3 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T4 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T4 e)
   where
     sizeof  e2 n  = psizeof  e2 (4  *   n)
     sizeof# e2 n# = psizeof# e2 (4# *# n#)
@@ -1387,8 +1523,17 @@ instance Unboxed e => Unboxed (T4 e)
             s4# -> writeUnboxed# mbytes# (o# +# 3#) e4 s4#
     
     newUnboxed e n# = pnewUnboxed e (4# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T4 e -> I4 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T5 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T5 e)
   where
     sizeof  e2 n  = psizeof  e2 (5  *   n)
     sizeof# e2 n# = psizeof# e2 (5# *# n#)
@@ -1419,8 +1564,17 @@ instance Unboxed e => Unboxed (T5 e)
               s5# -> writeUnboxed# mbytes# (o# +# 4#) e5 s5#
     
     newUnboxed e n# = pnewUnboxed e (5# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T5 e -> I5 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T6 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T6 e)
   where
     sizeof  e2 n  = psizeof  e2 (6  *   n)
     sizeof# e2 n# = psizeof# e2 (6# *# n#)
@@ -1453,8 +1607,17 @@ instance Unboxed e => Unboxed (T6 e)
                 s6# -> writeUnboxed# mbytes# (o# +# 5#) e6 s6#
     
     newUnboxed e n# = pnewUnboxed e (6# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T6 e -> I6 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T7 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T7 e)
   where
     sizeof  e2 n  = psizeof  e2 (7  *   n)
     sizeof# e2 n# = psizeof# e2 (7# *# n#)
@@ -1490,8 +1653,17 @@ instance Unboxed e => Unboxed (T7 e)
                   s7# -> writeUnboxed# mbytes# (o# +# 6#) e7 s7#
     
     newUnboxed e n# = pnewUnboxed e (7# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T7 e -> I7 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T8 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T8 e)
   where
     sizeof  e2 n  = psizeof  e2 (8  *   n)
     sizeof# e2 n# = psizeof# e2 (8# *# n#)
@@ -1529,8 +1701,17 @@ instance Unboxed e => Unboxed (T8 e)
                     s8# -> writeUnboxed# mbytes# (o# +# 7#) e8 s8#
     
     newUnboxed e n# = pnewUnboxed e (8# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T8 e -> I8 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T9 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T9 e)
   where
     sizeof  e2 n  = psizeof  e2 (9  *   n)
     sizeof# e2 n# = psizeof# e2 (9# *# n#)
@@ -1570,8 +1751,17 @@ instance Unboxed e => Unboxed (T9 e)
                       s9# -> writeUnboxed# mbytes# (o# +# 8#) e9 s9#
     
     newUnboxed e n# = pnewUnboxed e (9# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T9 e -> I9 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T10 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T10 e)
   where
     sizeof  e2 n  = psizeof  e2 (10  *   n)
     sizeof# e2 n# = psizeof# e2 (10# *# n#)
@@ -1614,8 +1804,17 @@ instance Unboxed e => Unboxed (T10 e)
                         s10# -> writeUnboxed# mbytes# (o# +# 9#) e10 s10#
     
     newUnboxed e n# = pnewUnboxed e (10# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T10 e -> I10 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T11 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T11 e)
   where
     sizeof  e2 n  = psizeof  e2 (11  *   n)
     sizeof# e2 n# = psizeof# e2 (11# *# n#)
@@ -1660,8 +1859,17 @@ instance Unboxed e => Unboxed (T11 e)
                           s11# -> writeUnboxed# mbytes# (o# +# 10#) e11 s11#
     
     newUnboxed e n# = pnewUnboxed e (11# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T11 e -> I11 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T12 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T12 e)
   where
     sizeof  e2 n  = psizeof  e2 (12  *   n)
     sizeof# e2 n# = psizeof# e2 (12# *# n#)
@@ -1708,8 +1916,17 @@ instance Unboxed e => Unboxed (T12 e)
                             s12# -> writeUnboxed# mbytes# (o# +# 11#) e12 s12#
     
     newUnboxed e n# = pnewUnboxed e (12# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T12 e -> I12 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T13 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T13 e)
   where
     sizeof  e2 n  = psizeof  e2 (13  *   n)
     sizeof# e2 n# = psizeof# e2 (13# *# n#)
@@ -1759,8 +1976,17 @@ instance Unboxed e => Unboxed (T13 e)
                               s13# -> writeUnboxed# mbytes# (o# +# 12#) e13 s13#
     
     newUnboxed e n# = pnewUnboxed e (13# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T13 e -> I13 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T14 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T14 e)
   where
     sizeof  e2 n  = psizeof  e2 (14  *   n)
     sizeof# e2 n# = psizeof# e2 (14# *# n#)
@@ -1812,8 +2038,17 @@ instance Unboxed e => Unboxed (T14 e)
                                 s14# -> writeUnboxed# mbytes# (o# +# 13#) e14 s14#
     
     newUnboxed e n# = pnewUnboxed e (14# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T14 e -> I14 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
-instance Unboxed e => Unboxed (T15 e)
+instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T15 e)
   where
     sizeof  e2 n  = psizeof  e2 (15  *   n)
     sizeof# e2 n# = psizeof# e2 (15# *# n#)
@@ -1867,6 +2102,15 @@ instance Unboxed e => Unboxed (T15 e)
                                   s15# -> writeUnboxed# mbytes# (o# +# 14#) e15 s15#
     
     newUnboxed e n# = pnewUnboxed e (15# *# n#)
+    
+    sortUnboxed# = radixSortUnboxed#
+    
+    toOrdered# = toOrdered# . fromGValue
+      where
+        fromGValue :: T15 e -> I15 e
+        fromGValue =  const undefined
+    
+    fromOrdered# = toOrdered#
 
 --------------------------------------------------------------------------------
 
@@ -1992,63 +2236,6 @@ calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
 
 --------------------------------------------------------------------------------
 
-radixSortOffset# :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int#
-                 -> State# s -> (# State# s, MutableByteArray# s #)
-radixSortOffset# bs# n# o# s# c# = \ s'# -> case radixSortIndex# bs# n# o# s# c# s'# of
-  (# s''#, idx# #) ->
-    let go# 0#  _ = \ s1# -> s1#
-        go# i# j# = \ s1# -> case h# 256# j# (int2Word# 0#) s1# of
-            s2# -> go# (i# -# 1#) (j# +# 256#) s2#
-          where
-            h# 0# _  _  = \ s1# -> s1#
-            h# e# k# w# = \ s1# -> case readWordArray# idx# k# s1# of
-              (# s2#, v# #) -> case writeWordArray# idx# k# w# s2# of
-                s3# -> h# (e# -# 1#) (k# +# 1#) (plusWord# v# w#) s3#
-    in  case go# c# 0# s''# of {s'''# -> (# s'''#, idx# #)}
-
-{- |
-  @radixSortIndex# bs# n# o# s#@ creates a 256-element unpacked array (of
-  numbers of type 'Word'), where the value @c@ with key @k@ corresponds to the
-  number of elements of the @n@-element array @bs@, the @(o# +# i# *# s#)th@
-  byte of which is equal to @k@. In other words, @radixSortIndex#@ iterates
-  through all the bytes in the @bs@ array, starting at @o@, with step @s@, and
-  up to @(o + n*s)@.
-  
-  Example:
-  @radixSortIndex# bs# n# 7# 8#@ counts the number of elements with the
-  corresponding last (if target byte order is little endian, then high) bytes of
-  8-byte (64-bit) machine words ('Word64' numbers).
--}
-radixSortIndex# :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int#
-                -> State# s -> (# State# s, MutableByteArray# s #)
-radixSortIndex# bs# n# o# s# c# = \ s1# -> case calloc# (0 :: Word) (256# *# c#) s1# of
-    (# s2#, idx# #) -> case go# idx# (c# -# 1#) s2# of
-      s3# -> (# s3#, idx# #)
-  where
-    go# _    -1# = \ s1# -> s1#
-    go# idx#  i# = \ s1# ->
-      case writeRadixSortIndex# bs# n# (o# +# i#) s# idx# (i# *# 256#) s1# of
-        s2# -> go# idx# (i# -# 1#) s2#
-
-writeRadixSortIndex# :: MutableByteArray# s -> Int# -> Int# -> Int#
-                     -> MutableByteArray# s -> Int# -> State# s -> State# s
-writeRadixSortIndex# bs# n# o# s# idx# io# =
-    if isTrue# (orI# (n# <# 1#) (o# <# 0#))
-      then \ s1# -> s1#
-      else \ s1# -> go# o# n# s1#
-  where
-    ox01# = int2Word# 0x01#
-    
-    go# _  0# = \ s1# -> s1#
-    go# i# j# = \ s1# -> case readWord8Array## bs# i# s1# of
-      (# s2#, w# #) ->
-        let k# = word2Int# w# +# io#
-        in  case readWordArray# idx# k# s2# of
-              (# s3#, l# #) -> case writeWordArray# idx# k# (plusWord# l# ox01#) s3# of
-                s4# -> go# (i# +# s#) (j# -# 1#) s4#
-
---------------------------------------------------------------------------------
-
 {- |
   @since 0.3
   
@@ -2124,33 +2311,119 @@ boolCountM# bs# n# o#
 
 --------------------------------------------------------------------------------
 
-radixSortX8Word :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int#
-                -> State# s -> State# s
-radixSortX8Word e bs# n# o# = \ s1'# -> case radixSortOffset# bs# n# o# s# s# s1'# of
-    (# s2'#, idx# #) -> case calloc# e (sizeof# e n#) s2'# of
-      (# s3'#, tmp# #) ->
-        let h#  _  _   _  _  0#  _ = \ s1# -> s1#
-            h# xs# i# ys# j# c# k# = \ s1# -> case go# xs# i# ys# j# n# k# (256# *# k#) s1# of
-              s2# -> h# ys# j# xs# i# (c# -# 1#) (k# +# 1#) s2#
-            
-            go#  _   _   _   _  0#  _    _ = \ s1# -> s1#
-            go# xs# ix# ys# iy# i# bx# io# =
-              \ s1# -> case readWord8Array## xs# bx# s1# of
-                (# s2#, w# #) -> let wo# = word2Int# w# +# io# in case readWordArray# idx# wo# s2# of
-                    (# s3#, off# #) -> case writeWordArray# idx# wo# (off# `plusWord#` ox01#) s3# of
-                      s4# -> case readUnboxed# xs# ix# s4# of
-                        (# s5#, v #) -> case writeUnboxed# ys# (word2Int# off#) (v `asTypeOf` e) s5# of
-                          s6# -> go# xs# (ix# +# 1#) ys# (iy# +# 1#) (i# -# 1#) (bx# +# 2#) io# s6#
-        in  h# bs# o# tmp# 0# s# 0# s3'#
+radixSortUnboxed# :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int#
+                  -> State# s -> State# s
+radixSortUnboxed# e bs# n# o# = \ s1# -> case toOrdered# e bs# n# o# s1# of
+  s2# -> case radixSortX8# e bs# n# o# s2# of
+    s3# -> fromOrdered# e bs# n# o# s3#
+
+radixSortX8# :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+radixSortX8# e bs# n# o# = let s# = sizeof# e 1# in
+  \ s1# -> case radixSortIndex# bs# n# o# s# s1# of
+    (# s2#, idx# #) -> case indexToOffset# idx# s# s2# of
+      s3# -> case calloc# e (sizeof# e n#) s3# of
+        (# s4#, tmp# #) -> writeRadixSort# e bs# tmp# idx# n# o# s4#
+
+writeRadixSort# :: Unboxed e => e -> MutableByteArray# s -> MutableByteArray# s
+                -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+writeRadixSort# e bs# tmp# idx# n# o# = h# bs# o# tmp# 0# s# 0#
   where
+    h#  _  _   _  _  0#  _ = \ s1# -> s1#
+    h# xs# i# ys# j# c# k# = \ s1# -> case go# xs# i# ys# j# n# k# (256# *# k#) s1# of
+      s2# -> h# ys# j# xs# i# (c# -# 1#) (k# +# 1#) s2#
+    
+    go#  _   _   _   _  0#  _    _ = \ s1# -> s1#
+    go# xs# ix# ys# iy# i# bx# io# = \ s1# -> case readWord8Array## xs# bx# s1# of
+      (# s2#, w# #) -> let wo# = word2Int# w# +# io# in case readWordArray# idx# wo# s2# of
+        (# s3#, off# #) -> case writeWordArray# idx# wo# (off# `plusWord#` ox01#) s3# of
+          s4# -> case readUnboxed# xs# ix# s4# of
+            (# s5#, v #) -> case writeUnboxed# ys# (word2Int# off#) (v `asTypeOf` e) s5# of
+              s6# -> go# xs# (ix# +# 1#) ys# (iy# +# 1#) (i# -# 1#) (bx# +# s#) io# s6#
+    
     ox01# = int2Word# 1#
     s#    = sizeof# e 1#
+
+indexToOffset# :: MutableByteArray# s -> Int# -> State# s -> State# s
+indexToOffset# idx# c# = go# c# 0#
+  where
+    go# 0#  _ = \ s1# -> s1#
+    go# i# j# = \ s1# -> case h# 256# j# (int2Word# 0#) s1# of
+        s2# -> go# (i# -# 1#) (j# +# 256#) s2#
+    
+    h# 0# _  _  = \ s1# -> s1#
+    h# e# k# w# = \ s1# -> case readWordArray# idx# k# s1# of
+      (# s2#, v# #) -> case writeWordArray# idx# k# w# s2# of
+        s3# -> h# (e# -# 1#) (k# +# 1#) (plusWord# v# w#) s3#
+
+{- |
+  @radixSortIndex# bs# n# o# s#@ creates a 256-element unpacked array (of
+  numbers of type 'Word'), where the value @c@ with key @k@ corresponds to the
+  number of elements of the @n@-element array @bs@, the @(o# +# i# *# s#)th@
+  byte of which is equal to @k@. In other words, @radixSortIndex#@ iterates
+  through all the bytes in the @bs@ array, starting at @o@, with step @s@, and
+  up to @(o + n*s)@.
+  
+  Example:
+  @radixSortIndex# bs# n# 7# 8#@ counts the number of elements with the
+  corresponding last (if target byte order is little endian, then high) bytes of
+  8-byte (64-bit) machine words ('Word64' numbers).
+-}
+radixSortIndex# :: MutableByteArray# s -> Int# -> Int# -> Int#
+                -> State# s -> (# State# s, MutableByteArray# s #)
+radixSortIndex# bs# n# o# s# =
+  let go# _    -1# = \ s1# -> s1#
+      go# idx#  i# = \ s1# -> case writeRadixIndex# bs# n# (o# +# i#) s# idx# (i# *# 256#) s1# of
+          s2# -> go# idx# (i# -# 1#) s2#
+  
+  in  \ s1# -> case calloc# (0 :: Word) (256# *# s#) s1# of
+        (# s2#, idx# #) -> case go# idx# (s# -# 1#) s2# of
+          s3# -> (# s3#, idx# #)
+
+writeRadixIndex# :: MutableByteArray# s -> Int# -> Int# -> Int#
+                 -> MutableByteArray# s -> Int# -> State# s -> State# s
+writeRadixIndex# bs# n# o# s# idx# io# = case orI# (n# <# 1#) (o# <# 0#) of
+    0# -> \ s1# -> go# o# n# s1#
+    _  -> \ s1# -> s1#
+  where
+    ox01# = int2Word# 0x01#
+    
+    go# _  0# = \ s1# -> s1#
+    go# i# j# = \ s1# -> case readWord8Array## bs# i# s1# of
+      (# s2#, w# #) ->
+        let k# = word2Int# w# +# io#
+        in  case readWordArray# idx# k# s2# of
+              (# s3#, l# #) -> case writeWordArray# idx# k# (plusWord# l# ox01#) s3# of
+                s4# -> go# (i# +# s#) (j# -# 1#) s4#
+
+--------------------------------------------------------------------------------
+
+radixSortIndexInt8# :: MutableByteArray# s -> Int# -> Int# -> State# s
+                    -> (# State# s, MutableByteArray# s #)
+radixSortIndexInt8# bs# n# o# = \ s1'# -> case calloc# (0 :: Word) 256# s1'# of
+  (# s2'#, idx# #) -> case orI# (n# <# 1#) (o# <# 0#) of
+    1# -> (# s2'#, idx# #)
+    _  -> let h# -1# = \ s1# -> s1#
+              h#  i# = \ s1# -> case go# n# (i# *# 256#) (o# +# i#) s1# of
+                s2# -> h# (i# -# 1#) s2#
+              
+              go# 0#  _  _  = \ s1# -> s1#
+              go# j# i# io# = \ s1# -> case readWord8Array## bs# i# s1# of
+                (# s2#, w# #) ->
+                  let k# = io# +# andI# 255# (word2Int# w# +# 0x80#) -- Int8 to Word8 range
+                  in  case readWordArray# idx# k# s2# of
+                        (# s3#, l# #) -> case writeWordArray# idx# k# (plusWord# l# ox01#) s3# of
+                          s4# -> go# (j# -# 1#) (i# +# 1#) io# s4#
+              
+              ox01# = int2Word# 0x01#
+          
+          in  case h# 0# s2'# of s3'# -> (# s3'#, idx# #)
 
 --------------------------------------------------------------------------------
 
 -- HINT: compareByteArrays# and GHC.ByteOrder is available since base 4.11.0.0
 
 #if !MIN_VERSION_base(4,11,0)
+
 {-
   NOTE: compareByteArrays# here is used only for equality check, so I don't need
   to worry about endianness and the encoding of signed and unsigned integers.
@@ -2183,6 +2456,7 @@ targetByteOrder =  BigEndian
 #else
 targetByteOrder =  if one# == 1 then LittleEndian else BigEndian
 #endif
+
 #endif
 
 {-# INLINE indexWord8Array## #-}
@@ -2210,10 +2484,77 @@ writeWord8Array## bs# i# v# = writeWord8Array# bs# i# (wordToWord8# v#)
 writeWord8Array## =  writeWord8Array#
 #endif
 
-#if !MIN_VERSION_base(4,16,0)
-{-# INLINE word8ToWord# #-}
-word8ToWord# :: Word# -> Word#
-word8ToWord# =  \ w# -> w#
+{-# INLINE writeInt8Array## #-}
+writeInt8Array## :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+#if MIN_VERSION_base(4,16,0)
+writeInt8Array## bs# i# v# = writeInt8Array# bs# i# (intToInt8# v#)
+#else
+writeInt8Array## =  writeInt8Array#
+#endif
+
+--------------------------------------------------------------------------------
+
+{- |
+  @since 0.3
+  
+  Convert an 'Int' value to a representation suitable for radix sort.
+  Note that this function is designed to read and write using 'Unboxed',
+  'Foreign.Storable.Storable' or another compatible API.
+-}
+{-# INLINE shiftWI# #-}
+shiftWI# :: Word# -> Word#
+#if SIZEOF_HSWORD == 4
+shiftWI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
+#else
+shiftWI# =  xor# (int2Word# 0x01# `shiftL#` 63#)
+#endif
+
+{- |
+  @since 0.3
+  
+  Convert an 'Int16' value to a representation suitable for radix sort.
+  Note that this function is designed to read and write using 'Unboxed',
+  'Foreign.Storable.Storable' or another compatible API.
+-}
+{-# INLINE shift16WI# #-}
+#if MIN_VERSION_base(4,16,0)
+shift16WI# :: Word16# -> Word16#
+shift16WI# =  xor# (wordToWord16# (int2Word# 0x8000#))
+#else
+shift16WI# :: Word# -> Word#
+shift16WI# =  xor# (int2Word# 0x8000#)
+#endif
+
+{- |
+  @since 0.3
+  
+  Convert an 'Int32' value to a representation suitable for radix sort.
+  Note that this function is designed to read and write using 'Unboxed',
+  'Foreign.Storable.Storable' or another compatible API.
+-}
+{-# INLINE shift32WI# #-}
+#if MIN_VERSION_base(4,16,0)
+shift32WI# :: Word16# -> Word16#
+shift32WI# =  xor# (wordToWord32# (int2Word# 0x01# `shiftL#` 31#))
+#else
+shift32WI# :: Word# -> Word#
+shift32WI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
+#endif
+
+{- |
+  @since 0.3
+  
+  Convert an 'Int64' value to a representation suitable for radix sort.
+  Note that this function is designed to read and write using 'Unboxed',
+  'Foreign.Storable.Storable' or another compatible API.
+-}
+{-# INLINE shift64WI# #-}
+#if MIN_VERSION_base(4,16,0)
+shift64WI# :: Word16# -> Word16#
+shift64WI# =  xor# (wordToWord64# (int2Word# 0x01# `shiftL#` 63#))
+#else
+shift64WI# :: Word# -> Word#
+shift64WI# =  xor# (int2Word# 0x01# `shiftL#` 63#)
 #endif
 
 --------------------------------------------------------------------------------
@@ -2229,7 +2570,6 @@ gcd# a# b# = gcd# b# (remInt# a# b#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
 
 
 
