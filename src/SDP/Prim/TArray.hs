@@ -223,7 +223,8 @@ instance MonadVar m => Freeze m (MArray# m e) (SArray# e)
 --------------------------------------------------------------------------------
 
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
-ascsBounds =  \ ((x, _) : xs) -> foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
 
 unpack :: MArray# m e -> SArray# (Var m e)
 unpack =  \ (MArray# es) -> es
@@ -236,5 +237,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 

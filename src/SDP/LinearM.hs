@@ -53,6 +53,8 @@ import SDP.Map
 import Data.Property hiding ( set )
 import Data.Typeable
 
+import Control.Exception.SDP
+
 default ()
 
 infixl 5 !#>
@@ -225,11 +227,15 @@ class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
     
     -- | 'foldrM1' is 'foldrM' version with 'last' element as base.
     foldrM1 :: (e -> e -> m e) -> l -> m e
-    foldrM1 f = getLeft >=> \ (es :< e) -> foldr ((=<<) . f) (pure e) es
+    foldrM1 f = getLeft >=> \ es' -> case es' of
+      (es :< e) -> foldr ((=<<) . f) (pure e) es
+      _         -> emptyEx "foldrM1: must be non-empty"
     
     -- | 'foldlM1' is 'foldlM' version with 'head' element as base.
     foldlM1 :: (e -> e -> m e) -> l -> m e
-    foldlM1 f = getLeft >=> \ (e :> es) -> foldl (flip $ (=<<) . flip f) (pure e) es
+    foldlM1 f = getLeft >=> \ es' -> case es' of
+      (e :> es) -> foldl (flip $ (=<<) . flip f) (pure e) es
+      _         -> emptyEx "foldlM1: must be non-empty"
     
     -- | Just swap two elements.
     swapM :: l -> Int -> Int -> m ()
@@ -527,4 +533,8 @@ type LinearM' m l = forall e . LinearM m (l e) e
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 #endif
 
+--------------------------------------------------------------------------------
+
+emptyEx :: String -> a
+emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
 

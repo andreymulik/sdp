@@ -608,8 +608,12 @@ instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e) => Freeze m (AnyBorder 
 expEx :: String -> a
 expEx =  throw . UnacceptableExpansion . showString "in SDP.Templates.AnyBorder."
 
+unreachEx :: String -> a
+unreachEx =  throw . UnreachableException . showString "in SDP.Templates.AnyBorder."
+
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
-ascsBounds =  \ ((x, _) : xs) -> foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
 
 {-# INLINE unpack #-}
 unpack :: AnyBorder rep i e -> rep e
@@ -622,4 +626,5 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
 

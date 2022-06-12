@@ -8,7 +8,7 @@
 
 {- |
     Module      :  SDP.Linear
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -266,7 +266,9 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     -- | Generalization of partition, that select sublines by predicates.
     partitions :: (Foldable f) => f (e -> Bool) -> l -> [l]
     partitions ps es =
-      let f = \ (x : xs) -> (\ (y, ys) -> (ys : y : xs)) . (`partition` x)
+      let f = \ es' -> case es' of
+            (x : xs) -> (\ (y, ys) -> (ys : y : xs)) . (`partition` x)
+            _        -> unreachEx "partitions"
       in  L.reverse $ foldl f [es] ps
     
     -- | @select f es@ is selective map of @es@ elements to new list.
@@ -359,19 +361,27 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     
     -- | 'o_foldr1' is just 'Data.Foldable.foldr1' in 'Linear' context.
     o_foldr1 :: (e -> e -> e) -> l -> e
-    o_foldr1 f = \ (es :< e) -> o_foldr f e es
+    o_foldr1 f = \ es' -> case es' of
+      (es :< e) -> o_foldr f e es
+      _         -> emptyEx "o_foldr1"
     
     -- | 'o_foldl1' is just 'Data.Foldable.foldl1' in 'Linear' context.
     o_foldl1 :: (e -> e -> e) -> l -> e
-    o_foldl1 f = \ (e :> es) -> o_foldl f e es
+    o_foldl1 f = \ es' -> case es' of
+      (e :> es) -> o_foldl f e es
+      _         -> emptyEx "o_foldl1"
     
     -- | 'o_foldr1'' is just strict 'Data.Foldable.foldr1' in 'Linear' context.
     o_foldr1' :: (e -> e -> e) -> l -> e
-    o_foldr1' f = \ (es :< e) -> o_foldr' f e es
+    o_foldr1' f = \ es' -> case es' of
+      (es :< e) -> o_foldr' f e es
+      _         -> emptyEx "o_foldr1'"
     
     -- | 'o_foldl1'' is just 'Data.Foldable.foldl1'' in 'Linear' context.
     o_foldl1' :: (e -> e -> e) -> l -> e
-    o_foldl1' f = \ (e :> es) -> o_foldl' f e es
+    o_foldl1' f = \ es' -> case es' of
+      (e :> es) -> o_foldl' f e es
+      _         -> emptyEx "o_foldl1'"
     
     {- Don't touch. -}
     
@@ -481,7 +491,9 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     -}
     splits :: (Foldable f) => f Int -> l -> [l]
     splits ns es =
-      let f = \ (r : ds) n -> let (d, r') = split n r in r' : d : ds
+      let f = \ es' n -> case es' of
+            (r : ds) -> let (d, r') = split n r in r' : d : ds
+            _        -> unreachEx "splits: must be non-empty"
       in  reverse $ foldl f [es] ns
     
     {- |
@@ -491,7 +503,9 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     -}
     divides :: (Foldable f) => f Int -> l -> [l]
     divides ns es =
-      let f = \ n (r : ds) -> let (r', d) = divide n r in r' : d : ds
+      let f = \ n es' -> case es' of
+            (r : ds) -> let (r', d) = divide n r in r' : d : ds
+            _        -> unreachEx "divides: must be non-empty"
       in  foldr f [es] ns
     
     {- |
@@ -949,7 +963,13 @@ inits es = es : inits (init es)
 ascending :: (Linear l e, Sort l e, Ord e) => l -> [Int] -> Bool
 ascending =  all sorted ... flip splits
 
+--------------------------------------------------------------------------------
+
+unreachEx :: String -> a
+unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+
 
 

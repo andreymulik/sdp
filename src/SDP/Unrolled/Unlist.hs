@@ -47,27 +47,26 @@ type Unlist = AnyChunks SArray#
 
 instance Eq1 Unlist
   where
-    liftEq _ Z Z = True
-    liftEq _ Z _ = False
-    liftEq _ _ Z = False
-    liftEq f xs ys = if n1 > n2
-        then liftEq f (take n2 x) y && liftEq f (drop n2 xs) (fromChunks ys')
-        else liftEq f x (take n1 y) && liftEq f (fromChunks xs') (drop n1 ys)
+    liftEq f xs ys
+        | isNull xs && isNull ys = True
+        | isNull xs || isNull ys = False
+        |         n1 > n2        = liftEq f (take n2 x) y && liftEq f (drop n2 xs) (fromChunks ys')
+        |          True          = liftEq f x (take n1 y) && liftEq f (fromChunks xs') (drop n1 ys)
       where
-        (x : xs') = toChunks xs; n1 = sizeOf x
-        (y : ys') = toChunks ys; n2 = sizeOf y
+        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
+        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
 
 instance Ord1 Unlist
   where
-    liftCompare _ Z Z = EQ
-    liftCompare _ Z _ = LT
-    liftCompare _ _ Z = GT
+    liftCompare _ Z   Z = EQ
+    liftCompare _ Z   _ = LT
+    liftCompare _ _   Z = GT
     liftCompare f xs ys = if n1 > n2
         then liftCompare f (take n2 x) y <> liftCompare f (drop n2 xs) (fromChunks ys')
         else liftCompare f x (take n1 y) <> liftCompare f (fromChunks xs') (drop n1 ys)
       where
-        (x : xs') = toChunks xs; n1 = sizeOf x
-        (y : ys') = toChunks ys; n2 = sizeOf y
+        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
+        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
 
 instance Zip Unlist
   where
@@ -102,4 +101,5 @@ instance Sort (Unlist e) e
 {-# INLINE done #-}
 done :: STArray# s e -> ST s (Unlist e)
 done =  unsafeFreeze
+
 

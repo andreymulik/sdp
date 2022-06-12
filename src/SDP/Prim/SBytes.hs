@@ -1153,7 +1153,8 @@ nubSorted f es =
   in  fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2])
 
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
-ascsBounds =  \ ((x, _) : xs) -> foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
+ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
 
 --------------------------------------------------------------------------------
 
@@ -1165,6 +1166,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
 
 
