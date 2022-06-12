@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Array.IO
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -16,11 +16,16 @@ module SDP.Array.IO
   module SDP.SortM,
   
   -- * MonadIO and IO Array
-  MIOArray, IOArray
+  -- ** With immutable bounds
+  MIOArray, IOArray,
+  
+  -- ** With mutable bounds
+  ArrayMIO, ArrayIO
 )
 where
 
 import SDP.Templates.AnyBorder
+import SDP.Templates.AnyVar
 import SDP.Prim.SArray
 import SDP.IndexedM
 import SDP.SortM
@@ -35,6 +40,11 @@ type MIOArray io = AnyBorder (MIOArray# io)
 -- | 'IOArray' is mutable version of 'SDP.Array.Array'.
 type IOArray = AnyBorder IOArray#
 
+-- | 'ArrayMIO' is mutable version of 'SDP.Array.Array'.
+type ArrayMIO io i = AnyVar io (MIOArray io i)
+
+-- | 'ArrayIO' is mutable version of 'SDP.Array.Array'.
+type ArrayIO i = AnyVar IO (IOArray i)
 
 
 

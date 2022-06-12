@@ -16,15 +16,19 @@ module SDP.Unrolled.STUnlist
   module SDP.IndexedM,
   module SDP.SortM,
   
-  -- * STUnlist
-  STUnlist
+  -- * STUnlist and UnlistST
+  STUnlist, UnlistST
 )
 where
 
 import SDP.Templates.AnyChunks
+import SDP.Templates.AnyVar
+
 import SDP.Prim.SArray
 import SDP.IndexedM
 import SDP.SortM
+
+import Control.Monad.ST
 
 default ()
 
@@ -32,4 +36,10 @@ default ()
 
 -- | 'STUnlist' is mutable version of 'SDP.Unrolled.Unlist.Unlist'.
 type STUnlist s = AnyChunks (STArray# s)
+
+-- | This 'UnlistST' is mutable version of 'SDP.Unrolled.Unlist.Unlist'.
+type UnlistST s = AnyVar (ST s) (STUnlist s)
+
+
+
 

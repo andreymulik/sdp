@@ -17,16 +17,20 @@ module SDP.ByteList.ST
   module SDP.Unboxed,
   module SDP.SortM,
   
-  -- * STByteList
-  STByteList
+  -- * STByteList and ByteListST
+  STByteList, ByteListST
 )
 where
 
 import SDP.Templates.AnyBorder
+import SDP.Templates.AnyVar
+
 import SDP.ByteList.STUblist
 import SDP.IndexedM
 import SDP.Unboxed
 import SDP.SortM
+
+import Control.Monad.ST
 
 default ()
 
@@ -35,6 +39,7 @@ default ()
 -- | 'STByteList' is mutable version of 'SDP.ByteList.ByteList'.
 type STByteList s = AnyBorder (STUblist s)
 
-
+-- | 'ByteListST' is mutable version of 'SDP.ByteList.ByteList'.
+type ByteListST s i = AnyVar (ST s) (STByteList s i)
 
 

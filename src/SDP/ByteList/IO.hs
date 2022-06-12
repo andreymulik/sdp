@@ -18,11 +18,17 @@ module SDP.ByteList.IO
   module SDP.SortM,
   
   -- * MonadIO and IO ByteLists
-  MIOByteList, IOByteList
+  -- ** With immutable bounds
+  MIOByteList, IOByteList,
+  
+  -- ** With mutable bounds
+  ByteListMIO, ByteListIO
 )
 where
 
 import SDP.Templates.AnyBorder
+import SDP.Templates.AnyVar
+
 import SDP.ByteList.IOUblist
 import SDP.IndexedM
 import SDP.Unboxed
@@ -37,4 +43,13 @@ type MIOByteList io = AnyBorder (MIOUblist io)
 
 -- | 'IOByteList' is mutable version of 'SDP.ByteList.ByteList'.
 type IOByteList = AnyBorder IOUblist
+
+-- | 'ByteListMIO' is mutable version of 'SDP.ByteList.ByteList'.
+type ByteListMIO io i = AnyVar io (MIOByteList io i)
+
+-- | 'ByteListIO' is mutable version of 'SDP.ByteList.ByteList'.
+type ByteListIO i = AnyVar IO (IOByteList i)
+
+
+
 

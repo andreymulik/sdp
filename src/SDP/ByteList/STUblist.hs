@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.ByteList.STUblist
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -17,16 +17,20 @@ module SDP.ByteList.STUblist
   module SDP.Unboxed,
   module SDP.SortM,
   
-  -- * STUblist
-  STUblist
+  -- * STUblist and UblistST
+  STUblist, UblistST
 )
 where
 
 import SDP.Templates.AnyChunks
+import SDP.Templates.AnyVar
+
 import SDP.Prim.SBytes
 import SDP.IndexedM
 import SDP.Unboxed
 import SDP.SortM
+
+import Control.Monad.ST
 
 default ()
 
@@ -35,6 +39,7 @@ default ()
 -- | This 'STUblist' is mutable version of 'SDP.ByteList.Ublist.Ublist'.
 type STUblist s = AnyChunks (STBytes# s)
 
-
+-- | This 'UblistST' is mutable version of 'SDP.ByteList.Ublist.Ublist'.
+type UblistST s = AnyVar (ST s) (STUblist s)
 
 

@@ -17,14 +17,18 @@ module SDP.Unrolled.ST
   module SDP.SortM,
   
   -- * STUnrolled
-  STUnrolled
+  STUnrolled, UnrolledST
 )
 where
 
 import SDP.Templates.AnyBorder
+import SDP.Templates.AnyVar
+
 import SDP.Unrolled.STUnlist
 import SDP.IndexedM
 import SDP.SortM
+
+import Control.Monad.ST
 
 default ()
 
@@ -32,4 +36,10 @@ default ()
 
 -- | 'STUnrolled' is mutable version 'SDP.Unrolled.Unrolled'.
 type STUnrolled s = AnyBorder (STUnlist s)
+
+-- | 'UnrolledST' is mutable version of 'SDP.Unrolled.Unrolled'.
+type UnrolledST s i = AnyVar (ST s) (STUnrolled s i)
+
+
+
 

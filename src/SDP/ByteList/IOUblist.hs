@@ -18,11 +18,17 @@ module SDP.ByteList.IOUblist
   module SDP.SortM,
   
   -- * MonadIO and IO Ublists
-  MIOUblist, IOUblist
+  -- ** With immutable bounds
+  MIOUblist, IOUblist,
+  
+  -- ** With mutable bounds
+  UblistMIO, UblistIO
 )
 where
 
 import SDP.Templates.AnyChunks
+import SDP.Templates.AnyVar
+
 import SDP.Prim.SBytes
 import SDP.IndexedM
 import SDP.Unboxed
@@ -37,4 +43,13 @@ type MIOUblist io = AnyChunks (MIOBytes# io)
 
 -- | 'IOUblist' is mutable version of 'SDP.ByteList.Ublist.Ublist'.
 type IOUblist = AnyChunks IOBytes#
+
+-- | 'UblistMIO' is mutable version of 'SDP.ByteList.Ublist.Ublist'.
+type UblistMIO io = AnyVar io (MIOUblist io)
+
+-- | 'UblistIO' is mutable version of 'SDP.ByteList.Ublist.Ublist'.
+type UblistIO = AnyVar IO IOUblist
+
+
+
 

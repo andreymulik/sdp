@@ -102,6 +102,7 @@ Library
     -- Templates
     SDP.Templates.AnyBorder
     SDP.Templates.AnyChunks
+    SDP.Templates.AnyVar
     
     -- Primitives
     SDP.Prim.SArray
@@ -140,6 +141,5 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
-
 
 
