@@ -30,6 +30,7 @@ where
 import Prelude ()
 import SDP.SafePrelude
 import SDP.LinearM
+import SDP.Map
 
 import Data.Maybe ( listToMaybe )
 
@@ -97,8 +98,32 @@ class (Monad m) => MapM m map key e | map -> m, map -> key, map -> e
     -- | Update elements by mapping with indices.
     updateM :: map -> (key -> e -> e) -> m map
     updateM es f = do
-      ascs <- getAssocs es
-      overwrite es [ (i, f i e) | (i, e) <- ascs ]
+      ascs <- kfoldrM (\ key e -> return . (:) (key, f key e)) [] es
+      overwrite es ascs
+    
+    -- | Update elements by mapping with indices.
+    mupdate :: map -> (key -> e -> m e) -> m map
+    mupdate es go = do
+      ies <- kfoldrM (\ key e ies -> (\ e' -> (key, e') : ies) <$> go key e) [] es
+      overwrite es ies
+    
+    -- | Create mutable map from immutable.
+    fromMap :: Map map' key e => map' -> (e -> e) -> m map
+    fromMap es f = newMap $ kfoldr (\ key e -> (:) (key, f e)) [] es
+    
+    -- | Create mutable map from another mutable.
+    fromMapM :: Map map' key e => map' -> (e -> m e) -> m map
+    fromMapM es go = newMap =<< kfoldr (\ key -> liftA2 ((:) . (,) key) . go) (return []) es
+    
+    -- | Create mutable map from immutable.
+    fromKeyMap :: Map map' key e => map' -> (key -> e -> e) -> m map
+    fromKeyMap es f = newMap $ kfoldr (\ key e -> (:) (key, f key e)) [] es
+    
+    -- | Create mutable map from another mutable.
+    fromKeyMapM :: Map map' key e => map' -> (key -> e -> m e) -> m map
+    fromKeyMapM es go = do
+      ies <- kfoldr (\ key -> liftA2 ((:) . (,) key) . go key) (return []) es
+      newMap ies
     
     {- |
       @since 0.3

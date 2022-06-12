@@ -8,7 +8,7 @@
 
 {- |
     Module      :  SDP.LinearM
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -234,6 +234,25 @@ class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
     -- | Just swap two elements.
     swapM :: l -> Int -> Int -> m ()
     swapM es i j = do ei <- es !#> i; writeM es i =<< es !#> j; writeM es j ei
+    
+    {- |
+      @since 0.3
+      
+      Mutable version of 'iterate'.
+    -}
+    iterateM :: Int -> (e -> m e) -> e -> m l
+    iterateM n go e = newLinearN n =<< iterate' n e id
+      where
+        iterate' 0 _ xs' = return (xs' [])
+        iterate' i x xs' = do x' <- go x; iterate' (i - 1) x' (xs' . (x :))
+    
+    {- |
+      @since 0.3
+      
+      'iterate' for mutable structures.
+    -}
+    miterate :: Int -> (e -> e) -> e -> m l
+    miterate n = newLinearN n ... iterate n
     
     {- |
       @takeM n es@ returns a reference to the @es@, keeping first @n@ elements.
@@ -501,15 +520,11 @@ type LinearM1 m l e = LinearM m (l e) e
 type LinearM2 m l i e = LinearM m (l i e) e
 
 #if __GLASGOW_HASKELL__ >= 806
-
 -- | 'LinearM' contraint for @(Type -> Type)@-kind types.
 type LinearM' m l = forall e . LinearM m (l e) e
 
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
-
 #endif
-
-
 
 

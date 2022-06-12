@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SBytes
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -713,6 +713,24 @@ instance (Unboxed e) => LinearM (ST s) (STBytes# s e) e
       let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
       in  go (n - 1)
     
+    miterate n@(I# n#) f e = do
+      es <- filled n e
+      
+      let
+        iterate' 0# _ _ = return ()
+        iterate' c# i x = do writeM es i x; iterate' (c# -# 1#) (i + 1) (f x)
+      
+      es <$ iterate' n# 0 e
+    
+    iterateM n@(I# n#) go e = do
+      es <- filled n e
+      
+      let
+        iterate' 0# _ _ = return ()
+        iterate' c# i x = do writeM es i x; iterate' (c# -# 1#) (i + 1) =<< go x
+      
+      es <$ iterate' n# 0 e
+    
     takeM n es@(STBytes# c o marr#)
       | n <= 0 = newNull
       | n >= c = return es
@@ -1147,4 +1165,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
+
 

@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Templates.AnyBorder
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -411,6 +411,9 @@ instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBo
         i = index (l, u) (c - n)
         c = size  (l, u)
     
+    miterate n = fmap (uncurry AnyBorder (defaultBounds n)) ... miterate n
+    iterateM n = fmap (uncurry AnyBorder (defaultBounds n)) ... iterateM n
+    
     prefixM p = prefixM p . unpack
     suffixM p = suffixM p . unpack
     mprefix p = mprefix p . unpack
@@ -619,7 +622,4 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
-
-
 

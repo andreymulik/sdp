@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Templates.AnyChunks
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -426,6 +426,9 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
     foldrM f base = foldr ((=<<) . flip (foldrM f)) (return base) . toChunks
     foldlM f base = foldl (flip $ (=<<) . flip (foldlM f)) (return base) . toChunks
     
+    miterate n = fmap (AnyChunks  . pure) ... miterate n
+    iterateM n = fmap (AnyChunks  . pure) ... iterateM n
+    
     takeM n (AnyChunks (e : es)) = n < 1 ? newNull $ do
       c <- getSizeOf e
       case n <=> c of
@@ -589,8 +592,7 @@ instance (IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
 
 instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e) => SortM m (AnyChunks rep e) e
   where
-    sortMBy = timSortBy
-    
+    sortMBy     = timSortBy
     sortedMBy f = go . toChunks
       where
         go (x1 : x2 : xs) =
@@ -655,6 +657,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
-
 
