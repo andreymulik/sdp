@@ -2519,7 +2519,7 @@ shiftWI# =  xor# (int2Word# 0x01# `shiftL#` 63#)
 {-# INLINE shift16WI# #-}
 #if MIN_VERSION_base(4,16,0)
 shift16WI# :: Word16# -> Word16#
-shift16WI# =  xor# (wordToWord16# (int2Word# 0x8000#))
+shift16WI# =  xorWord16# (wordToWord16# (int2Word# 0x8000#))
 #else
 shift16WI# :: Word# -> Word#
 shift16WI# =  xor# (int2Word# 0x8000#)
@@ -2534,8 +2534,8 @@ shift16WI# =  xor# (int2Word# 0x8000#)
 -}
 {-# INLINE shift32WI# #-}
 #if MIN_VERSION_base(4,16,0)
-shift32WI# :: Word16# -> Word16#
-shift32WI# =  xor# (wordToWord32# (int2Word# 0x01# `shiftL#` 31#))
+shift32WI# :: Word32# -> Word32#
+shift32WI# =  xorWord32# (wordToWord32# (int2Word# 0x01# `shiftL#` 31#))
 #else
 shift32WI# :: Word# -> Word#
 shift32WI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
@@ -2549,13 +2549,8 @@ shift32WI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
   'Foreign.Storable.Storable' or another compatible API.
 -}
 {-# INLINE shift64WI# #-}
-#if MIN_VERSION_base(4,16,0)
-shift64WI# :: Word16# -> Word16#
-shift64WI# =  xor# (wordToWord64# (int2Word# 0x01# `shiftL#` 63#))
-#else
 shift64WI# :: Word# -> Word#
-shift64WI# =  xor# (int2Word# 0x01# `shiftL#` 63#)
-#endif
+shift64WI# = xor# (int2Word# 0x01# `shiftL#` 63#)
 
 --------------------------------------------------------------------------------
 
