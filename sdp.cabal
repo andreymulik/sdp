@@ -9,7 +9,7 @@ author:        Andrey Mulik
 maintainer:    work.a.mulik@gmail.com
 bug-reports:   https://github.com/andreymulik/sdp/issues
 
-copyright:     2019-2021 Andrey Mulik
+copyright:     2019-2022 Andrey Mulik
 license-file:  LICENSE
 license:       BSD3
 
@@ -33,10 +33,10 @@ tested-with:
   GHC == 8.10.6,
   -- lts-18.24
   GHC == 8.10.7,
-  -- lts-19.0
+  -- lts-19.11
   GHC == 9.0.2,
-  -- nightly-2022-03-23
-  GHC == 9.2.2
+  -- nightly-2022-06-12
+  GHC == 9.2.3
 
 source-repository head
   type: git
