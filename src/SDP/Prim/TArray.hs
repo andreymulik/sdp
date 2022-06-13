@@ -45,6 +45,8 @@ newtype MArray# m e = MArray# (SArray# (Var m e))
 
 --------------------------------------------------------------------------------
 
+{- Eq instance. -}
+
 instance Eq (Var m e) => Eq (MArray# m e)
   where
     (==) (MArray# xs) (MArray# ys) = xs == ys
@@ -197,16 +199,12 @@ instance MonadVar m => IndexedM m (MArray# m e) Int e
     fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
     
     fromIndexed' es = do
-      let n = sizeOf es
-      copy <- filled n (unreachEx "fromIndexed'")
-      forM_ [0 .. n - 1] $ \ i -> writeM copy i (es !^ i)
-      return copy
+      copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
+      copy <$ ofoldr (\ i e go -> do writeM copy i e; go) (return ()) es
     
     fromIndexedM es = do
-      n    <- getSizeOf es
-      copy <- filled n (unreachEx "fromIndexedM")
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
 --------------------------------------------------------------------------------
 
@@ -237,4 +235,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
 

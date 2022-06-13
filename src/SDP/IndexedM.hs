@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.IndexedM
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -82,7 +82,7 @@ class (LinearM m v e, BorderedM m v i, MapM m v i e) => IndexedM m v i e
     
     -- | reshaped creates new indexed structure from old with reshaping function.
     reshaped :: (IndexedM m v' j e) => (i, i) -> v' -> (i -> j) -> m v
-    reshaped bnds es f = fromAssocs bnds =<< range bnds `forM` \ i -> (,) i <$> es !> f i
+    reshaped bnds es f = flip mupdate (\ i _ -> es !> f i) =<< fromAssocs bnds []
     
     {- |
       @'fromAccum' f es ies@ create a new structure from @es@ elements

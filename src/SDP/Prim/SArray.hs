@@ -986,16 +986,12 @@ instance IndexedM (ST s) (STArray# s e) Int e
     fromAssocs' bnds e ascs = size bnds `filled` e >>= (`overwrite` ascs)
     
     fromIndexed' es = do
-      let n = sizeOf es
-      copy <- filled n (unreachEx "fromIndexed'")
-      forM_ [0 .. n - 1] $ \ i -> writeM copy i (es !^ i)
-      return copy
+      copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
+      copy <$ ofoldr (\ i e go -> do writeM copy i e; go) (return ()) es
     
     fromIndexedM es = do
-      n    <- getSizeOf es
-      copy <- filled n (unreachEx "fromIndexedM")
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
 instance SortM (ST s) (STArray# s e) e
   where
@@ -1155,10 +1151,8 @@ instance (MonadIO io) => IndexedM io (MIOArray# io e) Int e
     fromIndexed' = pack . fromIndexed'
     
     fromIndexedM es = do
-      n    <- getSizeOf es
-      copy <- filled n (unreachEx "fromIndexedM")
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
 instance (MonadIO io) => SortM io (MIOArray# io e) e
   where
@@ -1185,23 +1179,22 @@ instance (MonadIO io) => Freeze io (MIOArray# io e) (SArray# e)
 
 instance (Storable e) => Thaw IO (SArray# e) (Int, Ptr e)
   where
-    thaw (SArray# n o arr#) = do
+    thaw es = do
+      let n = sizeOf es
       ptr <- callocArray n
-      forM_ [o .. n + o - 1] $ \ i@(I# i#) ->
-        let (# e #) = indexArray# arr# i#
-        in  pokeElemOff ptr i e
-      return (n, ptr)
+      (n, ptr) <$ ofoldr (\ i e go -> do pokeElemOff ptr i e; go) (return ()) es
 
 instance (Storable e) => Freeze IO (Int, Ptr e) (SArray# e)
   where
-    freeze (n, ptr) = do
-        let !n'@(I# n#) = max 0 n
-        es' <- stToIO . ST $ \ s1# -> case newArray# n# err s1# of
-          (# s2#, marr# #) -> (# s2#, MIOArray# (STArray# n' 0 marr#) #)
-        forM_ [0 .. n' - 1] $ \ i -> peekElemOff ptr i >>= writeM es' i
-        freeze es'
-      where
-        err = undEx "freeze {(Int, Ptr e) => SArray# e}" `asProxyTypeOf` ptr
+    freeze (c, ptr) = do
+      let
+        err = unreachEx "freeze {(Int, Ptr e) => SArray# e}"
+        
+        filled' :: proxy e -> e -> IO (MIOArray# IO e)
+        filled' =  const $ filled (max 0 c)
+      
+      es <- filled' ptr err
+      freeze =<< mupdate es (\ i _ -> peekElemOff ptr i)
 
 --------------------------------------------------------------------------------
 
@@ -1268,9 +1261,6 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
 ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
 ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
-
-asProxyTypeOf :: a -> proxy a -> a
-asProxyTypeOf =  const
 
 (<?=>) :: (Bordered b i) => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min

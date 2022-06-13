@@ -55,7 +55,8 @@ Library
   hs-source-dirs:   src
   
   build-tools: cpphs >=1.19
-  ghc-options: -O2 -Wall -Wcompat -pgmPcpphs -optP--cpp -optP-traditional
+  ghc-options: -O2 -Wall -Wcompat -Wall-missed-specialisations
+               -pgmPcpphs -optP--cpp -optP-traditional
   
   build-depends:
     base               >= 4.9 && <   5,
@@ -141,5 +142,4 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
-
 

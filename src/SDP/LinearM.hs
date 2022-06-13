@@ -156,9 +156,7 @@ class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
       Monadic in-place 'reverse', reverse elements of given structure.
     -}
     reversed' :: l -> m ()
-    reversed' es = do
-      xs <- getRight es
-      assocs xs `forM_` (uncurry $ writeM es)
+    reversed' es = ofoldr (\ i e go -> do writeM es i e; go) (return ()) =<< getRight es
     
     -- | Monadic 'concat'.
     merged :: (Foldable f) => f l -> m l
@@ -537,4 +535,6 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
+
+
 
