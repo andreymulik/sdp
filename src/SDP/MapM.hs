@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.MapM
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -112,8 +112,16 @@ class (Monad m) => MapM m map key e | map -> m, map -> key, map -> e
     fromMap es f = newMap $ kfoldr (\ key e -> (:) (key, f e)) [] es
     
     -- | Create mutable map from another mutable.
-    fromMapM :: Map map' key e => map' -> (e -> m e) -> m map
-    fromMapM es go = newMap =<< kfoldr (\ key -> liftA2 ((:) . (,) key) . go) (return []) es
+    fromMap' :: MapM m map' key e => map' -> (e -> e) -> m map
+    fromMap' es f = do
+      ies <- kfoldrM (\ key val ies -> return $ (key, f val) : ies) [] es
+      newMap ies
+    
+    -- | Create mutable map from another mutable.
+    fromMapM :: MapM m map' key e => map' -> (e -> m e) -> m map
+    fromMapM es go = do
+      ies <- kfoldrM (\ key val ies -> do e <- go val; return $ (key, e) : ies) [] es
+      newMap ies
     
     -- | Create mutable map from immutable.
     fromKeyMap :: Map map' key e => map' -> (key -> e -> e) -> m map
@@ -219,7 +227,4 @@ overEx =  throw . IndexOverflow . showString "in SDP.MapM."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.MapM."
-
-
-
 
