@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Index
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -152,7 +152,7 @@ splitDim i = let j = takeDim i in (dropDim i j, j)
   exceed 1 (cardinality of a series of natural numbers), so 'Fractional' types
   cannot be indices.
 -}
-class (Ord i, Shape i, Shape (DimLast i), Shape (DimInit i), Shape (GIndex i)) => Index i
+class (Ord i, Shape i, Shape (DimLast i), Shape (DimInit i), Shape (GIndex i), Show i) => Index i
   where
     {- Basic functions. -}
     
@@ -428,7 +428,7 @@ instance (Index i) => Index (E :& i)
     unsafeIndex   = (E :&) . unsafeIndex
 
 -- [internal]: undecidable
-instance (Index i, Enum i, Bounded i, Index (i' :& i)) => Index (i' :& i :& i)
+instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i)) => Index (i' :& i :& i)
   where
     defLimit i = lim (error "in defLimit {i' :& i :& i}") (rank i) i
       where
@@ -475,7 +475,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i)) => Index (i' :& i :& i)
     index bnds@(ls :& l, us :& u) c = checkBounds (0, size bnds - 1) c res err
       where
         (cs, i) = c `divMod` size (l, u)
-        res = index (ls, us) cs :& unsafeIndex i
+        res = index (ls, us) cs :& index (l, u) i
         err = "index {i' :& i :& i}"
     
     offset bnds ix@(is :& i) = checkBounds bnds ix res "offset {i' :& i :& i}"
