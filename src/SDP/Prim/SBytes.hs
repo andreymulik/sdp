@@ -27,7 +27,7 @@ module SDP.Prim.SBytes
   fromSTBytes#, packSTBytes#, unpackSTBytes#, offsetSTBytes#,
   
   -- ** Coerce unboxed arrays
-  unsafeCoerceSBytes#, unsafeCoerceSTBytes#,
+  unsafeCoerceSBytes#, unsafeCoerceSTBytes#, unsafeCoerceMIOBytes#,
   
   -- ** Unsafe pointer conversions
   unsafeSBytesToPtr#, unsafePtrToSBytes#,
@@ -547,10 +547,8 @@ instance (Unboxed e) => Indexed (SBytes# e) Int e
     assoc' bnds defvalue ascs = runST $ fromAssocs' bnds defvalue ascs >>= done
     
     fromIndexed es = runST $ do
-      let n = sizeOf es
-      copy <- alloc n
-      forM_ [0 .. n - 1] $ \ i -> writeM copy i (es !^ i)
-      done copy
+      copy <- alloc (sizeOf es)
+      ofoldr (\ i e go -> do writeM copy i e; go) (done copy) es
 
 --------------------------------------------------------------------------------
 
@@ -661,13 +659,11 @@ instance (Unboxed e) => LinearM (ST s) (STBytes# s e) e
     
     copied es@(STBytes# n _ _) = do
       copy <- alloc n
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
     
     copied' es l n = do
       copy <- alloc n
-      forM_ [0 .. n - 1] $ \ i -> es !#> (l + i) >>= writeM copy i
-      return copy
+      copy <$ (ofoldrM (\ i e _ -> writeM copy i e) () =<< dropM l es)
     
     reversed es = do es' <- copied es; reversed' es'; return es'
     
@@ -807,16 +803,12 @@ instance (Unboxed e) => IndexedM (ST s) (STBytes# s e) Int e
     fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
     
     fromIndexed' es = do
-      let n = sizeOf es
-      copy <- alloc n
-      forM_ [0 .. n - 1] $ \ i -> writeM copy i (es !^ i)
-      return copy
+      copy <- alloc (sizeOf es)
+      copy <$ ofoldr (\ i e go -> do writeM copy i e; go) (return ()) es
     
     fromIndexedM es = do
-      n    <- getSizeOf es
-      copy <- alloc n
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <- alloc =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
 instance (Unboxed e) => SortM (ST s) (STBytes# s e) e
   where
@@ -979,10 +971,8 @@ instance (MonadIO io, Unboxed e) => IndexedM io (MIOBytes# io e) Int e
     fromIndexed' = pack . fromIndexed'
     
     fromIndexedM es = do
-      n    <- getSizeOf es
-      copy <- filled n (unreachEx "fromIndexedM")
-      forM_ [0 .. n - 1] $ \ i -> es !#> i >>= writeM copy i
-      return copy
+      copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
 instance (MonadIO io, Unboxed e) => SortM io (MIOBytes# io e) e
   where
@@ -1005,19 +995,21 @@ instance (MonadIO io, Unboxed e) => Freeze io (MIOBytes# io e) (SBytes# e)
 
 instance (Storable e, Unboxed e) => Freeze IO (Int, Ptr e) (SBytes# e)
   where
-    freeze (n, ptr) = do
-      let !n'@(I# n#) = max 0 n
-      es' <- stToIO . ST $ \ s1# -> case pnewUnboxed ptr n# s1# of
-        (# s2#, marr# #) -> (# s2#, MIOBytes# (STBytes# n' 0 marr#) `asSameProxyOf` ptr #)
-      forM_ [0 .. n' - 1] $ \ i -> peekElemOff ptr i >>= writeM es' i
-      freeze es'
+    freeze (c, ptr) = do
+      let
+        err = unreachEx "freeze {(Int, Ptr e) => SBytes# e}"
+        
+        filled' :: Unboxed e => proxy e -> e -> IO (MIOBytes# IO e)
+        filled' =  const $ filled (max 0 c)
+      
+      es <- filled' ptr err
+      freeze =<< mupdate es (\ i _ -> peekElemOff ptr i)
 
 instance (Storable e, Unboxed e) => Thaw IO (SBytes# e) (Int, Ptr e)
   where
-    thaw (SBytes# n o arr#) = do
+    thaw arr@(SBytes# n _ _) = do
       ptr <- callocArray n
-      forM_ [o .. n + o - 1] $ \ i@(I# i#) -> pokeElemOff ptr i (arr# !# i#)
-      return (n, ptr)
+      (n, ptr) <$ ofoldr (\ i e go -> do pokeElemOff ptr i e; go) (return ()) arr
 
 --------------------------------------------------------------------------------
 
@@ -1081,21 +1073,26 @@ unsafeCoerceSTBytes# pa@(STBytes# n o arr#) = pb
     s1 = psizeof pa 8; s2 = psizeof pb 8
 
 {- |
+  'unsafeCoerceMIOBytes#' is unsafe low-lowel coerce of an mutable array with
+  recounting the number of elements and offset (with possible rounding).
+-}
+unsafeCoerceMIOBytes# :: (MonadIO io, Unboxed a, Unboxed b)
+                      => MIOBytes# io a -> MIOBytes# io b
+unsafeCoerceMIOBytes# (MIOBytes# es) = MIOBytes# (unsafeCoerceSTBytes# es)
+
+{- |
   @'unsafeSBytesToPtr#' es@ byte-wise stores 'SBytes#' content to 'Ptr'. Returns
   the number of overwritten elements and a pointer to @psizeof es (sizeOf es)@
   bytes of allocated memory.
 -}
 unsafeSBytesToPtr# :: (Unboxed e) => SBytes# e -> IO (Int, Ptr e)
-unsafeSBytesToPtr# es@(SBytes# c (I# o#) marr#) = do
+unsafeSBytesToPtr# es = do
   let
-    pokeByte :: Ptr a -> Int -> Word8 -> IO ()
-    pokeByte =  pokeByteOff
-    
-    n = psizeof es c
+    es' = unsafeCoerceSBytes# es :: SBytes# Word8
+    n   = sizeOf es'
   
   ptr <- mallocBytes n
-  forM_ [0 .. n - 1] $ \ i@(I# i#) -> pokeByte ptr i (marr# !# (o# +# i#))
-  return (n, ptr)
+  ofoldr (\ i e go -> do pokeByteOff ptr i e; go) (return (n, ptr)) es'
 
 {- |
   @'unsafePtrToSBytes#' n ptr@ byte-wise stores @n@ elements of 'Ptr' @ptr@ to
@@ -1104,18 +1101,14 @@ unsafeSBytesToPtr# es@(SBytes# c (I# o#) marr#) = do
 unsafePtrToSBytes# :: (Unboxed e) => (Int, Ptr e) -> IO (SBytes# e)
 unsafePtrToSBytes# (c, ptr) = do
   let
-    !n@(I# n#) = psizeof ptr c'
-    c' = max 0 c
+    filled' :: Unboxed e => proxy e -> e -> IO (IOBytes# e)
+    filled' =  const $ filled (max 0 c)
   
-  es@(STBytes# _ _ arr#) <- stToIO $ ST $ \ s1# -> case pnewUnboxed ptr n# s1# of
-    (# s2#, marr# #) -> (# s2#, STBytes# c' 0 marr# #)
+  es <- filled' ptr (unreachEx "unsafePtrToSBytes#")
   
-  forM_ [0 .. n - 1] $ \ i@(I# i#) -> do
-    e <- peekByteOff ptr i :: IO Word8
-    stToIO $ ST $ \ s1# -> case writeUnboxed# arr# i# e s1# of
-      s2# -> (# s2#, () #)
-  
-  stToIO (done es)
+  let es' = unsafeCoerceMIOBytes# es :: IOBytes# Word8
+  void $ mupdate es' (\ i _ -> peekByteOff ptr i)
+  done' es
 
 -- | Calculate hash 'SBytes#' using 'hashUnboxedWith'.
 hashSBytesWith# :: (Unboxed e) => Int -> SBytes# e -> Int
@@ -1124,15 +1117,16 @@ hashSBytesWith# (I# salt#) es@(SBytes# (I# c#) (I# o#) bytes#) =
 
 --------------------------------------------------------------------------------
 
-asSameProxyOf :: f a -> g a -> f a
-asSameProxyOf =  const
-
 {-# INLINE done #-}
 done :: STBytes# s e -> ST s (SBytes# e)
 done (STBytes# n o marr#) = ST $ \ s1# -> case unsafeFreezeByteArray# marr# s1# of
   (# s2#, arr# #) -> (# s2#, SBytes# n o arr# #)
 
--- | alloc creates filled by default value pseudo-primitive.
+{-# INLINE done' #-}
+done' :: MonadIO io => MIOBytes# io e -> io (SBytes# e)
+done' =  \ (MIOBytes# arr) -> stToMIO (done arr)
+
+-- | Create 'filled' by default value pseudo-primitive.
 alloc :: (Unboxed e) => Int -> ST s (STBytes# s e)
 alloc c@(I# c#) =
   let res = ST $ \ s1# -> case pnewUnboxed1 res c# s1# of
@@ -1166,5 +1160,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
 
 
