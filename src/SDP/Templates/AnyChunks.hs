@@ -643,9 +643,9 @@ instance {-# OVERLAPS #-} (Freeze1 m mut imm e) => Freeze m (AnyChunks mut e) (A
 
 --------------------------------------------------------------------------------
 
-ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
+ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
+ascsBounds             _ = defaultBounds 0
 
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Templates.AnyChunks."
@@ -655,9 +655,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Templates.AnyChunks."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
-
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024

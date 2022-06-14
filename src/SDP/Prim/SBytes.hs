@@ -1146,9 +1146,9 @@ nubSorted f es =
   let fun = \ e ls -> e `f` head ls == EQ ? ls $ e : ls
   in  fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2])
 
-ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
+ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
+ascsBounds             _ = defaultBounds 0
 
 --------------------------------------------------------------------------------
 

@@ -226,12 +226,20 @@ class (Ord i, Shape i, Shape (DimLast i), Shape (DimInit i), Shape (GIndex i), S
     -- | Returns previous index in 'range'.
     prev :: (i, i) -> i -> i
     default prev :: (Enum i) => (i, i) -> i -> i
-    prev (l, u) i | isEmpty (l, u) = emptyEx "prev {default}" | i <= l = l | i > u = u | True = pred i
+    prev (l, u) i
+      | isEmpty (l, u) = emptyEx "prev range must be non-empty {default}"
+      |     i <= l     = l
+      |     i >  u     = u
+      |      True      = pred i
     
     -- | Returns next index in range.
     next :: (i, i) -> i -> i
     default next :: (Enum i) => (i, i) -> i -> i
-    next (l, u) i | isEmpty (l, u) = emptyEx "next {default}" | i >= u = u | i < l = l | True = succ i
+    next (l, u) i
+      | isEmpty (l, u) = emptyEx "next: range must be non-empty {default}"
+      |     i >= u     = u
+      |     i <  l     = l
+      |      True      = succ i
     
     -- | Returns 'offset' (indent) of 'index' in 'range'.
     {-# INLINE offset #-}
@@ -554,7 +562,4 @@ checkBounds bnds i res = case inBounds bnds i of
 
 emptyEx :: String -> a
 emptyEx =  throw . EmptyRange . showString "in SDP.Index."
-
-
-
 

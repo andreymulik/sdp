@@ -966,7 +966,7 @@ instance LinearM (ST s) (STArray# s e) e
 
 instance MapM (ST s) (STArray# s e) Int e
   where
-    newMap' e ascs = fromAssocs' (ascsBounds ascs) e ascs
+    newMap' e ascs = isNull ascs ? newNull $ fromAssocs' (ascsBounds ascs) e ascs
     
     {-# INLINE writeM' #-}
     writeM' (STArray# _ (I# o#) marr#) = \ (I# i#) e -> ST $
@@ -1133,7 +1133,7 @@ instance (MonadIO io) => LinearM io (MIOArray# io e) e
 
 instance (MonadIO io) => MapM io (MIOArray# io e) Int e
   where
-    newMap' e ascs = fromAssocs' (ascsBounds ascs) e ascs
+    newMap' e ascs = isNull ascs ? newNull $ fromAssocs' (ascsBounds ascs) e ascs
     
     writeM' es = stToMIO ... writeM' (unpack es)
     
@@ -1258,9 +1258,9 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
   where
     fun = \ e ls -> e `f` head ls == EQ ? ls $ e : ls
 
-ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
+ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
+ascsBounds             _ = defaultBounds 0
 
 (<?=>) :: (Bordered b i) => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min

@@ -220,9 +220,9 @@ instance MonadVar m => Freeze m (MArray# m e) (SArray# e)
 
 --------------------------------------------------------------------------------
 
-ascsBounds :: (Ord a) => [(a, b)] -> (a, a)
+ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds _ = unreachEx "ascsBounds: list must be non-empty"
+ascsBounds             _ = defaultBounds 0
 
 unpack :: MArray# m e -> SArray# (Var m e)
 unpack =  \ (MArray# es) -> es
