@@ -1,5 +1,5 @@
-{-# LANGUAGE Trustworthy, DeriveDataTypeable, DeriveGeneric, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE Safe, DeriveDataTypeable, DeriveGeneric, FlexibleContexts #-}
 
 {- |
     Module      :  SDP.Templates.AnyVar
@@ -36,7 +36,6 @@ import Data.Typeable
 import Data.Field
 
 import GHC.Generics
-import GHC.Conc
 
 default ()
 
@@ -54,11 +53,9 @@ newtype AnyVar m rep e = AnyVar (Var m (rep e)) deriving ( Typeable, Generic )
 
 {- Eq instance. -}
 
-instance Eq (AnyVar IO rep e) where AnyVar x == AnyVar y = x == y
-
-instance Eq (AnyVar STM rep e) where AnyVar x == AnyVar y = x == y
-
-instance Eq (AnyVar (ST s) rep e) where AnyVar x == AnyVar y = x == y
+instance (MonadVar m, Eq (Var m (rep e))) => Eq (AnyVar m rep e)
+  where
+    AnyVar x == AnyVar y = x == y
 
 --------------------------------------------------------------------------------
 
@@ -71,7 +68,7 @@ instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
 
 --------------------------------------------------------------------------------
 
-{- EstimateM, BorderedM and LinearM instances. -}
+{- EstimateM and BorderedM instances. -}
 
 instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
   where
@@ -85,6 +82,10 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m re
     getBounds  = getBounds  <=< get this.unpack
     getLower   = getLower   <=< get this.unpack
     getUpper   = getUpper   <=< get this.unpack
+
+--------------------------------------------------------------------------------
+
+{- LinearM instance. -}
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => LinearM m (AnyVar m rep e) e
   where
@@ -140,7 +141,7 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => Linear
 
 --------------------------------------------------------------------------------
 
-{- MapM, IndexedM and SortM instances. -}
+{- MapM and IndexedM instances. -}
 
 instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key e) => MapM m (AnyVar m rep e) key e
   where
@@ -163,6 +164,10 @@ instance (MonadVar m, IndexedM1 m rep key e) => IndexedM m (AnyVar m rep e) key 
     
     fromIndexed' = pack <=< fromIndexed'
     fromIndexedM = pack <=< fromIndexedM
+
+--------------------------------------------------------------------------------
+
+{- SortM instances. -}
 
 instance (MonadVar m, SortM1 m rep e) => SortM m (AnyVar m rep e) e
   where

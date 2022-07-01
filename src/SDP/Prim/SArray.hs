@@ -106,7 +106,7 @@ instance Eq1 SArray#
 
 {- Ord and Ord1 instances. -}
 
-instance (Ord e) => Ord (SArray# e) where compare = compare1
+instance Ord e => Ord (SArray# e) where compare = compare1
 
 instance Ord1 SArray#
   where
@@ -118,13 +118,13 @@ instance Ord1 SArray#
 
 {- Show and Read instances. -}
 
-instance (Show e) => Show (SArray# e) where showsPrec p = showsPrec p . listL
+instance Show e => Show (SArray# e) where showsPrec p = showsPrec p . listL
 
-instance (Read e) => Read (SArray# e) where readPrec = fromList <$> readPrec
+instance Read e => Read (SArray# e) where readPrec = fromList <$> readPrec
 
 --------------------------------------------------------------------------------
 
-{- Overloaded Lists and Strings support. -}
+{- Overloaded Lists and Strings. -}
 
 instance IsString (SArray# Char) where fromString = fromList
 
@@ -140,8 +140,8 @@ instance E.IsList (SArray# e)
 
 {- Semigroup, Monoid and Default instances. -}
 
-instance Default   (SArray# e) where def = Z
-instance Monoid    (SArray# e) where mempty = Z; mappend = (<>)
+instance Default (SArray# e) where def = Z
+instance Monoid  (SArray# e) where mempty = Z; mappend = (<>)
 
 instance Semigroup (SArray# e)
   where
@@ -157,12 +157,21 @@ instance Semigroup (SArray# e)
 
 --------------------------------------------------------------------------------
 
-{- Nullable and Estimate instances. -}
+{- Nullable and NullableM instances. -}
 
 instance Nullable (SArray# e)
   where
     lzero  = runST $ filled 0 (unreachEx "lzero") >>= done
     isNull = \ (SArray# c _ _) -> c == 0
+
+instance Monad m => NullableM m (SArray# e)
+  where
+    newNull = return lzero
+    nowNull = return . isNull
+
+--------------------------------------------------------------------------------
+
+{- Estimate and EstimateM instances. -}
 
 instance Estimate (SArray# e)
   where
@@ -177,6 +186,47 @@ instance Estimate (SArray# e)
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance Monad m => EstimateM m (SArray# e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
+
+--------------------------------------------------------------------------------
+
+{- Bordered and BorderedM instances. -}
+
+instance Bordered (SArray# e) Int
+  where
+    lower _ = 0
+    rebound = take . size
+    
+    sizeOf   (SArray# c _ _) = c
+    upper    (SArray# c _ _) = c - 1
+    bounds   (SArray# c _ _) = (0, c - 1)
+    indices  (SArray# c _ _) = [0 .. c - 1]
+    indexOf  (SArray# c _ _) = index (0, c - 1)
+    offsetOf (SArray# c _ _) = offset (0, c - 1)
+    indexIn  (SArray# c _ _) = \ i -> i >= 0 && i < c
+
+instance Monad m => BorderedM m (SArray# e) Int
+  where
+    nowIndexIn (SArray# c _ _) = return . inRange (0, c - 1)
+    getIndices (SArray# c _ _) = return [0 .. c - 1]
+    getBounds  (SArray# c _ _) = return (0, c - 1)
+    getUpper   (SArray# c _ _) = return (c - 1)
+    getSizeOf  (SArray# c _ _) = return c
+    
+    getLower _ = return 0
 
 --------------------------------------------------------------------------------
 
@@ -343,20 +393,7 @@ instance Traversable SArray#
 
 --------------------------------------------------------------------------------
 
-{- Bordered, Forceable and Linear instances. -}
-
-instance Bordered (SArray# e) Int
-  where
-    lower _ = 0
-    rebound = take . size
-    
-    sizeOf   (SArray# c _ _) = c
-    upper    (SArray# c _ _) = c - 1
-    bounds   (SArray# c _ _) = (0, c - 1)
-    indices  (SArray# c _ _) = [0 .. c - 1]
-    indexOf  (SArray# c _ _) = index (0, c - 1)
-    offsetOf (SArray# c _ _) = offset (0, c - 1)
-    indexIn  (SArray# c _ _) = \ i -> i >= 0 && i < c
+{- Forceable and Linear instances. -}
 
 instance Forceable (SArray# e)
   where
@@ -536,7 +573,7 @@ instance Linear (SArray# e) e
 
 {- Set and SetWith instances. -}
 
-instance (Ord e) => Set (SArray# e) e
+instance Ord e => Set (SArray# e) e
 
 instance SetWith (SArray# e) e
   where
@@ -746,15 +783,17 @@ type role STArray# nominal representational
 
 --------------------------------------------------------------------------------
 
+{- Eq instance. -}
+
 instance Eq (STArray# s e)
   where
-    (STArray# c1 o1 marr1#) == (STArray# c2 o2 marr2#) =
+    STArray# c1 o1 marr1# == STArray# c2 o2 marr2# =
       let same = isTrue# (sameMutableArray# marr1# marr2#)
       in  c1 == c2 && (c1 == 0 || o1 == o2 && same)
 
 --------------------------------------------------------------------------------
 
-{- NullableM, Estimate, EstimateM and Bordered instances. -}
+{- NullableM instance. -}
 
 instance NullableM (ST s) (STArray# s e)
   where
@@ -762,6 +801,10 @@ instance NullableM (ST s) (STArray# s e)
       (# s2#, marr# #) -> (# s2#, STArray# 0 0 marr# #)
     
     nowNull (STArray# n _ _) = return (n < 1)
+
+--------------------------------------------------------------------------------
+
+{- Estimate and EstimateM instances. -}
 
 instance Estimate (STArray# s e)
   where
@@ -791,6 +834,10 @@ instance EstimateM (ST s) (STArray# s e)
     lestimateMGE' = return ... (.>=)
     lestimateM'   = return ... (<.=>)
 
+--------------------------------------------------------------------------------
+
+{- Bordered and BorderedM instances. -}
+
 instance Bordered (STArray# s e) Int
   where
     lower _ = 0
@@ -810,10 +857,6 @@ instance Bordered (STArray# s e) Int
       where
         n = size bnds
 
---------------------------------------------------------------------------------
-
-{- BorderedM and LinearM instances. -}
-
 instance BorderedM (ST s) (STArray# s e) Int
   where
     nowIndexIn (STArray# c _ _) = return . inRange (0, c - 1)
@@ -823,6 +866,10 @@ instance BorderedM (ST s) (STArray# s e) Int
     getSizeOf  (STArray# c _ _) = return c
     
     getLower _ = return 0
+
+--------------------------------------------------------------------------------
+
+{- LinearM instance. -}
 
 instance LinearM (ST s) (STArray# s e) e
   where
@@ -976,7 +1023,7 @@ instance LinearM (ST s) (STArray# s e) e
 
 --------------------------------------------------------------------------------
 
-{- MapM, IndexedM and SortM instances. -}
+{- MapM and IndexedM instances. -}
 
 instance MapM (ST s) (STArray# s e) Int e
   where
@@ -1007,6 +1054,10 @@ instance IndexedM (ST s) (STArray# s e) Int e
       copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
       copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
+--------------------------------------------------------------------------------
+
+{- SortM instance. -}
+
 instance SortM (ST s) (STArray# s e) e
   where
     sortedMBy f es@(STArray# n _ _) =
@@ -1024,17 +1075,18 @@ newtype MIOArray# (io :: Type -> Type) e = MIOArray# (STArray# RealWorld e)
 -- | 'IOArray#' is mutable preudo-primitive 'Int'-indexed lazy boxed array.
 type IOArray# = MIOArray# IO
 
-{-# INLINE unpack #-}
-unpack :: MIOArray# io e -> STArray# RealWorld e
-unpack =  coerce
+--------------------------------------------------------------------------------
 
-{-# INLINE pack #-}
-pack :: (MonadIO io) => ST RealWorld (STArray# RealWorld e) -> io (MIOArray# io e)
-pack =  stToMIO . coerce
+{- NullableM instance. -}
+
+instance (MonadIO io) => NullableM io (MIOArray# io e)
+  where
+    newNull = pack newNull
+    nowNull = stToMIO . nowNull . unpack
 
 --------------------------------------------------------------------------------
 
-{- Estimate, EstimateM, Bordered and NullableM instances. -}
+{- Estimate and EstimateM instances. -}
 
 instance Estimate (MIOArray# io e)
   where
@@ -1064,6 +1116,10 @@ instance MonadIO io => EstimateM io (MIOArray# io e)
     lestimateMGE' = return ... (.>=)
     lestimateM'   = return ... (<.=>)
 
+--------------------------------------------------------------------------------
+
+{- Bordered and BorderedM instances. -}
+
 instance Bordered (MIOArray# io e) Int
   where
     lower _ = 0
@@ -1077,16 +1133,7 @@ instance Bordered (MIOArray# io e) Int
     offsetOf (MIOArray# (STArray# c _ _)) = offset (0, c - 1)
     indexIn  (MIOArray# (STArray# c _ _)) = \ i -> i >= 0 && i < c
 
-instance (MonadIO io) => NullableM io (MIOArray# io e)
-  where
-    newNull = pack newNull
-    nowNull = stToMIO . nowNull . unpack
-
---------------------------------------------------------------------------------
-
-{- BorderedM and LinearM instances. -}
-
-instance (MonadIO io) => BorderedM io (MIOArray# io e) Int
+instance MonadIO io => BorderedM io (MIOArray# io e) Int
   where
     getIndexOf = return ... indexOf . unpack
     getIndices = return . indices . unpack
@@ -1095,7 +1142,11 @@ instance (MonadIO io) => BorderedM io (MIOArray# io e) Int
     getUpper   = return . upper . unpack
     getLower _ = return 0
 
-instance (MonadIO io) => LinearM io (MIOArray# io e) e
+--------------------------------------------------------------------------------
+
+{- LinearM instance. -}
+
+instance MonadIO io => LinearM io (MIOArray# io e) e
   where
     singleM = pack . singleM
     getHead = stToMIO . getHead . unpack
@@ -1158,9 +1209,9 @@ instance (MonadIO io) => LinearM io (MIOArray# io e) e
 
 --------------------------------------------------------------------------------
 
-{- MapM, IndexedM and SortM instances. -}
+{- MapM and IndexedM instances. -}
 
-instance (MonadIO io) => MapM io (MIOArray# io e) Int e
+instance MonadIO io => MapM io (MIOArray# io e) Int e
   where
     newMap' e ascs = isNull ascs ? newNull $ fromAssocs' (ascsBounds ascs) e ascs
     
@@ -1172,7 +1223,7 @@ instance (MonadIO io) => MapM io (MIOArray# io e) Int e
     kfoldrM   = ofoldrM
     kfoldlM   = ofoldlM
 
-instance (MonadIO io) => IndexedM io (MIOArray# io e) Int e
+instance MonadIO io => IndexedM io (MIOArray# io e) Int e
   where
     fromAssocs  bnds = pack  .  fromAssocs  bnds
     fromAssocs' bnds = pack ... fromAssocs' bnds
@@ -1183,7 +1234,11 @@ instance (MonadIO io) => IndexedM io (MIOArray# io e) Int e
       copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
       copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
-instance (MonadIO io) => SortM io (MIOArray# io e) e
+--------------------------------------------------------------------------------
+
+{- SortM instance. -}
+
+instance MonadIO io => SortM io (MIOArray# io e) e
   where
     sortedMBy f = stToMIO . sortedMBy f . unpack
     sortMBy     = timSortBy
@@ -1192,12 +1247,12 @@ instance (MonadIO io) => SortM io (MIOArray# io e) e
 
 {- Thaw and Freeze instances. -}
 
-instance (MonadIO io) => Thaw io (SArray# e) (MIOArray# io e)
+instance MonadIO io => Thaw io (SArray# e) (MIOArray# io e)
   where
     unsafeThaw = pack . unsafeThaw
     thaw       = pack . thaw
 
-instance (MonadIO io) => Freeze io (MIOArray# io e) (SArray# e)
+instance MonadIO io => Freeze io (MIOArray# io e) (SArray# e)
   where
     unsafeFreeze = stToMIO . unsafeFreeze . unpack
     freeze       = stToMIO . freeze . unpack
@@ -1206,14 +1261,14 @@ instance (MonadIO io) => Freeze io (MIOArray# io e) (SArray# e)
 
 {- Thaw and Freeze instances. -}
 
-instance (Storable e) => Thaw IO (SArray# e) (Int, Ptr e)
+instance Storable e => Thaw IO (SArray# e) (Int, Ptr e)
   where
     thaw es = do
       let n = sizeOf es
       ptr <- callocArray n
       (n, ptr) <$ ofoldr (\ i e go -> do pokeElemOff ptr i e; go) (return ()) es
 
-instance (Storable e) => Freeze IO (Int, Ptr e) (SArray# e)
+instance Storable e => Freeze IO (Int, Ptr e) (SArray# e)
   where
     freeze (c, ptr) = do
       let
@@ -1266,8 +1321,18 @@ fromSTArray# :: STArray# s e -> State# s -> (# State# s, MutableArray# s e #)
 fromSTArray# (STArray# (I# c#) (I# o#) marr#) = cloneMutableArray# marr# o# c#
 
 -- | 'coerceSTArray#' is 'coerce' alias.
-coerceSTArray# :: (Coercible a b) => STArray# s a -> STArray# s b
+coerceSTArray# :: Coercible a b => STArray# s a -> STArray# s b
 coerceSTArray# =  coerce
+
+--------------------------------------------------------------------------------
+
+{-# INLINE unpack #-}
+unpack :: MIOArray# io e -> STArray# RealWorld e
+unpack =  coerce
+
+{-# INLINE pack #-}
+pack :: (MonadIO io) => ST RealWorld (STArray# RealWorld e) -> io (MIOArray# io e)
+pack =  stToMIO . coerce
 
 --------------------------------------------------------------------------------
 

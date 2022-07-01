@@ -65,11 +65,11 @@ default ()
 newtype AnyChunks rep e = AnyChunks [rep e] deriving ( Typeable, Data, Generic )
 
 -- | Construct immutable 'AnyChunks' safely.
-fromChunks :: (Nullable (rep e)) => [rep e] -> AnyChunks rep e
+fromChunks :: Nullable1 rep e => [rep e] -> AnyChunks rep e
 fromChunks =  AnyChunks . except isNull
 
 -- | Construct mutable 'AnyChunks' safely.
-fromChunksM :: (BorderedM1 m rep Int e) => [rep e] -> m (AnyChunks rep e)
+fromChunksM :: BorderedM1 m rep Int e => [rep e] -> m (AnyChunks rep e)
 fromChunksM =  fmap AnyChunks . go
   where
     go (x : xs) = do n <- getSizeOf x; n == 0 ? go xs $ (x :) <$> go xs
@@ -154,11 +154,11 @@ instance (Linear1 (AnyChunks rep) e) => E.IsList (AnyChunks rep e)
 
 {- Functor and Applicative instances. -}
 
-instance (Functor rep) => Functor (AnyChunks rep)
+instance Functor rep => Functor (AnyChunks rep)
   where
     fmap f (AnyChunks es) = AnyChunks (fmap f <$> es)
 
-instance (Applicative rep) => Applicative (AnyChunks rep)
+instance Applicative rep => Applicative (AnyChunks rep)
   where
     AnyChunks fs <*> AnyChunks es = AnyChunks $ liftA2 (<*>) fs es
     pure e = AnyChunks [pure e]
@@ -167,7 +167,7 @@ instance (Applicative rep) => Applicative (AnyChunks rep)
 
 {- Foldable and Traversable instances. -}
 
-instance (Foldable rep) => Foldable (AnyChunks rep)
+instance Foldable rep => Foldable (AnyChunks rep)
   where
     foldr f base (AnyChunks es) = flip (foldr f) `foldr` base $ es
     foldl f base (AnyChunks es) = foldl (foldl f) base es
@@ -176,17 +176,13 @@ instance (Foldable rep) => Foldable (AnyChunks rep)
     length (AnyChunks es) = foldr' ((+) . length) 0 es
     null   (AnyChunks es) = null es
 
-instance (Traversable rep) => Traversable (AnyChunks rep)
+instance Traversable rep => Traversable (AnyChunks rep)
   where
     traverse f (AnyChunks es) = AnyChunks <$> traverse (traverse f) es
 
 --------------------------------------------------------------------------------
 
-{- Nullable, NullableM, Forceable, Estimate and EstimateM instances. -}
-
-instance (Forceable1 rep e) => Forceable (AnyChunks rep e)
-  where
-    force = AnyChunks . force . E.coerce
+{- Nullable and NullableM instances. -}
 
 instance Nullable (AnyChunks rep e)
   where
@@ -197,6 +193,10 @@ instance (NullableM m (rep e)) => NullableM m (AnyChunks rep e)
   where
     nowNull = fmap and . mapM nowNull . toChunks
     newNull = return (AnyChunks [])
+
+--------------------------------------------------------------------------------
+
+{- Estimate and EstimateM instances. -}
 
 instance Bordered1 rep Int e => Estimate (AnyChunks rep e)
   where
@@ -232,9 +232,9 @@ instance (Monad m, BorderedM1 m rep Int e) => EstimateM m (AnyChunks rep e)
 
 --------------------------------------------------------------------------------
 
-{- Bordered and Linear instances. -}
+{- Bordered and BorderedM instances. -}
 
-instance (Bordered1 rep Int e) => Bordered (AnyChunks rep e) Int
+instance Bordered1 rep Int e => Bordered (AnyChunks rep e) Int
   where
     sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
     
@@ -257,6 +257,24 @@ instance (Bordered1 rep Int e) => Bordered (AnyChunks rep e) Int
           GT -> x : go (c - s) xs
           EQ -> [x]
         go _    []    = []
+
+instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
+  where
+    getLower  _ = return 0
+    getUpper es = do n <- getSizeOf es; return (n - 1)
+    
+    getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
+    
+    getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
+    nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
+
+--------------------------------------------------------------------------------
+
+{- Forceable and Linear instances. -}
+
+instance Forceable1 rep e => Forceable (AnyChunks rep e)
+  where
+    force = AnyChunks . force . E.coerce
 
 instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
   where
@@ -358,17 +376,7 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
-{- BorderedM and LinearM instances. -}
-
-instance (BorderedM1 m rep Int e) => BorderedM m (AnyChunks rep e) Int
-  where
-    getLower  _ = return 0
-    getUpper es = do n <- getSizeOf es; return (n - 1)
-    
-    getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
-    
-    getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
-    nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
+{- LinearM instance. -}
 
 instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep e) e
   where
@@ -469,7 +477,7 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
 
 --------------------------------------------------------------------------------
 
-{- Set, SetWith and Scan instances. -}
+{- Set and SetWith instances. -}
 
 instance (Nullable (AnyChunks rep e), SetWith1 (AnyChunks rep) e, Ord e) => Set (AnyChunks rep e) e
 
@@ -498,6 +506,10 @@ instance (SetWith1 rep e, Linear1 rep e, Ord (rep e), Bordered1 rep Int e) => Se
     memberWith f x (AnyChunks es) = memberWith f x `any` es
     
     isSubsetWith f xs ys = o_foldr (\ e b -> memberWith f e ys && b) True xs
+
+--------------------------------------------------------------------------------
+
+{- Scan instances. -}
 
 instance (Linear1 (AnyChunks rep) e) => Scan (AnyChunks rep e) e
 
@@ -552,7 +564,7 @@ instance (Indexed1 rep Int e) => Indexed (AnyChunks rep e) Int e
 
 --------------------------------------------------------------------------------
 
-{- MapM, IndexedM and SortM instances. -}
+{- MapM and IndexedM instances. -}
 
 instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m (AnyChunks rep e) Int e
   where
@@ -606,6 +618,10 @@ instance (IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
     
     fromIndexed' = newLinear  .  listL
     fromIndexedM = newLinear <=< getLeft
+
+--------------------------------------------------------------------------------
+
+{- SortM instance. -}
 
 instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e) => SortM m (AnyChunks rep e) e
   where
@@ -675,6 +691,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
 
 

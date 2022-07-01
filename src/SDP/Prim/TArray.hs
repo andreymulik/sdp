@@ -53,7 +53,7 @@ instance Eq (Var m e) => Eq (MArray# m e)
 
 --------------------------------------------------------------------------------
 
-{- Nullable, Estimate, EstimateM and Bordered instances. -}
+{- Nullable and NullableM instances. -}
 
 instance Nullable (MArray# m e)
   where
@@ -62,8 +62,12 @@ instance Nullable (MArray# m e)
 
 instance Monad m => NullableM m (MArray# m e)
   where
-    newNull = return (MArray# Z)
-    nowNull = return . isNull . unpack
+    newNull = return Z
+    nowNull = return . isNull
+
+--------------------------------------------------------------------------------
+
+{- Estimate and EstimateM instances. -}
 
 instance Estimate (MArray# m e)
   where
@@ -93,11 +97,15 @@ instance Monad m => EstimateM m (MArray# m e)
     lestimateMGE' = return ... (.>=)
     lestimateM'   = return ... (<.=>)
 
+--------------------------------------------------------------------------------
+
+{- Bordered and BorderedM instances. -}
+
 instance Bordered (MArray# m e) Int
   where
     lower _ = 0
-    upper   = upper.unpack
-    sizeOf  = sizeOf.unpack
+    upper   = upper . unpack
+    sizeOf  = sizeOf . unpack
     indexIn = \ es i -> i >= 0 && i < sizeOf (unpack es)
     
     bounds   (MArray# es) = (0, upper es)
@@ -107,10 +115,6 @@ instance Bordered (MArray# m e) Int
     
     rebound bnds = MArray# . rebound bnds . unpack
 
---------------------------------------------------------------------------------
-
-{- BorderedM and LinearM instances. -}
-
 instance Monad m => BorderedM m (MArray# m e) Int
   where
     getIndexOf = return ... indexOf
@@ -119,6 +123,10 @@ instance Monad m => BorderedM m (MArray# m e) Int
     getSizeOf  = return . sizeOf
     getUpper   = return . upper
     getLower _ = return 0
+
+--------------------------------------------------------------------------------
+
+{- LinearM instance. -}
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where
@@ -190,7 +198,7 @@ instance MonadVar m => LinearM m (MArray# m e) e
 
 --------------------------------------------------------------------------------
 
-{- MapM and IndexedM instances. -}
+{- MapM instance. -}
 
 instance MonadVar m => MapM m (MArray# m e) Int e
   where
@@ -207,6 +215,10 @@ instance MonadVar m => MapM m (MArray# m e) Int e
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
+
+--------------------------------------------------------------------------------
+
+{- IndexedM instance. -}
 
 instance MonadVar m => IndexedM m (MArray# m e) Int e
   where
@@ -249,7 +261,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
-
 
 

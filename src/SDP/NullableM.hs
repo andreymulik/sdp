@@ -1,5 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, ConstraintKinds #-}
-{-# LANGUAGE Safe, CPP #-}
+{-# LANGUAGE Safe, CPP, MultiParamTypeClasses, ConstraintKinds #-}
 
 #if __GLASGOW_HASKELL__ >= 806
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
@@ -7,7 +6,7 @@
 
 {- |
     Module      :  SDP.NullableM
-    Copyright   :  (c) Andrey Mulik 2021
+    Copyright   :  (c) Andrey Mulik 2021-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -30,7 +29,7 @@ default ()
 --------------------------------------------------------------------------------
 
 -- | @since 0.3 'NullableM' is class of types which value may be empty.
-class (Monad m) => NullableM m e | e -> m
+class Monad m => NullableM m e
   where
     -- | Monadic 'SDP.Nullable.lzero'.
     newNull :: m e
@@ -61,5 +60,6 @@ type NullableM' m rep = forall e . NullableM m (rep e)
 type NullableM'' m rep = forall i e . NullableM m (rep i e)
 
 #endif
+
 
 

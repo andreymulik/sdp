@@ -134,7 +134,7 @@ instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e) => Monoid (An
 
 --------------------------------------------------------------------------------
 
-{- Nullable, NullableM, Estimate and EstimateM instances. -}
+{- Nullable and NullableM instances. -}
 
 instance (Index i, Nullable (rep e)) => Nullable (AnyBorder rep i e)
   where
@@ -146,7 +146,11 @@ instance (Index i, NullableM m (rep e)) => NullableM m (AnyBorder rep i e)
     nowNull (AnyBorder l u es) = isEmpty (l, u) ? return True $ nowNull es
     newNull = uncurry AnyBorder (defaultBounds 0) <$> newNull
 
-instance (Index i) => Estimate (AnyBorder rep i e)
+--------------------------------------------------------------------------------
+
+{- Estimate and EstimateM instances. -}
+
+instance Index i => Estimate (AnyBorder rep i e)
   where
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
@@ -173,6 +177,32 @@ instance (Monad m, Index i) => EstimateM m (AnyBorder rep i e)
     lestimateMLE' = return ... (.<=)
     lestimateMGE' = return ... (.>=)
     lestimateM'   = return ... (<.=>)
+
+--------------------------------------------------------------------------------
+
+{- Bordered and BorderedM instances. -}
+
+instance Index i => Bordered (AnyBorder rep i e) i
+  where
+    lower    (AnyBorder l _ _) = l
+    upper    (AnyBorder _ u _) = u
+    bounds   (AnyBorder l u _) = (l, u)
+    sizeOf   (AnyBorder l u _) = size    (l, u)
+    indices  (AnyBorder l u _) = range   (l, u)
+    indexOf  (AnyBorder l u _) = index   (l, u)
+    indexIn  (AnyBorder l u _) = inRange (l, u)
+    offsetOf (AnyBorder l u _) = offset  (l, u)
+    
+    rebound bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
+
+instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
+  where
+    nowIndexIn (AnyBorder l u _) = return . inRange (l, u)
+    getIndices (AnyBorder l u _) = return $ range (l, u)
+    getSizeOf  (AnyBorder l u _) = return $ size (l, u)
+    getBounds  (AnyBorder l u _) = return (l, u)
+    getLower   (AnyBorder l _ _) = return l
+    getUpper   (AnyBorder _ u _) = return u
 
 --------------------------------------------------------------------------------
 
@@ -248,24 +278,11 @@ instance (Index i, Traversable rep) => Traversable (AnyBorder rep i)
 
 --------------------------------------------------------------------------------
 
-{- Forceable, Bordered and Linear instances. -}
+{- Forceable and Linear instances. -}
 
 instance (Index i, Forceable1 rep e) => Forceable (AnyBorder rep i e)
   where
     force (AnyBorder l u rep) = AnyBorder l u (force rep)
-
-instance (Index i) => Bordered (AnyBorder rep i e) i
-  where
-    lower    (AnyBorder l _ _) = l
-    upper    (AnyBorder _ u _) = u
-    bounds   (AnyBorder l u _) = (l, u)
-    sizeOf   (AnyBorder l u _) = size    (l, u)
-    indices  (AnyBorder l u _) = range   (l, u)
-    indexOf  (AnyBorder l u _) = index   (l, u)
-    indexIn  (AnyBorder l u _) = inRange (l, u)
-    offsetOf (AnyBorder l u _) = offset  (l, u)
-    
-    rebound bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
 
 instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep i e) e
   where
@@ -338,16 +355,7 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
 
 --------------------------------------------------------------------------------
 
-{- BorderedM and LinearM instances. -}
-
-instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
-  where
-    nowIndexIn (AnyBorder l u _) = return . inRange (l, u)
-    getIndices (AnyBorder l u _) = return $ range (l, u)
-    getSizeOf  (AnyBorder l u _) = return $ size (l, u)
-    getBounds  (AnyBorder l u _) = return (l, u)
-    getLower   (AnyBorder l _ _) = return l
-    getUpper   (AnyBorder _ u _) = return u
+{- LinearM instance. -}
 
 instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBorder rep i e) e
   where
@@ -531,7 +539,7 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Shaped (AnyBorder rep) e
 
 --------------------------------------------------------------------------------
 
-{- MapM, IndexedM and SortM instances. -}
+{- MapM, IndexedM instances. -}
 
 instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e) => MapM m (AnyBorder rep i e) i e
   where
@@ -571,6 +579,10 @@ instance (Index i, IndexedM1 m rep Int e) => IndexedM m (AnyBorder rep i e) i e
     
     fromIndexed' = withBounds' <=< fromIndexed'
     fromIndexedM = withBounds' <=< fromIndexedM
+
+--------------------------------------------------------------------------------
+
+{- SortM instance. -}
 
 instance (Index i, SortM1 m rep e) => SortM m (AnyBorder rep i e) e
   where
@@ -637,4 +649,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
+
 
