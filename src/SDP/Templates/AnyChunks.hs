@@ -182,7 +182,7 @@ instance (Traversable rep) => Traversable (AnyChunks rep)
 
 --------------------------------------------------------------------------------
 
-{- Nullable, NullableM, Forceable and Estimate instances. -}
+{- Nullable, NullableM, Forceable, Estimate and EstimateM instances. -}
 
 instance (Forceable1 rep e) => Forceable (AnyChunks rep e)
   where
@@ -198,7 +198,7 @@ instance (NullableM m (rep e)) => NullableM m (AnyChunks rep e)
     nowNull = fmap and . mapM nowNull . toChunks
     newNull = return (AnyChunks [])
 
-instance (Bordered1 rep Int e) => Estimate (AnyChunks rep e)
+instance Bordered1 rep Int e => Estimate (AnyChunks rep e)
   where
     (<==>) = go 0
       where
@@ -212,6 +212,23 @@ instance (Bordered1 rep Int e) => Estimate (AnyChunks rep e)
     (AnyChunks (x : xs)) <.=> n = c > n ? GT $ AnyChunks xs <.=> (n - c)
       where
         c = sizeOf x
+
+instance (Monad m, BorderedM1 m rep Int e) => EstimateM m (AnyChunks rep e)
+  where
+    estimateM = go 0
+      where
+        go o (AnyChunks [])   (AnyChunks []) = return (o <=> 0)
+        go o (AnyChunks [])               ys = lestimateM' ys o
+        go o xs               (AnyChunks []) = lestimateM' xs (-o)
+        go o (AnyChunks (x : xs)) (AnyChunks (y : ys)) = do
+          sx <- getSizeOf x
+          sy <- getSizeOf y
+          go (o + sx - sy) (AnyChunks xs) (AnyChunks ys)
+    
+    lestimateM' (AnyChunks       []) n = return (0 <=> n)
+    lestimateM' (AnyChunks (x : xs)) n = do
+      c <- getSizeOf x
+      c > n ? return GT $ lestimateM' (AnyChunks xs) (n - c)
 
 --------------------------------------------------------------------------------
 
@@ -658,5 +675,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
 
 

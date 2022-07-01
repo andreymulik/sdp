@@ -71,7 +71,12 @@ instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
 
 --------------------------------------------------------------------------------
 
-{- BorderedM and LinearM instances. -}
+{- EstimateM, BorderedM and LinearM instances. -}
+
+instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
+  where
+    lestimateM' xs n = do xs' <- get this (unpack xs); lestimateM' xs' n
+    estimateM        = on (join ... liftA2 estimateM) (get this.unpack)
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m rep e) i
   where

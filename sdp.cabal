@@ -68,6 +68,7 @@ Library
     -- Commons
     SDP.SafePrelude
     SDP.Comparing
+    SDP.EstimateM
     SDP.Estimate
     SDP.Nullable
     SDP.Unboxed

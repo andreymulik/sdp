@@ -587,7 +587,7 @@ instance Eq (STBytes# s e)
 
 --------------------------------------------------------------------------------
 
-{- NullableM, Estimate and Bordered instances. -}
+{- NullableM, Estimate, EstimateM and Bordered instances. -}
 
 instance NullableM (ST s) (STBytes# s e)
   where
@@ -603,12 +603,25 @@ instance Estimate (STBytes# s e)
     (.>=.) = on (>=)  sizeOf
     (.>.)  = on (>)   sizeOf
     (.<.)  = on (<)   sizeOf
-    
     (<.=>) = (<=>) . sizeOf
     (.>=)  = (>=)  . sizeOf
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance EstimateM (ST s) (STBytes# s e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 instance Bordered (STBytes# s e) Int
   where
@@ -837,7 +850,7 @@ pack =  stToMIO . coerce
 
 --------------------------------------------------------------------------------
 
-{- NullableM, Estimate and Bordered instances. -}
+{- NullableM, Estimate, EstimateM and Bordered instances. -}
 
 instance (MonadIO io) => NullableM io (MIOBytes# io e)
   where
@@ -857,6 +870,20 @@ instance Estimate (MIOBytes# io e)
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance MonadIO io => EstimateM io (MIOBytes# io e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 instance Bordered (MIOBytes# io e) Int
   where
@@ -1160,6 +1187,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-
 

@@ -39,7 +39,7 @@ default ()
 --------------------------------------------------------------------------------
 
 -- | 'BorderedM' is 'Bordered' version for mutable data structures.
-class (Monad m, Index i) => BorderedM m b i | b -> m, b -> i
+class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> m, b -> i
   where
     {-# MINIMAL (getBounds|getLower, getUpper) #-}
     

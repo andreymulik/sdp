@@ -53,7 +53,7 @@ instance Eq (Var m e) => Eq (MArray# m e)
 
 --------------------------------------------------------------------------------
 
-{- Nullable, Estimate and Bordered instances. -}
+{- Nullable, Estimate, EstimateM and Bordered instances. -}
 
 instance Nullable (MArray# m e)
   where
@@ -78,6 +78,20 @@ instance Estimate (MArray# m e)
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance Monad m => EstimateM m (MArray# m e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 instance Bordered (MArray# m e) Int
   where
@@ -235,6 +249,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
 
 
 

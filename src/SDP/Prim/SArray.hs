@@ -754,7 +754,7 @@ instance Eq (STArray# s e)
 
 --------------------------------------------------------------------------------
 
-{- NullableM, Estimate and Bordered instances. -}
+{- NullableM, Estimate, EstimateM and Bordered instances. -}
 
 instance NullableM (ST s) (STArray# s e)
   where
@@ -776,6 +776,20 @@ instance Estimate (STArray# s e)
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance EstimateM (ST s) (STArray# s e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 instance Bordered (STArray# s e) Int
   where
@@ -1020,7 +1034,7 @@ pack =  stToMIO . coerce
 
 --------------------------------------------------------------------------------
 
-{- Estimate, Bordered and NullableM instances. -}
+{- Estimate, EstimateM, Bordered and NullableM instances. -}
 
 instance Estimate (MIOArray# io e)
   where
@@ -1029,11 +1043,26 @@ instance Estimate (MIOArray# io e)
     (.>=.) = on (>=)  sizeOf
     (.>.)  = on (>)   sizeOf
     (.<.)  = on (<)   sizeOf
+    
     (<.=>) = (<=>) . sizeOf
     (.>=)  = (>=)  . sizeOf
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance MonadIO io => EstimateM io (MIOArray# io e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 instance Bordered (MIOArray# io e) Int
   where
@@ -1281,5 +1310,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
 
 

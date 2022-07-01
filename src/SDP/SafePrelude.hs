@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.SafePrelude
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -37,6 +37,7 @@ module SDP.SafePrelude
   module Data.Foldable,
   
   module SDP.Comparing,
+  module SDP.EstimateM,
   module SDP.Estimate,
   
   module Prelude,
@@ -72,6 +73,7 @@ import Prelude hiding
   )
 
 import SDP.Comparing
+import SDP.EstimateM
 import SDP.Estimate
 
 #if !MIN_VERSION_base(4,11,0)
@@ -200,6 +202,4 @@ whenJust =  maybe (return ())
 -- | 'stToMIO' is just @'liftIO' . 'stToIO'@.
 stToMIO :: MonadIO io => ST RealWorld e -> io e
 stToMIO =  liftIO . stToIO
-
-
 

@@ -134,7 +134,7 @@ instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e) => Monoid (An
 
 --------------------------------------------------------------------------------
 
-{- Nullable, NullableM and Estimate instances. -}
+{- Nullable, NullableM, Estimate and EstimateM instances. -}
 
 instance (Index i, Nullable (rep e)) => Nullable (AnyBorder rep i e)
   where
@@ -159,6 +159,20 @@ instance (Index i) => Estimate (AnyBorder rep i e)
     (.<=)  = (<=)  . sizeOf
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
+
+instance (Monad m, Index i) => EstimateM m (AnyBorder rep i e)
+  where
+    estimateMLT = return ... (.<.)
+    estimateMGT = return ... (.>.)
+    estimateMLE = return ... (.<=.)
+    estimateMGE = return ... (.>=.)
+    estimateM   = return ... (<==>)
+    
+    lestimateMLT' = return ... (.<)
+    lestimateMGT' = return ... (.>)
+    lestimateMLE' = return ... (.<=)
+    lestimateMGE' = return ... (.>=)
+    lestimateM'   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -623,5 +637,4 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
 
