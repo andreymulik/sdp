@@ -376,7 +376,11 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance (Monad m, BorderedM1 m rep Int e, LinearM1 m rep e) => Copyable m (AnyChunks rep e)
+  where
+    copied = fmap AnyChunks . mapM copied . toChunks
 
 instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep e) e
   where
@@ -414,6 +418,8 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
       where
         (d, n) = c `divMod` lim
     
+    copied' xs l n = copied =<< takeM n =<< dropM l xs
+    
     copyTo src os trg ot c = when (c > 0) $ do
         when (os < 0 || ot < 0) $ underEx "copyTo"
         src' <- dropM os src
@@ -423,7 +429,7 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
         go n xs@(AnyChunks (x : _)) ys@(AnyChunks (y : _)) = do
           n1 <- getSizeOf x
           n2 <- getSizeOf y
-          let n' = minimum [n1, n2, n]
+          let n' = n1 `min` n2 `min` n
           
           copyTo x 0 y 0 n'
           dropM n' xs >>=<< dropM n' ys $ go (n - n')
@@ -691,5 +697,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
 

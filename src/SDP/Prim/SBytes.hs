@@ -692,7 +692,13 @@ instance BorderedM (ST s) (STBytes# s e) Int
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance Unboxed e => Copyable (ST s) (STBytes# s e)
+  where
+    copied es@(STBytes# n@(I# n#) (I# o#) marr#) = ST $
+      \ s1# -> case pcloneUnboxedM es marr# o# n# s1# of
+        (# s2#, copy# #) -> (# s2#, STBytes# n 0 copy# #)
 
 instance Unboxed e => LinearM (ST s) (STBytes# s e) e
   where
@@ -715,13 +721,11 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
     
     writeM = writeM'
     
-    copied es@(STBytes# n _ _) = do
-      copy <- alloc n
-      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
-    
-    copied' es l n = do
-      copy <- alloc n
-      copy <$ (ofoldrM (\ i e _ -> writeM copy i e) () =<< dropM l es)
+    copied' es@(STBytes# c (I# o#) marr#) l@(I# l#) n@(I# n#)
+      | l >= 0 && n >= 0 && c >= l = ST $
+        \ s1# -> case pcloneUnboxedM es marr# (o# +# l#) n# s1# of
+          (# s2#, copy# #) -> (# s2#, STBytes# n 0 copy# #)
+      | True = unreachEx "copied'"
     
     reversed es = do es' <- copied es; reversed' es'; return es'
     
@@ -737,7 +741,6 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
     copyTo src sc trg tc n@(I# n#) = when (n > 0) $ do
         when      (sc < 0 || tc < 0)      $ underEx "copyTo"
         when (sc + n > n1 || tc + n > n2) $ overEx  "copyTo"
-        
         ST $ \ s1# -> case pcopyUnboxedM src src# so# trg# to# n# s1# of
           s2# -> (# s2#, () #)
       where
@@ -917,7 +920,6 @@ instance Estimate (MIOBytes# io e)
     (.>=.) = on (>=)  sizeOf
     (.>.)  = on (>)   sizeOf
     (.<.)  = on (<)   sizeOf
-    
     (<.=>) = (<=>) . sizeOf
     (.>=)  = (>=)  . sizeOf
     (.<=)  = (<=)  . sizeOf
@@ -967,7 +969,11 @@ instance MonadIO io => BorderedM io (MIOBytes# io e) Int
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance (MonadIO io, Unboxed e) => Copyable io (MIOBytes# io e)
+  where
+    copied = pack . copied . unpack
 
 instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
   where
@@ -986,15 +992,14 @@ instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
     
     writeM es = stToMIO ... writeM (unpack es)
     
-    copied   = pack  . copied   . unpack
     reversed = pack  . reversed . unpack
     getLeft  = stToMIO . getLeft  . unpack
     getRight = stToMIO . getRight . unpack
     
     copied' es = pack ... copied' (unpack es)
     
-    merged = pack  .  merged . foldr ((:) . unpack) []
     filled = pack ... filled
+    merged = pack  .  merged . foldr ((:) . unpack) []
     
     copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
     
@@ -1053,8 +1058,7 @@ instance (MonadIO io, Unboxed e) => IndexedM io (MIOBytes# io e) Int e
     fromAssocs' bnds = pack ... fromAssocs' bnds
     
     fromIndexed' = pack . fromIndexed'
-    
-    fromIndexedM es = do
+    fromIndexedM = \ es -> do
       copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
       copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
 
@@ -1248,8 +1252,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-
-
-
 

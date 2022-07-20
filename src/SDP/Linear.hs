@@ -237,6 +237,12 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     write :: l -> Int -> e -> l
     write es = fromList ... write (listL es)
     
+    foreachO :: Monad m => (Int -> e -> m r) -> l -> m [r]
+    foreachO f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
+    
+    foreachO' :: Monad m => (Int -> e -> m e) -> l -> m l
+    foreachO' =  fmap fromList ... foreachO
+    
     {- Custom -}
     
     -- | Generalized concat.
@@ -970,6 +976,5 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
 
 

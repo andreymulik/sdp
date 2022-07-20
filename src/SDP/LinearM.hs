@@ -19,6 +19,7 @@ module SDP.LinearM
 (
   -- * Exports
   module SDP.NullableM,
+  module SDP.Copyable,
   module SDP.Linear,
   
   -- * BorderedM class
@@ -47,6 +48,7 @@ import Prelude ()
 import SDP.SafePrelude
 import SDP.BorderedM
 import SDP.NullableM
+import SDP.Copyable
 import SDP.Linear
 import SDP.Map
 
@@ -66,7 +68,7 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
+class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
   where
     {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
         (getLeft|getRight), (!#>), writeM, copyTo #-}
@@ -136,13 +138,8 @@ class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
     -- | Unsafe monadic offset-based writer.
     writeM :: l -> Int -> e -> m ()
     
-    -- | Create copy.
-    {-# INLINE copied #-}
-    copied :: l -> m l
-    copied =  getLeft >=> newLinear
-    
-    -- | @copied' es l n@ returns the slice of @es@ from @l@ of length @n@.
     {-# INLINE copied' #-}
+    -- | @copied' es l n@ returns the slice of @es@ from @l@ of length @n@.
     copied' :: l -> Int -> Int -> m l
     copied' es l n = getLeft es >>= newLinearN n . drop l
     
@@ -198,6 +195,39 @@ class (Monad m, NullableM m l) => LinearM m l e | l -> m, l -> e
     ofoldlM :: (Int -> r -> e -> m r) -> r -> l -> m r
     ofoldlM f base es = foldl (flip $ uncurry ((=<<) ... flip . f)) (pure base)
                       . assocs =<< getLeft es
+    
+    {- |
+      @since 0.3
+      
+      Apply given procedure to offset and value of each element.
+      
+      Gets the results of applying the procedure to the offset and value of each
+      element. In general, it does not regulate the order in which operations
+      are performed. Allows parallel and/or multiple execution of operations for
+      each element.
+      
+      For guaranteed one-time, sequential execution, use 'Foldable',
+      'Traversable' and similar functions from the 'Linear', 'SDP.Map.Map',
+      'LinearM' and 'SDP.MapM.MapM' classes.
+    -}
+    omapM :: (Int -> e -> m r) -> l -> m [r]
+    omapM f es = ofoldrM (\ o e xs -> (: xs) <$> f o e) [] es
+    
+    {- |
+      @since 0.3
+      
+      Same as 'omapM', but creates new structure with elements of same type.
+    -}
+    omapM' :: (Int -> e -> m e) -> l -> m l
+    omapM' =  newLinear <=<< omapM
+    
+    {- |
+      @since 0.3
+      
+      Same as 'omapM', but discards results.
+    -}
+    omapM_ :: (Int -> e -> m ()) -> l -> m ()
+    omapM_ f = ofoldrM (\ o e _ -> f o e) ()
     
     -- | 'ofoldrM'' is strict version of 'ofoldrM'.
     ofoldrM' :: (Int -> e -> r -> m r) -> r -> l -> m r

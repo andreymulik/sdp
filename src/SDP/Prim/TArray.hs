@@ -1,5 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, GADTs #-}
 {-# LANGUAGE Trustworthy, MagicHash, PatternSynonyms, UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 
 {- |
     Module      :  SDP.Prim.TArray
@@ -41,7 +41,9 @@ pattern TArray# :: SArray# (Var STM e) -> TArray# e
 pattern TArray# es = MArray# es
 
 -- | Generalized array of variables.
-newtype MArray# m e = MArray# (SArray# (Var m e))
+data MArray# m e
+  where
+    MArray# :: MonadVar m => {-# UNPACK #-} !(SArray# (Var m e)) -> MArray# m e
 
 --------------------------------------------------------------------------------
 
@@ -49,18 +51,18 @@ newtype MArray# m e = MArray# (SArray# (Var m e))
 
 instance Eq (Var m e) => Eq (MArray# m e)
   where
-    (==) (MArray# xs) (MArray# ys) = xs == ys
+    MArray# xs == MArray# ys = xs == ys
 
 --------------------------------------------------------------------------------
 
 {- Nullable and NullableM instances. -}
 
-instance Nullable (MArray# m e)
+instance MonadVar m => Nullable (MArray# m e)
   where
     isNull = \ (MArray# es) -> isNull es
     lzero  = MArray# Z
 
-instance Monad m => NullableM m (MArray# m e)
+instance MonadVar m => NullableM m (MArray# m e)
   where
     newNull = return Z
     nowNull = return . isNull
@@ -113,7 +115,7 @@ instance Bordered (MArray# m e) Int
     indexOf  (MArray# es) = index (0, upper es)
     offsetOf (MArray# es) = offset (0, upper es)
     
-    rebound bnds = MArray# . rebound bnds . unpack
+    rebound bnds (MArray# es) = MArray# (rebound bnds es)
 
 instance Monad m => BorderedM m (MArray# m e) Int
   where
@@ -126,7 +128,14 @@ instance Monad m => BorderedM m (MArray# m e) Int
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance MonadVar m => Copyable m (MArray# m e)
+  where
+    copied (MArray# arr) = MArray# <$> foreachO' (const $ var <=< get this') arr
+      where
+        this' :: MonadVar m => Field m (Var m e) e
+        this' =  this
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where
@@ -238,17 +247,19 @@ instance MonadVar m => IndexedM m (MArray# m e) Int e
 
 instance MonadVar m => Thaw m (SArray# e) (MArray# m e)
   where
-    thaw = fmap MArray# . mapM var
+    thaw es = MArray# <$> mapM var es
 
-instance MonadVar m => Freeze m (MArray# m e) (SArray# e)
+instance Monad m => Freeze m (MArray# m e) (SArray# e)
   where
-    freeze = mapM (get this) . unpack
+    freeze (MArray# es) = get this `mapM` es
 
 --------------------------------------------------------------------------------
 
 ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
 ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
 ascsBounds             _ = defaultBounds 0
+
+--------------------------------------------------------------------------------
 
 unpack :: MArray# m e -> SArray# (Var m e)
 unpack =  \ (MArray# es) -> es
@@ -261,5 +272,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 

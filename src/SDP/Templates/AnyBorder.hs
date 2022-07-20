@@ -1,6 +1,6 @@
+{-# LANGUAGE Trustworthy, TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
-{-# LANGUAGE Trustworthy, UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {- |
     Module      :  SDP.Templates.AnyBorder
@@ -355,7 +355,11 @@ instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep 
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance Copyable1 m rep e => Copyable m (AnyBorder rep i e)
+  where
+    copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
 instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBorder rep i e) e
   where
@@ -377,7 +381,6 @@ instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBo
     {-# INLINE writeM #-}
     writeM = writeM . unpack
     
-    copied   (AnyBorder l u es) = AnyBorder l u <$> copied  es
     copied'  (AnyBorder l u es) = (AnyBorder l u <$>) ... copied' es
     reversed (AnyBorder l u es) = AnyBorder l u <$> reversed es
     
@@ -618,13 +621,15 @@ instance {-# OVERLAPPABLE #-} (Index i, Freeze m (rep e) imm) => Freeze m (AnyBo
     freeze       = freeze . unpack
 
 -- Prim to bordered (with any index).
-instance {-# OVERLAPPABLE #-} (Index i, Freeze m mut (rep e), Bordered1 rep Int e) => Freeze m mut (AnyBorder rep i e)
+instance {-# OVERLAPPABLE #-} (Index i, Freeze m mut (rep e), Bordered1 rep Int e)
+      => Freeze m mut (AnyBorder rep i e)
   where
     unsafeFreeze = fmap withBounds . unsafeFreeze
     freeze       = fmap withBounds . freeze
 
 -- Lift prim to prim on bordered to bordered (with same index).
-instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e) => Freeze m (AnyBorder mut i e) (AnyBorder imm i e)
+instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e)
+      => Freeze m (AnyBorder mut i e) (AnyBorder imm i e)
   where
     unsafeFreeze (AnyBorder l u mut) = AnyBorder l u <$> unsafeFreeze mut
     freeze       (AnyBorder l u mut) = AnyBorder l u <$> freeze mut

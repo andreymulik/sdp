@@ -94,7 +94,7 @@ type role SArray# representational
 
 {- Eq and Eq1 instances. -}
 
-instance (Eq e) => Eq (SArray# e) where (==) = eq1
+instance Eq e => Eq (SArray# e) where (==) = eq1
 
 instance Eq1 SArray#
   where
@@ -869,7 +869,13 @@ instance BorderedM (ST s) (STArray# s e) Int
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance Copyable (ST s) (STArray# s e)
+  where
+    copied (STArray# n@(I# n#) (I# o#) marr#) = ST $
+      \ s1# -> case cloneMutableArray# marr# o# n# s1# of
+        (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
 
 instance LinearM (ST s) (STArray# s e) e
   where
@@ -904,15 +910,11 @@ instance LinearM (ST s) (STArray# s e) e
     
     writeM = writeM'
     
-    copied (STArray# n@(I# n#) (I# o#) marr#) = ST $
-      \ s1# -> case cloneMutableArray# marr# o# n# s1# of
-        (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
-    
     copied' (STArray# c (I# o#) marr#) l@(I# l#) n@(I# n#)
-      | l >= 0 && n >= 0 && c >= l + n = ST $
+      | l >= 0 && n >= 0 && c >= l = ST $
         \ s1# -> case cloneMutableArray# marr# (o# +# l#) n# s1# of
           (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
-      | True = unreachEx "copied'"
+      | True = undEx "copied'"
     
     reversed  es = do es' <- copied es; reversed' es'; return es'
     reversed' es =
@@ -1144,7 +1146,11 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance MonadIO io => Copyable io (MIOArray# io e)
+  where
+    copied = pack . copied . unpack
 
 instance MonadIO io => LinearM io (MIOArray# io e) e
   where
@@ -1162,7 +1168,6 @@ instance MonadIO io => LinearM io (MIOArray# io e) e
     writeM = writeM'
     (!#>)  = stToMIO ... (!#>) . unpack
     
-    copied    = pack . copied . unpack
     reversed  = pack . reversed . unpack
     getLeft   = stToMIO . getLeft  . unpack
     getRight  = stToMIO . getRight . unpack
@@ -1170,8 +1175,8 @@ instance MonadIO io => LinearM io (MIOArray# io e) e
     
     copied' es = pack ... copied' (unpack es)
     
-    merged = pack . merged . foldr ((:) . unpack) []
     filled = pack ... filled
+    merged = pack . merged . foldr ((:) . unpack) []
     
     copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
     

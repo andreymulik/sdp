@@ -88,6 +88,7 @@ Library
     SDP.NullableM
     SDP.BorderedM
     SDP.Bordered
+    SDP.Copyable
     SDP.IndexedM
     SDP.LinearM
     SDP.Indexed
@@ -143,4 +144,7 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
+
+
+
 

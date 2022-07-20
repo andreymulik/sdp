@@ -85,7 +85,11 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m re
 
 --------------------------------------------------------------------------------
 
-{- LinearM instance. -}
+{- Copyable and LinearM instances. -}
+
+instance (MonadVar m, Copyable1 m rep e) => Copyable m (AnyVar m rep e)
+  where
+    copied = pack <=< copied <=< get this.unpack
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => LinearM m (AnyVar m rep e) e
   where
@@ -104,8 +108,6 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => Linear
     AnyVar es !#> i = do es' <- get this es; es' !#> i
     
     writeM (AnyVar es) i e = do es' <- get this es; writeM es' i e
-    
-    copied = pack <=< copied <=< get this.unpack
     
     copied' (AnyVar es) l n = do es' <- get this es; pack =<< copied' es' l n
     
@@ -202,4 +204,7 @@ unpack =  \ (AnyVar es) -> es
 withAnyVar :: (MonadVar m, Typeable m, Typeable rep, Typeable (Var m), Typeable e)
            => (rep e -> m (rep e)) -> AnyVar m rep e -> m ()
 withAnyVar f = flip set [this :<~ f] . unpack
+
+
+
 
