@@ -7,7 +7,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.Bytes.ST" provides 'STBytes' - mutable strict unboxed array type.
+    "SDP.Bytes.ST" provides mutable strict unboxed array types.
 -}
 module SDP.Bytes.ST
 (
@@ -35,6 +35,6 @@ default ()
 -- | 'STBytes' is mutable version of 'SDP.Bytes.Bytes'.
 type STBytes s = AnyBorder (STBytes# s)
 
--- | 'BytesST' is mutable version of 'SDP.Array.Array'.
+-- | 'BytesST' is mutable version of 'SDP.Bytes.Bytes'.
 type BytesST s i = AnyVar (ST s) (STBytes s i)
 

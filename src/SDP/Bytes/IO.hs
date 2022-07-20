@@ -7,7 +7,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.Bytes.IO" provides 'IOBytes' - mutable strict unboxed array type.
+    "SDP.Bytes.IO" provides mutable strict unboxed array types.
 -}
 module SDP.Bytes.IO
 (

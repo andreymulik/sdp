@@ -2,13 +2,13 @@
 
 {- |
     Module      :  SDP.ByteList.ST
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.ByteList.ST" provides 'STByteList' - mutable unboxed strict bordered
-    unrolled linked list.
+    "SDP.ByteList.ST" provides mutable unboxed strict bordered unrolled
+    linked lists.
 -}
 module SDP.ByteList.ST
 (

@@ -8,8 +8,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
     
-    "SDP.Prim.SBytes" provides strict unboxed array pseudo-primitive types
-    'SBytes#', 'STBytes#' and 'IOBytes#'.
+    "SDP.Prim.SBytes" provides strict unboxed pseudo-primitive arrays.
 -}
 module SDP.Prim.SBytes
 (
@@ -1252,4 +1251,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
 

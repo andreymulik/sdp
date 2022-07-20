@@ -7,7 +7,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.Array.ST" provides 'STArray' - mutable lazy boxed array type.
+    "SDP.Array.ST" provides mutable lazy boxed array types.
 -}
 module SDP.Array.ST
 (

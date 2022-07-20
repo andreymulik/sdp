@@ -8,29 +8,24 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
     
-    "SDP.Plate.AnyVar" provides 'AnyVar' - template of generalized by
+    "SDP.Templates.AnyVar" provides 'AnyVar' - template of generalized by
     index type structure, based on 'Int'-indexed primitive.
 -}
 module SDP.Templates.AnyVar
 (
   -- * Export
   module SDP.IndexedM,
-  module SDP.Shaped,
-  module SDP.Sort,
-  module SDP.Scan,
+  module SDP.SortM,
   
   -- * Border template
-  AnyVar (..), withAnyVar
+  AnyVar ( AnyVar ), withAnyVar
 )
 where
 
 import Prelude ()
 import SDP.SafePrelude
-import SDP.IndexedM hiding ( set )
-import SDP.Shaped
+import SDP.IndexedM
 import SDP.SortM
-import SDP.Sort
-import SDP.Scan
 
 import Data.Typeable
 import Data.Field
@@ -47,7 +42,8 @@ default ()
   * 'Eq', 'Ord', 'Eq1' and 'Ord1' instances ingores bounds.
   * 'Thaw' and 'Freeze' instances for @'AnyVar' rep e@ inherit @rep e@ behavior.
 -}
-newtype AnyVar m rep e = AnyVar (Var m (rep e)) deriving ( Typeable, Generic )
+newtype AnyVar m rep e = AnyVar {fromAnyVar :: Var m (rep e)}
+  deriving ( Typeable, Generic )
 
 --------------------------------------------------------------------------------
 
@@ -64,7 +60,7 @@ instance (MonadVar m, Eq (Var m (rep e))) => Eq (AnyVar m rep e)
 instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
   where
     newNull = AnyVar <$> (var =<< newNull)
-    nowNull = nowNull <=< get this.unpack
+    nowNull = nowNull <=< get this.fromAnyVar
 
 --------------------------------------------------------------------------------
 
@@ -72,16 +68,16 @@ instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
 
 instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
   where
-    lestimateM' xs n = do xs' <- get this (unpack xs); lestimateM' xs' n
-    estimateM        = on (join ... liftA2 estimateM) (get this.unpack)
+    lestimateM' xs n = do xs' <- get this (fromAnyVar xs); lestimateM' xs' n
+    estimateM        = on (join ... liftA2 estimateM) (get this.fromAnyVar)
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m rep e) i
   where
-    getIndices = getIndices <=< get this.unpack
-    getSizeOf  = getSizeOf  <=< get this.unpack
-    getBounds  = getBounds  <=< get this.unpack
-    getLower   = getLower   <=< get this.unpack
-    getUpper   = getUpper   <=< get this.unpack
+    getIndices = getIndices <=< get this.fromAnyVar
+    getSizeOf  = getSizeOf  <=< get this.fromAnyVar
+    getBounds  = getBounds  <=< get this.fromAnyVar
+    getLower   = getLower   <=< get this.fromAnyVar
+    getUpper   = getUpper   <=< get this.fromAnyVar
 
 --------------------------------------------------------------------------------
 
@@ -89,18 +85,18 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m re
 
 instance (MonadVar m, Copyable1 m rep e) => Copyable m (AnyVar m rep e)
   where
-    copied = pack <=< copied <=< get this.unpack
+    copied = pack <=< copied <=< get this.fromAnyVar
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => LinearM m (AnyVar m rep e) e
   where
-    getHead = getHead <=< get this.unpack
-    getLast = getLast <=< get this.unpack
+    getHead = getHead <=< get this.fromAnyVar
+    getLast = getLast <=< get this.fromAnyVar
     
     prepend e xs@(AnyVar es) = xs <$ (setRecord this es =<< prepend     e =<< get this es)
     append  xs@(AnyVar es) e = xs <$ (setRecord this es =<< flip append e =<< get this es)
     
-    getLeft  = getLeft  <=< get this.unpack
-    getRight = getRight <=< get this.unpack
+    getLeft  = getLeft  <=< get this.fromAnyVar
+    getRight = getRight <=< get this.fromAnyVar
     
     newLinear = pack <=< newLinear
     filled  n = pack <=< filled  n
@@ -122,24 +118,24 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => Linear
     miterate n = pack <=<< miterate n
     iterateM n = pack <=<< iterateM n
     
-    ofoldrM f e = ofoldrM f e <=< get this.unpack
-    ofoldlM f e = ofoldlM f e <=< get this.unpack
+    foldrM f e = foldrM f e <=< get this.fromAnyVar
+    foldlM f e = foldlM f e <=< get this.fromAnyVar
     
-    foldrM f e = foldrM f e <=< get this.unpack
-    foldlM f e = foldlM f e <=< get this.unpack
+    ofoldrM f e = ofoldrM f e <=< get this.fromAnyVar
+    ofoldlM f e = ofoldlM f e <=< get this.fromAnyVar
     
-    takeM n = pack <=< takeM n <=< get this.unpack
-    dropM n = pack <=< dropM n <=< get this.unpack
-    keepM n = pack <=< keepM n <=< get this.unpack
-    sansM n = pack <=< sansM n <=< get this.unpack
+    takeM n = pack <=< takeM n <=< get this.fromAnyVar
+    dropM n = pack <=< dropM n <=< get this.fromAnyVar
+    keepM n = pack <=< keepM n <=< get this.fromAnyVar
+    sansM n = pack <=< sansM n <=< get this.fromAnyVar
     
-    splitM  n = uncurry (on (liftA2 (,)) pack) <=< splitM  n <=< get this.unpack
-    divideM n = uncurry (on (liftA2 (,)) pack) <=< divideM n <=< get this.unpack
+    splitM  n = uncurry (on (liftA2 (,)) pack) <=< splitM  n <=< get this.fromAnyVar
+    divideM n = uncurry (on (liftA2 (,)) pack) <=< divideM n <=< get this.fromAnyVar
     
-    prefixM p = prefixM p <=< get this.unpack
-    suffixM p = suffixM p <=< get this.unpack
-    mprefix p = mprefix p <=< get this.unpack
-    msuffix p = msuffix p <=< get this.unpack
+    prefixM p = prefixM p <=< get this.fromAnyVar
+    suffixM p = suffixM p <=< get this.fromAnyVar
+    mprefix p = mprefix p <=< get this.fromAnyVar
+    msuffix p = msuffix p <=< get this.fromAnyVar
 
 --------------------------------------------------------------------------------
 
@@ -156,8 +152,8 @@ instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key 
     
     overwrite xs@(AnyVar es) ascs = xs <$ (flip overwrite ascs =<< get this es)
     
-    kfoldrM f base = kfoldrM f base <=< get this.unpack
-    kfoldlM f base = kfoldlM f base <=< get this.unpack
+    kfoldrM f base = kfoldrM f base <=< get this.fromAnyVar
+    kfoldlM f base = kfoldlM f base <=< get this.fromAnyVar
 
 instance (MonadVar m, IndexedM1 m rep key e) => IndexedM m (AnyVar m rep e) key e
   where
@@ -173,8 +169,8 @@ instance (MonadVar m, IndexedM1 m rep key e) => IndexedM m (AnyVar m rep e) key 
 
 instance (MonadVar m, SortM1 m rep e) => SortM m (AnyVar m rep e) e
   where
-    sortedMBy f = sortedMBy f <=< get this.unpack
-    sortMBy   f = sortMBy   f <=< get this.unpack
+    sortedMBy f = sortedMBy f <=< get this.fromAnyVar
+    sortMBy   f = sortMBy   f <=< get this.fromAnyVar
 
 --------------------------------------------------------------------------------
 
@@ -187,8 +183,8 @@ instance (MonadVar m, Thaw m imm (mut e)) => Thaw m imm (AnyVar m mut e)
 
 instance (MonadVar m, Freeze m (imm e) mut) => Freeze m (AnyVar m imm e) mut
   where
-    unsafeFreeze = get this.unpack >=> unsafeFreeze
-    freeze       = get this.unpack >=> freeze
+    unsafeFreeze = get this.fromAnyVar >=> unsafeFreeze
+    freeze       = get this.fromAnyVar >=> freeze
 
 --------------------------------------------------------------------------------
 
@@ -196,15 +192,9 @@ instance (MonadVar m, Freeze m (imm e) mut) => Freeze m (AnyVar m imm e) mut
 pack :: MonadVar m => rep e -> m (AnyVar m rep e)
 pack =  fmap AnyVar . var
 
-{-# INLINE unpack #-}
-unpack :: AnyVar m rep e -> Var m (rep e)
-unpack =  \ (AnyVar es) -> es
-
 {-# INLINE withAnyVar #-}
 withAnyVar :: (MonadVar m, Typeable m, Typeable rep, Typeable (Var m), Typeable e)
            => (rep e -> m (rep e)) -> AnyVar m rep e -> m ()
-withAnyVar f = flip set [this :<~ f] . unpack
-
-
+withAnyVar f ps = () <$ modifyRecordM this' (fromAnyVar ps) f
 
 

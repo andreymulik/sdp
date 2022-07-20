@@ -2,13 +2,13 @@
 
 {- |
     Module      :  SDP.Unrolled.ST
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.Unrolled.ST" provides 'STUnrolled' - mutable boxed lazy bordered
-    unrolled linked list.
+    "SDP.Unrolled.ST" provides mutable boxed lazy bordered unrolled
+    linked lists.
 -}
 module SDP.Unrolled.ST
 (

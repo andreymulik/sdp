@@ -133,9 +133,6 @@ instance Monad m => BorderedM m (MArray# m e) Int
 instance MonadVar m => Copyable m (MArray# m e)
   where
     copied (MArray# arr) = MArray# <$> foreachO' (const $ var <=< get this') arr
-      where
-        this' :: MonadVar m => Field m (Var m e) e
-        this' =  this
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where
@@ -272,4 +269,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
+
 

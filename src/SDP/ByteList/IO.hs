@@ -2,13 +2,13 @@
 
 {- |
     Module      :  SDP.ByteList.IO
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
-    "SDP.ByteList.IO" provides 'IOByteList' - mutable strict unboxed bordered
-    unrolled linked list type.
+    "SDP.ByteList.IO" provides mutable strict unboxed bordered unrolled linked
+    list types.
 -}
 module SDP.ByteList.IO
 (

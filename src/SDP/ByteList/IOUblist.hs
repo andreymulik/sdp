@@ -2,13 +2,13 @@
 
 {- |
     Module      :  SDP.ByteList.IOUblist
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC Extensions)
     
-    "SDP.ByteList.IOUblist" provides 'IOUblist' - mutable strict unboxed
-    unrolled linked list.
+    "SDP.ByteList.IOUblist" provides mutable strict unboxed unrolled
+    linked lists.
 -}
 module SDP.ByteList.IOUblist
 (

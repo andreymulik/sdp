@@ -9,7 +9,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
     
-    "SDP.Plate.AnyBorder" provides 'AnyBorder' - template of generalized by
+    "SDP.Templates.AnyBorder" provides 'AnyBorder' - template of generalized by
     index type structure, based on 'Int'-indexed primitive.
 -}
 module SDP.Templates.AnyBorder

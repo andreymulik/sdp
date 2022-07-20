@@ -8,8 +8,7 @@
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
     
-    "SDP.Prim.SArray" provides lazy boxed array pseudo-primitive types
-    'SArray#', 'STArray#' and 'IOArray#'.
+    "SDP.Prim.SArray" provides lazy boxed pseudo-primitive safe arrays.
 -}
 module SDP.Prim.SArray
 (
@@ -1380,6 +1379,7 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
 
 
 

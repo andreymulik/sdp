@@ -2,7 +2,7 @@
 
 {- |
     Module      :  Text.Show.SDP
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -42,13 +42,13 @@ assocsPrec name = \ p es -> showParen (p > appPrec) $ showString name
 -}
 showsRaw :: (Show e) => Int -> [e] -> ShowS
 showsRaw _    []    = id
-showsRaw p (x : xs) = showParen (p > appPrec) stream
-  where
-    stream = shows x . foldr (\ e rest -> showChar ' ' . shows e . rest) id xs
+showsRaw p (x : xs) =
+  let stream = shows x . foldr (\ e rest -> showChar ' ' . shows e . rest) id xs
+  in  showParen (p > appPrec) stream
 
 -- | Just 'showsRaw' version for 'Linear'.
 showsRawLinear :: (Linear l e, Show e) => Int -> l -> ShowS
-showsRawLinear p = showsRaw p . listL
+showsRawLinear =  (. listL) . showsRaw
 
 
 
