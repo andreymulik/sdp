@@ -1,6 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE Trustworthy, CPP, UndecidableInstances, BangPatterns #-}
 {-# LANGUAGE TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
-{-# LANGUAGE Trustworthy, UndecidableInstances, BangPatterns #-}
+
+#if __GLASGOW_HASKELL__ >= 806
+{-# LANGUAGE QuantifiedConstraints #-}
+#endif
 
 {- |
     Module      :  SDP.Templates.AnyChunks
@@ -108,6 +112,35 @@ instance (Ord (rep e), Bordered1 rep Int e, Linear1 rep e) => Ord (AnyChunks rep
 
 --------------------------------------------------------------------------------
 
+{- Eq1 and Ord1 instances. -}
+
+#if __GLASGOW_HASKELL__ >= 806
+instance (Bordered' rep Int, Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
+  where
+    liftEq f xs ys
+        | isNull xs && isNull ys = True
+        | isNull xs || isNull ys = False
+        |         n1 > n2        = liftEq f (take n2 x) y && liftEq f (drop n2 xs) (fromChunks ys')
+        |          True          = liftEq f x (take n1 y) && liftEq f (fromChunks xs') (drop n1 ys)
+      where
+        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
+        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
+
+instance (Bordered' rep Int, Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
+  where
+    liftCompare _ Z   Z = EQ
+    liftCompare _ Z   _ = LT
+    liftCompare _ _   Z = GT
+    liftCompare f xs ys = if n1 > n2
+        then liftCompare f (take n2 x) y <> liftCompare f (drop n2 xs) (fromChunks ys')
+        else liftCompare f x (take n1 y) <> liftCompare f (fromChunks xs') (drop n1 ys)
+      where
+        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
+        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
+#endif
+
+--------------------------------------------------------------------------------
+
 {- Show and Read instances. -}
 
 instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Show e) => Show (AnyChunks rep e)
@@ -152,7 +185,7 @@ instance (Linear1 (AnyChunks rep) e) => E.IsList (AnyChunks rep e)
 
 --------------------------------------------------------------------------------
 
-{- Functor and Applicative instances. -}
+{- Functor, Applicative and Zip instances. -}
 
 instance Functor rep => Functor (AnyChunks rep)
   where
@@ -162,6 +195,27 @@ instance Applicative rep => Applicative (AnyChunks rep)
   where
     AnyChunks fs <*> AnyChunks es = AnyChunks $ liftA2 (<*>) fs es
     pure e = AnyChunks [pure e]
+
+#if __GLASGOW_HASKELL__ >= 806
+instance (Functor rep, Bordered' rep Int, Linear' rep) => Zip (AnyChunks rep)
+  where
+    all2 f as bs             = all2 f (listL as) (listL bs)
+    any2 f as bs             = any2 f (listL as) (listL bs)
+    all3 f as bs cs          = all3 f (listL as) (listL bs) (listL cs)
+    any3 f as bs cs          = any3 f (listL as) (listL bs) (listL cs)
+    all4 f as bs cs ds       = all4 f (listL as) (listL bs) (listL cs) (listL ds)
+    any4 f as bs cs ds       = any4 f (listL as) (listL bs) (listL cs) (listL ds)
+    all5 f as bs cs ds es    = all5 f (listL as) (listL bs) (listL cs) (listL ds) (listL es)
+    any5 f as bs cs ds es    = any5 f (listL as) (listL bs) (listL cs) (listL ds) (listL es)
+    all6 f as bs cs ds es fs = all6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
+    any6 f as bs cs ds es fs = any6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
+    
+    zipWith  f as bs             = fromList $ zipWith  f (listL as) (listL bs)
+    zipWith3 f as bs cs          = fromList $ zipWith3 f (listL as) (listL bs) (listL cs)
+    zipWith4 f as bs cs ds       = fromList $ zipWith4 f (listL as) (listL bs) (listL cs) (listL ds)
+    zipWith5 f as bs cs ds es    = fromList $ zipWith5 f (listL as) (listL bs) (listL cs) (listL ds) (listL es)
+    zipWith6 f as bs cs ds es fs = fromList $ zipWith6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -697,4 +751,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
 

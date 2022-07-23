@@ -1,3 +1,5 @@
+{-# LANGUAGE Safe #-}
+
 {- |
     Module      :  SDP.Internal.Utils
     Copyright   :  (c) Andrey Mulik 2022
@@ -80,6 +82,4 @@ x +?      _ = x
 {-# INLINE (>>=<<) #-}
 (>>=<<) :: Monad m => m a -> m b -> (a -> b -> m c) -> m c
 (>>=<<) = \ ma mb f -> join $ liftM2 f ma mb
-
-
 

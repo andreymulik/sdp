@@ -1,8 +1,8 @@
-{-# LANGUAGE Safe, MagicHash, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE Safe, CPP, MagicHash, MultiParamTypeClasses, FlexibleInstances #-}
 
 {- |
     Module      :  SDP.Unrolled.Unlist
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -45,6 +45,13 @@ type Unlist = AnyChunks SArray#
 
 {- Eq1 and Ord1 instances. -}
 
+#if __GLASGOW_HASKELL__ < 806
+{- |
+  Legacy 'Eq1' instance for @GHC < 8.6.1@
+  
+  With @GHC >= 8.6.1@ see "SDP.Templates.AnyChunks" for more general instance,
+  which use @QuantifiedConstraints@ extension.
+-}
 instance Eq1 Unlist
   where
     liftEq f xs ys
@@ -56,6 +63,12 @@ instance Eq1 Unlist
         (x, xs') = uncons (toChunks xs); n1 = sizeOf x
         (y, ys') = uncons (toChunks ys); n2 = sizeOf y
 
+{- |
+  Legacy 'Ord1' instance for @GHC < 8.6.1@
+  
+  With @GHC >= 8.6.1@ see "SDP.Templates.AnyChunks" for more general instance,
+  which use @QuantifiedConstraints@ extension.
+-}
 instance Ord1 Unlist
   where
     liftCompare _ Z   Z = EQ
@@ -67,7 +80,19 @@ instance Ord1 Unlist
       where
         (x, xs') = uncons (toChunks xs); n1 = sizeOf x
         (y, ys') = uncons (toChunks ys); n2 = sizeOf y
+#endif
 
+--------------------------------------------------------------------------------
+
+{- Zip instance. -}
+
+#if __GLASGOW_HASKELL__ < 806
+{- |
+  Legacy 'Zip' instance for @GHC < 8.6.1@
+  
+  With @GHC >= 8.6.1@ see "SDP.Templates.AnyChunks" for more general instance,
+  which use @QuantifiedConstraints@ extension.
+-}
 instance Zip Unlist
   where
     all2 f as bs             = all2 f (listL as) (listL bs)
@@ -86,6 +111,7 @@ instance Zip Unlist
     zipWith4 f as bs cs ds       = fromList $ zipWith4 f (listL as) (listL bs) (listL cs) (listL ds)
     zipWith5 f as bs cs ds es    = fromList $ zipWith5 f (listL as) (listL bs) (listL cs) (listL ds) (listL es)
     zipWith6 f as bs cs ds es fs = fromList $ zipWith6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
+#endif
 
 instance Sort (Unlist e) e
   where
@@ -101,5 +127,4 @@ instance Sort (Unlist e) e
 {-# INLINE done #-}
 done :: STArray# s e -> ST s (Unlist e)
 done =  unsafeFreeze
-
 
