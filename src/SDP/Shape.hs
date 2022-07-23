@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Shape
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -29,8 +29,6 @@ module SDP.Shape
 )
 where
 
-import Prelude ()
-import SDP.SafePrelude
 import SDP.Finite
 import SDP.Tuple
 
@@ -243,6 +241,14 @@ instance (Shape i, Enum i, Bounded i, Shape (i' :& i)) => Shape (i' :& i :& i)
     lastDim   = \ (_  :& i) -> i
     unconsDim = \ (is :& i) -> (is, i)
 
+-- | Convert any index type bounds to generalized index bounds.
+toGBounds :: (Shape i) => (i, i) -> (GIndex i, GIndex i)
+toGBounds =  both toGIndex
+
+-- | Convert generalized index bounds to any index type bounds.
+fromGBounds :: (Shape i) => (GIndex i, GIndex i) -> (i, i)
+fromGBounds =  both fromGIndex
+
 --------------------------------------------------------------------------------
 
 {- Tuple instances. -}
@@ -355,16 +361,5 @@ unconsDim  (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o) = ((a,b,c,d,e,f,g,h,i,j,k,l,m,n),o);
 consDim    (a,b,c,d,e,f,g,h,i,j,k,l,m,n) o = (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o);
 }
 #undef SHAPE_INSTANCE
-
---------------------------------------------------------------------------------
-
--- | Convert any index type bounds to generalized index bounds.
-toGBounds :: (Shape i) => (i, i) -> (GIndex i, GIndex i)
-toGBounds =  both toGIndex
-
--- | Convert generalized index bounds to any index type bounds.
-fromGBounds :: (Shape i) => (GIndex i, GIndex i) -> (i, i)
-fromGBounds =  both fromGIndex
-
 
 

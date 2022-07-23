@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.Bordered
-    Copyright   :  (c) Andrey Mulik 2021
+    Copyright   :  (c) Andrey Mulik 2021-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -114,7 +114,7 @@ class (Index i, Estimate b) => Bordered b i | b -> i
 
 --------------------------------------------------------------------------------
 
-instance (Index i) => Bordered (i, i) i
+instance Index i => Bordered (i, i) i
   where
     bounds = id
     lower  = fst

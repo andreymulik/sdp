@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe, CPP, ConstraintKinds #-}
+{-# LANGUAGE Safe, CPP, ConstraintKinds, FlexibleInstances #-}
 
 #if __GLASGOW_HASKELL__ >= 806
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
@@ -6,7 +6,7 @@
 
 {- |
     Module      :  SDP.Estimate
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -34,8 +34,10 @@ module SDP.Estimate
 where
 
 import Data.Functor.Classes
+import Data.Function
 
 import SDP.Comparing
+import SDP.Index
 
 default ()
 
@@ -114,6 +116,20 @@ type Estimate'' rep = forall i e . Estimate (rep i e)
 
 --------------------------------------------------------------------------------
 
+instance Index i => Estimate (i, i)
+  where
+    (<==>) = on (<=>) size
+    (.<=.) = on (<=)  size
+    (.>=.) = on (>=)  size
+    (.>.)  = on (>)   size
+    (.<.)  = on (<)   size
+    
+    (<.=>) = (<=>) . size
+    (.<=)  = (<=)  . size
+    (.>=)  = (>=)  . size
+    (.>)   = (>)   . size
+    (.<)   = (<)   . size
+
 instance Estimate [a]
   where
     [] <==> [] = EQ
@@ -125,6 +141,5 @@ instance Estimate [a]
     es <.=> n =
       let go xs c | c == 0 = GT | null xs = 0 <=> c | True = tail xs `go` (c - 1)
       in  if n < 0 then LT else go es n
-
 
 

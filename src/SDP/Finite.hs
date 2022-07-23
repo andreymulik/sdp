@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Finite
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -32,11 +32,10 @@ module SDP.Finite
 )
 where
 
-import Prelude ( (++) )
-import SDP.SafePrelude
 import SDP.Nullable
 
 import Data.Default.Class
+import Data.Bifunctor
 import Data.Typeable
 import Data.Data
 
@@ -207,4 +206,5 @@ unsnoc :: [i] -> ([i], i)
 unsnoc    [i]   = ([], i)
 unsnoc (i : is) = (i :) `first` unsnoc is
 unsnoc     _    = throw $ UnexpectedRank "in SDP.Finite.fromList"
+
 

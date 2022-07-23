@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.BorderedM
-    Copyright   :  (c) Andrey Mulik 2021
+    Copyright   :  (c) Andrey Mulik 2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)

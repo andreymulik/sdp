@@ -144,7 +144,12 @@ Library
     
     Text.Show.SDP
     Text.Read.SDP
-
-
+  
+  other-modules:
+    -- To eliminate cyclic imports within the library
+    SDP.Internal.Utils
+    
+    -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
+    SDP.Internal.Index
 
 
