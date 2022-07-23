@@ -489,9 +489,9 @@ instance (Index i, Sort (rep e) e) => Sort (AnyBorder rep i e) e
 
 instance (Index i, Indexed1 rep Int e) => Map (AnyBorder rep i e) i e
   where
-    toMap ascs = isNull ascs ? Z $ assoc (ascsBounds ascs) ascs
+    toMap ascs = isNull ascs ? Z $ assoc (rangeBounds (fsts ascs)) ascs
     
-    toMap' e ascs = isNull ascs ? Z $ assoc' (ascsBounds ascs) e ascs
+    toMap' e ascs = isNull ascs ? Z $ assoc' (rangeBounds (fsts ascs)) e ascs
     
     {-# INLINE (.!) #-}
     (.!) (AnyBorder l u rep) = (rep !^) . offset (l, u)
@@ -547,11 +547,11 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Shaped (AnyBorder rep) e
 instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e) => MapM m (AnyBorder rep i e) i e
   where
     newMap ascs =
-      let bnds@(l, u) = ascsBounds ascs
+      let bnds@(l, u) = rangeBounds (fsts ascs)
       in  AnyBorder l u <$> newMap [ (offset bnds i, e) | (i, e) <- ascs ]
     
     newMap' defvalue ascs =
-      let bnds@(l, u) = ascsBounds ascs
+      let bnds@(l, u) = rangeBounds (fsts ascs)
       in  AnyBorder l u <$> newMap' defvalue [ (offset bnds i, e) | (i, e) <- ascs ]
     
     {-# INLINE writeM' #-}
@@ -639,10 +639,6 @@ instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e)
 expEx :: String -> a
 expEx =  throw . UnacceptableExpansion . showString "in SDP.Templates.AnyBorder."
 
-ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
-ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds             _ = defaultBounds 0
-
 {-# INLINE unpack #-}
 unpack :: AnyBorder rep i e -> rep e
 unpack =  \ (AnyBorder _ _ es) -> es
@@ -654,7 +650,6 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
 
 
 

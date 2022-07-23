@@ -208,7 +208,9 @@ instance MonadVar m => LinearM m (MArray# m e) e
 
 instance MonadVar m => MapM m (MArray# m e) Int e
   where
-    newMap' defvalue ascs = fromAssocs' (ascsBounds ascs) defvalue ascs
+    newMap' defvalue ascs =
+      let bnds = rangeBounds (fsts ascs)
+      in  fromAssocs' bnds defvalue ascs
     
     {-# INLINE writeM' #-}
     writeM' = setField this ... (!^) . unpack
@@ -252,12 +254,6 @@ instance Monad m => Freeze m (MArray# m e) (SArray# e)
 
 --------------------------------------------------------------------------------
 
-ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
-ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds             _ = defaultBounds 0
-
---------------------------------------------------------------------------------
-
 unpack :: MArray# m e -> SArray# (Var m e)
 unpack =  \ (MArray# es) -> es
 
@@ -269,7 +265,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 
 
 

@@ -727,7 +727,9 @@ instance Sort (SArray# e) e
 
 instance Map (SArray# e) Int e
   where
-    toMap' e ascs = isNull ascs ? Z $ assoc' (ascsBounds ascs) e ascs
+    toMap' e ascs =
+      let bnds = rangeBounds (fsts ascs)
+      in  isNull ascs ? Z $ assoc' bnds e ascs
     
     Z  // ascs = toMap ascs
     es // ascs = runST $ fromFoldableM es >>= (`overwrite` ascs) >>= done
@@ -1028,7 +1030,9 @@ instance LinearM (ST s) (STArray# s e) e
 
 instance MapM (ST s) (STArray# s e) Int e
   where
-    newMap' e ascs = isNull ascs ? newNull $ fromAssocs' (ascsBounds ascs) e ascs
+    newMap' e ascs =
+      let bnds = rangeBounds (fsts ascs)
+      in  isNull ascs ? newNull $ fromAssocs' bnds e ascs
     
     {-# INLINE writeM' #-}
     writeM' (STArray# _ (I# o#) marr#) = \ (I# i#) e -> ST $
@@ -1217,7 +1221,9 @@ instance MonadIO io => LinearM io (MIOArray# io e) e
 
 instance MonadIO io => MapM io (MIOArray# io e) Int e
   where
-    newMap' e ascs = isNull ascs ? newNull $ fromAssocs' (ascsBounds ascs) e ascs
+    newMap' e ascs =
+      let bnds = rangeBounds (fsts ascs)
+      in  isNull ascs ? newNull $ fromAssocs' bnds e ascs
     
     writeM' es = stToMIO ... writeM' (unpack es)
     
@@ -1356,11 +1362,7 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
   where
     fun = \ e ls -> e `f` head ls == EQ ? ls $ e : ls
 
-ascsBounds :: (Index a, Ord a) => [(a, b)] -> (a, a)
-ascsBounds ((x, _) : xs) = foldr (\ (e, _) (mn, mx) -> (min mn e, max mx e)) (x, x) xs
-ascsBounds             _ = defaultBounds 0
-
-(<?=>) :: (Bordered b i) => Int -> b -> Int
+(<?=>) :: Bordered b i => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min
 
 --------------------------------------------------------------------------------
@@ -1379,7 +1381,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
-
 
 
