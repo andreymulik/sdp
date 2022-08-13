@@ -83,13 +83,13 @@ class Shape i
     
     -- | Create index from generalized index.
     {-# INLINE fromGIndex #-}
-    default fromGIndex :: (RANK1 i) => GIndex i -> i
+    default fromGIndex :: RANK1 i => GIndex i -> i
     fromGIndex :: GIndex i -> i
     fromGIndex =  \ (E :& i) -> i
     
     -- | Create generalized index from index.
     {-# INLINE toGIndex #-}
-    default toGIndex :: (RANK1 i) => i -> GIndex i
+    default toGIndex :: RANK1 i => i -> GIndex i
     toGIndex :: i -> GIndex i
     toGIndex =  (E :&)
     
@@ -100,17 +100,17 @@ class Shape i
     
     -- | Add new dimension.
     {-# INLINE consDim #-}
-    default consDim :: (DimLast i ~~ i) => DimInit i -> DimLast i -> i
+    default consDim :: DimLast i ~~ i => DimInit i -> DimLast i -> i
     consDim :: DimInit i -> DimLast i -> i
     consDim =  const id
     
     {-# INLINE initDim #-}
-    default initDim :: (DimInit i ~~ E) => i -> DimInit i
+    default initDim :: DimInit i ~~ E => i -> DimInit i
     initDim :: i -> DimInit i
     initDim =  const E
     
     {-# INLINE lastDim #-}
-    default lastDim :: (DimLast i ~~ i) => i -> DimLast i
+    default lastDim :: DimLast i ~~ i => i -> DimLast i
     lastDim :: i -> DimLast i
     lastDim =  id
     
@@ -213,7 +213,7 @@ instance Shape CSigAtomic
 
 {- N-dimensional instances. -}
 
-instance (Shape i) => Shape (E :& i)
+instance Shape i => Shape (E :& i)
   where
     type DimInit (E :& i) = E
     type DimLast (E :& i) = i
@@ -242,11 +242,11 @@ instance (Shape i, Enum i, Bounded i, Shape (i' :& i)) => Shape (i' :& i :& i)
     unconsDim = \ (is :& i) -> (is, i)
 
 -- | Convert any index type bounds to generalized index bounds.
-toGBounds :: (Shape i) => (i, i) -> (GIndex i, GIndex i)
+toGBounds :: Shape i => (i, i) -> (GIndex i, GIndex i)
 toGBounds =  both toGIndex
 
 -- | Convert generalized index bounds to any index type bounds.
-fromGBounds :: (Shape i) => (GIndex i, GIndex i) -> (i, i)
+fromGBounds :: Shape i => (GIndex i, GIndex i) -> (i, i)
 fromGBounds =  both fromGIndex
 
 --------------------------------------------------------------------------------

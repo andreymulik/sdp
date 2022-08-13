@@ -31,6 +31,7 @@ where
 import SDP.Internal.Utils
 import SDP.Shape
 
+import Data.Maybe
 import Data.Tuple
 import Data.Char ( ord )
 
@@ -184,9 +185,9 @@ class
     default ordBounds :: GIndex i ~~ I1 i => (i, i) -> (i, i)
     
     -- | Returns size of biggest range, that may be represented by this type.
-    defLimit :: i -> Integer
-    defLimit i = toInteger (maxBound `asTypeOf` i) + 1
-    default defLimit :: (Integral i, Bounded i) => i -> Integer
+    defLimit :: i -> Maybe Integer
+    defLimit i = Just (1 + toInteger (asTypeOf maxBound i))
+    default defLimit :: (Integral i, Bounded i) => i -> Maybe Integer
     
     -- | Returns default range by size.
     {-# INLINE defaultBounds #-}
@@ -219,6 +220,11 @@ class
     unsafeIndex :: Int -> i
     unsafeIndex =  toEnum
     default unsafeIndex :: Enum i => Int -> i
+    
+    -- | Variant of 'unsafeIndex' for 'Integer's.
+    {-# INLINE unsafeIndex' #-}
+    unsafeIndex' :: Integer -> i
+    unsafeIndex' =  unsafeIndex . fromInteger
     
     -- | Checks if the bounds is empty.
     {-# INLINE isEmpty #-}
@@ -305,8 +311,9 @@ class
 
 instance Index E
   where
-    unsafeIndex = const (emptyEx "unsafeIndex {E}")
-    defLimit    = const (-1)
+    unsafeIndex' = const (emptyEx "unsafeIndex {E}")
+    unsafeIndex  = const (emptyEx "unsafeIndex {E}")
+    defLimit     = Just . const (-1)
     
     size  = const 0
     sizes = const []
@@ -333,13 +340,13 @@ instance Index ()
     sizes = const [1]
     range = const [()]
     
-    defLimit = const 0
+    defLimit = Just . const 0
     next _ _ = ()
     prev _ _ = ()
     
     inBounds    _ _ = IN
-    isEmpty       _ = False
     inRange     _ _ = True
+    isEmpty       _ = False
     isOverflow  _ _ = False
     isUnderflow _ _ = False
     
@@ -347,8 +354,11 @@ instance Index ()
     index         = const unsafeIndex
     offset  _  _  = 0
     
-    unsafeIndex  0 = ()
-    unsafeIndex  _ = emptyEx "unsafeIndex ()"
+    unsafeIndex 0 = ()
+    unsafeIndex _ = emptyEx "unsafeIndex ()"
+    
+    unsafeIndex' 0 = ()
+    unsafeIndex' _ = emptyEx "unsafeIndex' ()"
     
     extendBounds = const id
     rangeBounds  = const ((), ())
@@ -356,7 +366,7 @@ instance Index ()
 instance Index Char
   where
     defaultBounds = defaultBoundsUnsign
-    defLimit      = const $ toInteger (ord maxBound)
+    defLimit = const . Just $ toInteger (ord maxBound)
 
 {- |
   Note that 'Integer' isn't 'Bounded', so it can't be used in multidimensional
@@ -364,8 +374,7 @@ instance Index Char
 -}
 instance Index Integer
   where
-    -- | Undefined.
-    defLimit = error "in SDP.Index.defLimit: Integer has no upper bound"
+    defLimit = const Nothing
     offset   = offsetIntegral
 
 instance Index Int     where offset = offsetIntegral
@@ -418,7 +427,7 @@ instance Index CUIntMax   where offset = offsetIntegral; defaultBounds = default
 
 instance Index i => Index (E :& i)
   where
-    defLimit = (const . defLimit :: Index i => i -> (E :& i) -> Integer) undefined
+    defLimit = (const . defLimit :: Index i => i -> (E :& i) -> Maybe Integer) undefined
     
     size  (E:&l, E:&u) =  size (l, u)
     sizes (E:&l, E:&u) = [size (l, u)]
@@ -439,6 +448,7 @@ instance Index i => Index (E :& i)
     index  = \ (E:&l, E:&u) -> (E:&) . index (l, u)
     
     defaultBounds = both (E :&) . defaultBounds
+    unsafeIndex'  = (E :&) . unsafeIndex'
     unsafeIndex   = (E :&) . unsafeIndex
     
     extendBounds (E:&i) (E:&l, E:&u) = both (E:&) $ extendBounds i (l, u)
@@ -447,10 +457,12 @@ instance Index i => Index (E :& i)
 instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
       => Index (i' :& i :& i)
   where
-    defLimit i = lim (error "in defLimit {i' :& i :& i}") (rank i) i
+    defLimit is = lim err (rank is) is
       where
-        lim :: Index i => i -> Int -> (i' :& i :& i) -> Integer
-        lim =  const ... (^) . defLimit
+        lim :: Index i => i -> Int -> (i' :& i :& i) -> Maybe Integer
+        lim i l _ = (^ l) <$> defLimit i
+        
+        err = unreachEx "defLimit {i' :& i :& i}"
     
     size  (ls :& l, us :& u) = size (l, u) * size (ls, us)
     sizes (ls :& l, us :& u) = sizes (ls, us) ++ sizes (l, u)
@@ -500,16 +512,22 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
         res = offset (ls, us) is * size (l, u) + offset (l, u) i
         (ls :& l, us :& u) = bnds
     
-    unsafeIndex c = unsafeIndex d :& i
+    unsafeIndex = unsafeIndex' . toInteger
+    
+    unsafeIndex' n = res
       where
-        (d, m) = defLimit c <= lim ? (0, c) $ c `divMod` fromInteger lim
-        i   = unsafeIndex m
-        lim = defLimit i
+        (d, m) = n <= l ? (0, n) $ l `divMod` n
+        res    = unsafeIndex' d :& unsafeIndex' m
+        
+        l = lim res undefined
+        
+        lim :: Index i => (i' :& i :& i) -> i -> Integer
+        lim =  const (fromMaybe n . defLimit)
     
     extendBounds (i :& is) (l :& ls, u :& us) = (l' :& ls', u' :& us')
       where
         (ls', us') = extendBounds is (ls, us)
-        (l', u')   = extendBounds i  (l, u)
+        (l',   u') = extendBounds i  (l,   u)
 
 --------------------------------------------------------------------------------
 
@@ -580,6 +598,8 @@ checkBounds bnds i res = case inBounds bnds i of
 emptyEx :: String -> a
 emptyEx =  throw . EmptyRange . showString "in SDP.Index."
 
+unreachEx :: String -> a
+unreachEx =  throw . UnreachableException . showString "in SDP.Index."
 
 
 
