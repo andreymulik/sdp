@@ -199,35 +199,49 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
     {- |
       @since 0.3
       
-      Apply given procedure to offset and value of each element.
-      
-      Gets the results of applying the procedure to the offset and value of each
-      element. In general, it does not regulate the order in which operations
-      are performed. Allows parallel and/or multiple execution of operations for
-      each element.
-      
-      For guaranteed one-time, sequential execution, use 'Foldable',
-      'Traversable' and similar functions from the 'Linear', 'SDP.Map.Map',
-      'LinearM' and 'SDP.MapM.MapM' classes.
+      Same as 'listWithM'', but actions can be performed in any order (may be
+      parallel).
     -}
-    omapM :: (Int -> e -> m r) -> l -> m [r]
-    omapM f es = ofoldrM (\ o e xs -> (: xs) <$> f o e) [] es
+    listWithM :: (Int -> e -> m r) -> l -> m [r]
+    listWithM =  listWithM'
     
     {- |
       @since 0.3
       
-      Same as 'omapM', but creates new structure with elements of same type.
+      @'listWithM'' go es@ executes an action @go@ for each offset and element
+      of @es@ from left to right.
+      
+      @
+      listWithM' go es === listWith' go =<< getLeft es
+      @
     -}
-    omapM' :: (Int -> e -> m e) -> l -> m l
-    omapM' =  newLinear <=<< omapM
+    listWithM' :: (Int -> e -> m r) -> l -> m [r]
+    listWithM' go = ofoldrM (\ o e xs -> (: xs) <$> go o e) []
     
     {- |
       @since 0.3
       
-      Same as 'omapM', but discards results.
+      Same as 'mapWithM'', but actions can be performed in any order (may be
+      parallel).
     -}
-    omapM_ :: (Int -> e -> m ()) -> l -> m ()
-    omapM_ f = ofoldrM (\ o e _ -> f o e) ()
+    mapWithM :: (Int -> e -> m e) -> l -> m l
+    mapWithM =  mapWithM'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'mapWithM'', but keeps argument stucture like 'fmap'.
+    -}
+    mapWithM' :: (Int -> e -> m e) -> l -> m l
+    mapWithM' =  newLinear <=<< listWithM
+    
+    {- |
+      @since 0.3
+      
+      Same as 'mapWithM', but discards result.
+    -}
+    mapWithM_ :: (Int -> e -> m ()) -> l -> m ()
+    mapWithM_ f = ofoldrM (\ o e _ -> f o e) ()
     
     -- | 'ofoldrM'' is strict version of 'ofoldrM'.
     ofoldrM' :: (Int -> e -> r -> m r) -> r -> l -> m r
@@ -565,6 +579,7 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
+
 
 
 

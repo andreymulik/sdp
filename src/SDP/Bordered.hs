@@ -99,7 +99,7 @@ class (Index i, Estimate b) => Bordered b i | b -> i
       @'rebound' es bnds@ changes structure bounds, if possible - in place.
       
       * If given bounds is empty, returns an empty structure (with *any* empty
-      bounds).
+      bounds, e.g. @defaultBounds 0@).
       * If the new range is lesser than the current size of the structure,
       bounds of a suitable size must be set
       * If the new range is larger than the current size of the structure, an

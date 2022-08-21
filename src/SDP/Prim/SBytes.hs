@@ -223,6 +223,7 @@ instance Monad m => BorderedM m (SBytes# e) Int
     getSizeOf  (SBytes# c _ _) = return c
     
     getLower _ = return 0
+    rebounded' = return ... rebound
 
 --------------------------------------------------------------------------------
 
@@ -473,7 +474,7 @@ instance Unboxed e => SetWith (SBytes# e) e
             x = xs !^ i
             y = ys !^ j
     
-    memberWith = binaryContain
+    memberWith = memberSorted
     
     lookupLTWith _ _ Z  = Nothing
     lookupLTWith f o es
@@ -683,9 +684,10 @@ instance Bordered (STBytes# s e) Int
       where
         n = size bnds
 
-instance BorderedM (ST s) (STBytes# s e) Int
+instance Unboxed e => BorderedM (ST s) (STBytes# s e) Int
   where
     getLower _ = return 0
+    rebounded' = takeM . size
     
     nowIndexIn (STBytes# c _ _) = return . inRange (0, c - 1)
     getIndices (STBytes# c _ _) = return [0 .. c - 1]
@@ -965,13 +967,15 @@ instance Bordered (MIOBytes# io e) Int
     offsetOf (MIOBytes# (STBytes# c _ _)) = offset (0, c - 1)
     indexIn  (MIOBytes# (STBytes# c _ _)) = \ i -> i >= 0 && i < c
 
-instance MonadIO io => BorderedM io (MIOBytes# io e) Int
+instance (MonadIO io, Unboxed e) => BorderedM io (MIOBytes# io e) Int
   where
     getIndexOf = return ... indexOf . unpack
     getIndices = return . indices . unpack
     getSizeOf  = return . sizeOf . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
+    
+    rebounded' = takeM . size
     getLower _ = return 0
 
 --------------------------------------------------------------------------------
@@ -1255,6 +1259,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
 
 
 

@@ -16,7 +16,6 @@ module SDP.Templates.AnyBorder
 (
   -- * Export
   module SDP.IndexedM,
-  module SDP.Shaped,
   module SDP.Sort,
   module SDP.Scan,
   
@@ -28,7 +27,6 @@ where
 import Prelude ()
 import SDP.SafePrelude
 import SDP.IndexedM
-import SDP.Shaped
 import SDP.SortM
 import SDP.Sort
 import SDP.Scan
@@ -43,8 +41,6 @@ import Text.Show.SDP
 
 import qualified GHC.Exts as E
 import GHC.Generics
-
-import Control.Exception.SDP
 
 default ()
 
@@ -88,7 +84,8 @@ instance (Index i, Ord1 rep) => Ord1 (AnyBorder rep i)
 
 {- Show and Read instances. -}
 
-instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Index i, Show i, Show e) => Show (AnyBorder rep i e)
+instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Index i, Show i, Show e)
+      => Show (AnyBorder rep i e)
   where
     showsPrec = assocsPrec "array "
 
@@ -105,11 +102,13 @@ instance (Index i, Read i, Read e, Indexed1 rep Int e) => Read (AnyBorder rep i 
 
 {- Overloaded Lists and String support. -}
 
-instance (Index i, IsString (rep Char), Bordered1 rep Int Char) => IsString (AnyBorder rep i Char)
+instance (Index i, IsString (rep Char), Bordered1 rep Int Char)
+      => IsString (AnyBorder rep i Char)
   where
     fromString = withBounds . fromString
 
-instance (Index i, E.IsList (rep e), Bordered1 rep Int e) => E.IsList (AnyBorder rep i e)
+instance (Index i, E.IsList (rep e), Bordered1 rep Int e)
+      => E.IsList (AnyBorder rep i e)
   where
     type Item (AnyBorder rep i e) = E.Item (rep e)
     
@@ -123,11 +122,13 @@ instance (Index i, E.IsList (rep e), Bordered1 rep Int e) => E.IsList (AnyBorder
 
 instance (Index i, Nullable1 rep e) => Default (AnyBorder rep i e) where def = Z
 
-instance (Index i, Semigroup (rep e), Bordered1 rep Int e) => Semigroup (AnyBorder rep i e)
+instance (Index i, Semigroup (rep e), Bordered1 rep Int e)
+      => Semigroup (AnyBorder rep i e)
   where
     (<>) = withBounds ... on (<>) unpack
 
-instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e) => Monoid (AnyBorder rep i e)
+instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e)
+      => Monoid (AnyBorder rep i e)
   where
     mappend = (<>)
     mempty  = Z
@@ -203,6 +204,10 @@ instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
     getBounds  (AnyBorder l u _) = return (l, u)
     getLower   (AnyBorder l _ _) = return l
     getUpper   (AnyBorder _ u _) = return u
+    
+    rebounded' bnds es =
+      let bnds' = defaultBounds (size bnds)
+      in  uncurry AnyBorder bnds <$> rebounded' bnds' (unpack es)
 
 --------------------------------------------------------------------------------
 
@@ -280,11 +285,12 @@ instance (Index i, Traversable rep) => Traversable (AnyBorder rep i)
 
 {- Forceable and Linear instances. -}
 
-instance (Index i, Forceable1 rep e) => Forceable (AnyBorder rep i e)
+instance Forceable1 rep e => Forceable (AnyBorder rep i e)
   where
     force (AnyBorder l u rep) = AnyBorder l u (force rep)
 
-instance (Index i, Linear1 rep e, Bordered1 rep Int e) => Linear (AnyBorder rep i e) e
+instance (Index i, Linear1 rep e, Bordered1 rep Int e)
+      => Linear (AnyBorder rep i e) e
   where
     single = withBounds . single
     
@@ -361,7 +367,8 @@ instance Copyable1 m rep e => Copyable m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
-instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBorder rep i e) e
+instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e)
+      => LinearM m (AnyBorder rep i e) e
   where
     getHead = getHead . unpack
     getLast = getLast . unpack
@@ -448,9 +455,11 @@ instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e) => LinearM m (AnyBo
 
 {- Set and SetWith instances. -}
 
-instance (SetWith1 (AnyBorder rep i) e, Nullable (AnyBorder rep i e), Ord e) => Set (AnyBorder rep i e) e
+instance (SetWith1 (AnyBorder rep i) e, Nullable (AnyBorder rep i e), Ord e)
+      => Set (AnyBorder rep i e) e
 
-instance (Index i, SetWith1 rep e, Linear1 rep e, Bordered1 rep Int e) => SetWith (AnyBorder rep i e) e
+instance (Index i, SetWith1 rep e, Linear1 rep e, Bordered1 rep Int e)
+      => SetWith (AnyBorder rep i e) e
   where
     isSubsetWith f = isSubsetWith f `on` unpack
     
@@ -494,7 +503,7 @@ instance (Index i, Indexed1 rep Int e) => Map (AnyBorder rep i e) i e
     toMap' e ascs = isNull ascs ? Z $ assoc' (rangeBounds (fsts ascs)) e ascs
     
     {-# INLINE (.!) #-}
-    (.!) (AnyBorder l u rep) = (rep !^) . offset (l, u)
+    AnyBorder l u rep .! i = rep !^ offset (l, u) i
     
     Z // ascs = toMap ascs
     (AnyBorder l u rep) // ascs =
@@ -520,12 +529,9 @@ instance (Index i, Indexed1 rep Int e) => Indexed (AnyBorder rep i e) i e
         bnds' = defaultBounds $ size bnds
     
     fromIndexed = withBounds . fromIndexed
-
-instance (Bordered1 rep Int e, Linear1 rep e) => Shaped (AnyBorder rep) e
-  where
-    reshape es bs = size bs >. es ? expEx "reshape" $ uncurry AnyBorder bs (unpack es)
     
-    (AnyBorder l u rep) !! ij = uncurry AnyBorder sub . take s $ drop o rep
+    {-
+    AnyBorder l u rep !! ij = uncurry AnyBorder sub . take s $ drop o rep
       where
         (num, sub) = slice (l, u) ij
         
@@ -539,12 +545,14 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Shaped (AnyBorder rep) e
     unslice ess =
       let bnds = defaultBounds (foldr' ((+) . sizeOf) 0 ess)
       in  uncurry AnyBorder bnds (concatMap unpack ess)
+    -}
 
 --------------------------------------------------------------------------------
 
 {- MapM, IndexedM instances. -}
 
-instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e) => MapM m (AnyBorder rep i e) i e
+instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e)
+      => MapM m (AnyBorder rep i e) i e
   where
     newMap ascs =
       let bnds@(l, u) = rangeBounds (fsts ascs)
@@ -597,25 +605,29 @@ instance (Index i, SortM1 m rep e) => SortM m (AnyBorder rep i e) e
 {- Freeze and Thaw instances. -}
 
 -- Bordered (with any index) to prim.
-instance {-# OVERLAPPABLE #-} (Index i, Thaw m (rep e) mut) => Thaw m (AnyBorder rep i e) mut
+instance {-# OVERLAPPABLE #-} (Index i, Thaw m (rep e) mut)
+      => Thaw m (AnyBorder rep i e) mut
   where
     unsafeThaw = unsafeThaw . unpack
     thaw       = thaw . unpack
 
 -- Prim to bordered (with any index).
-instance {-# OVERLAPPABLE #-} (Index i, Thaw m imm (rep e), Bordered1 rep Int e) => Thaw m imm (AnyBorder rep i e)
+instance {-# OVERLAPPABLE #-} (Index i, Thaw m imm (rep e), Bordered1 rep Int e)
+      => Thaw m imm (AnyBorder rep i e)
   where
     unsafeThaw = fmap withBounds . unsafeThaw
     thaw       = fmap withBounds . thaw
 
 -- Lift prim to prim on bordered on bordered (with same index).
-instance {-# OVERLAPS #-} (Index i, Thaw1 m imm mut e) => Thaw m (AnyBorder imm i e) (AnyBorder mut i e)
+instance {-# OVERLAPS #-} (Index i, Thaw1 m imm mut e)
+      => Thaw m (AnyBorder imm i e) (AnyBorder mut i e)
   where
     unsafeThaw (AnyBorder l u imm) = AnyBorder l u <$> unsafeThaw imm
     thaw       (AnyBorder l u imm) = AnyBorder l u <$> thaw imm
 
 -- Bordered (with any index) to prim.
-instance {-# OVERLAPPABLE #-} (Index i, Freeze m (rep e) imm) => Freeze m (AnyBorder rep i e) imm
+instance {-# OVERLAPPABLE #-} (Index i, Freeze m (rep e) imm)
+      => Freeze m (AnyBorder rep i e) imm
   where
     unsafeFreeze = unsafeFreeze . unpack
     freeze       = freeze . unpack
@@ -636,9 +648,6 @@ instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e)
 
 --------------------------------------------------------------------------------
 
-expEx :: String -> a
-expEx =  throw . UnacceptableExpansion . showString "in SDP.Templates.AnyBorder."
-
 {-# INLINE unpack #-}
 unpack :: AnyBorder rep i e -> rep e
 unpack =  \ (AnyBorder _ _ es) -> es
@@ -650,6 +659,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
 
 
 

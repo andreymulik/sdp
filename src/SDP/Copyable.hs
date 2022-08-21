@@ -42,19 +42,34 @@ class Monad m => Copyable m c
 
 --------------------------------------------------------------------------------
 
--- | @since 0.3 'Copyable' contraint for @(Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Copyable' contraint for @(Type -> Type)@-kind types.
+-}
 type Copyable1 m c e = Copyable m (c e)
 
--- | @since 0.3 'Copyable' contraint for @(Type -> Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Copyable' contraint for @(Type -> Type -> Type)@-kind types.
+-}
 type Copyable2 m c i e = Copyable m (c i e)
 
 #if __GLASGOW_HASKELL__ >= 806
--- | @since 0.3 'Copyable' contraint for @(Type -> Type@-kind types.
+{- |
+  @since 0.3
+  
+  'Copyable' contraint for @(Type -> Type@-kind types.
+-}
 type Copyable' m c = forall e . Copyable m (c e)
 
--- | @since 0.3 'Copyable' contraint for @(Type -> Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Copyable' contraint for @(Type -> Type -> Type)@-kind types.
+-}
 type Copyable'' m c = forall i e . Copyable m (c i e)
 #endif
-
 
 

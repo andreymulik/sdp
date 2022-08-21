@@ -117,13 +117,15 @@ instance Bordered (MArray# m e) Int
     
     rebound bnds (MArray# es) = MArray# (rebound bnds es)
 
-instance Monad m => BorderedM m (MArray# m e) Int
+instance MonadVar m => BorderedM m (MArray# m e) Int
   where
     getIndexOf = return ... indexOf
     getIndices = return . indices
     getBounds  = return . bounds
     getSizeOf  = return . sizeOf
     getUpper   = return . upper
+    
+    rebounded' = takeM . size
     getLower _ = return 0
 
 --------------------------------------------------------------------------------
@@ -132,7 +134,7 @@ instance Monad m => BorderedM m (MArray# m e) Int
 
 instance MonadVar m => Copyable m (MArray# m e)
   where
-    copied (MArray# arr) = MArray# <$> foreachO' (const $ var <=< get this') arr
+    copied (MArray# arr) = MArray# <$> mapWith' (const $ var <=< get this') arr
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where
@@ -265,6 +267,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
-
 

@@ -92,7 +92,6 @@ Library
     SDP.IndexedM
     SDP.LinearM
     SDP.Indexed
-    SDP.Shaped
     SDP.Linear
     SDP.MapM
     SDP.ZipM
@@ -151,5 +150,6 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
+
 
 

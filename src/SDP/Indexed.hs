@@ -1,5 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
-{-# LANGUAGE Safe, CPP, ConstraintKinds, DefaultSignatures #-}
+{-# LANGUAGE Trustworthy, FlexibleContexts, ConstraintKinds, TypeOperators #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE DefaultSignatures, GADTs, CPP #-}
 
 #if __GLASGOW_HASKELL__ >= 806
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
@@ -7,7 +9,7 @@
 
 {- |
     Module      :  SDP.Indexed
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -21,7 +23,7 @@ module SDP.Indexed
   module SDP.Map,
   
   -- * Indexed
-  Indexed (..), Indexed1, Indexed2, binaryContain,
+  Indexed (..), Indexed1, Indexed2, binaryContain, memberSorted,
   
   -- * Freeze
   Freeze (..), Freeze1, Freeze2,
@@ -39,11 +41,22 @@ import SDP.SafePrelude
 import SDP.Linear
 import SDP.Map
 
+import GHC.Exts
+  (
+    Int (..), newArray#, indexArray#, readArray#, writeArray#,
+    unsafeFreezeArray#, (-#)
+  )
+
+import GHC.ST ( ST (..) )
+
 import Control.Exception.SDP
 
 default ()
 
 --------------------------------------------------------------------------------
+
+{-# DEPRECATED imap "deprecated in favour 'SDP.Indexed.Indexed.imap', \
+      \will be removed in sdp-0.4" #-}
 
 -- | 'Indexed' is class of ordered associative arrays with static bounds.
 class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
@@ -67,7 +80,15 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     assoc' bnds defvalue = toMap' defvalue . filter (inRange bnds . fst)
     
     -- | 'fromIndexed' converts this indexed structure to another one.
-    fromIndexed :: (Indexed m j e) => m -> v
+    fromIndexed :: Indexed m j e => m -> v
+    
+    -- | Same as 'reshape', deprecated.
+    imap :: Map m j e => (i, i) -> m -> (i -> j) -> v
+    imap bnds es f = assoc bnds [ (i, es!f i) | i <- range bnds ]
+    
+    -- | 'reshape' creates new indexed structure from old with reshaping.
+    reshape :: Indexed v' j e => (i, i) -> v' -> (i -> j) -> v
+    reshape =  imap
     
     {- |
       @'accum' f es ies@ create a new structure from @es@ elements selectively
@@ -76,14 +97,36 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     accum :: (e -> e' -> e) -> v -> [(i, e')] -> v
     accum f es ies = bounds es `assoc` [ (i, es!i `f` e') | (i, e') <- ies ]
     
-    -- | 'imap' creates new indexed structure from old with reshaping.
-    imap :: (Map m j e) => (i, i) -> m -> (i -> j) -> v
-    imap bnds es f = assoc bnds [ (i, es!f i) | i <- range bnds ]
+    -- | @es !! ij@ returns subshape @ij@ of @es@.
+    (!!) :: (Indexed2 s j e, s i e ~ v, SubIndex i j) => s i e -> i :|: j -> s j e
+    es !! ij = toMap $ kfoldr (\ i e ies ->
+        let (ij', j) = splitDim i
+        in  ij' == ij ? (j, e) : ies $ ies
+      ) [] es
+    
+    -- | Returns list of @es@ subshapes.
+    slices ::
+      (
+        Indexed2 s (i :|: j) (s j e), s i e ~ v, SubIndex i j, Indexed2 s j e
+      ) => s i e -> s (i :|: j) (s j e)
+    
+    slices es = let ((ls, l), (us, u)) = splitDim `both` bounds es in assoc (ls, us)
+        [
+          (ij, assoc (l, u) ies)
+        | (ij, ies) <- size (ls, us) `unpick` offset (ls, us) $ kfoldr
+          (\ i e xs -> flip (,) e `second` splitDim i : xs) [] es
+      ]
+    
+    -- | Unslice subshapes.
+    unslice :: (Indexed2 s (i :|: j) (s j e), SubIndex i j, s i e ~ v, Indexed2 s j e)
+            => s (i :|: j) (s j e) -> s i e
+    
+    unslice = toMap . kfoldr (\ i -> (++) . (first (`joinDim` i) <$>) . assocs) []
 
 --------------------------------------------------------------------------------
 
 -- | Service class of mutable to immutable conversions.
-class (Monad m) => Freeze m v' v | v' -> m
+class Monad m => Freeze m v' v | v' -> m
   where
     {- |
       @freeze@ is a safe way to convert a mutable structure to a immutable.
@@ -137,9 +180,35 @@ instance Indexed [e] Int e
 
 --------------------------------------------------------------------------------
 
--- | binaryContain checks that sorted structure has equal element.
+-- | Split the list and return the good producer of the resulting chunks.
+unpick :: Int -> (i -> Int) -> [(i, e)] -> [(i, [e])]
+unpick (I# n#) f es = runST $ ST $ \ s1# -> case newArray# n# [] s1# of
+  (# s2#, marr# #) -> case newArray# n# undefined s2# of
+    (# s3#, midx# #) -> case foldr (\ (i, e) go s# -> case f i of
+      I# i# -> case readArray# marr# i# s# of
+        (# s', xs #) -> case writeArray# marr# i# (e : xs) s' of
+          s''# -> case writeArray# midx# i# i s''# of
+            s'''# -> go s'''#
+      ) (\ s# -> s#) es s3# of
+        s4# -> case unsafeFreezeArray# marr# s4# of
+          (# s5#, arr# #) -> case unsafeFreezeArray# midx# s5# of
+            (# s6#, idx# #) ->
+              let
+                  go -1# xss = xss
+                  go  c# xss =
+                    let (# xs #) = indexArray# arr# c#
+                        (# i #)  = indexArray# idx# c#
+                    in  go (c# -# 1#) ((i, reverse xs) : xss)
+              in  (# s6#, go (n# -# 1#) [] #)
+
+--------------------------------------------------------------------------------
+
+{-# DEPRECATED binaryContain "deprecated in favour 'SDP.Indexed.binaryContain' \
+      \will be removed in sdp-0.4" #-}
+
+-- | 'binaryContain' checks that sorted structure has equal element.
 binaryContain :: (Linear v e, Bordered v i) => Compare e -> e -> v -> Bool
-binaryContain _ _ Z  = False
+binaryContain _ _  Z = False
 binaryContain f e es =
   let
     contain l u = not (l > u) && case f e (es !^ j) of
@@ -149,6 +218,12 @@ binaryContain f e es =
       where
         j = u - l `div` 2 + l
   in  f e (head es) /= LT && f e (last es) /= GT && contain 0 (sizeOf es - 1)
+
+--------------------------------------------------------------------------------
+
+-- | 'memberSorted' checks that sorted structure has equal element.
+memberSorted :: Indexed v i e => Compare e -> e -> v -> Bool
+memberSorted =  binaryContain
 
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Indexed."

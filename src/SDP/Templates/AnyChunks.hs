@@ -314,13 +314,20 @@ instance Bordered1 rep Int e => Bordered (AnyChunks rep e) Int
 
 instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
   where
-    getLower  _ = return 0
-    getUpper es = do n <- getSizeOf es; return (n - 1)
+    getLower = const $ return 0
+    getUpper = fmap pred . getSizeOf
     
     getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
     
     getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
     nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
+    
+    rebounded' bnds (AnyChunks es) = AnyChunks <$> go (size bnds) es
+      where
+        go _    []    = return []
+        go n (x : xs) = do
+          s <- getSizeOf x
+          n <= s ? return [] $ (x :) <$> go (n - s) xs
 
 --------------------------------------------------------------------------------
 
@@ -432,24 +439,30 @@ instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
 
 {- Copyable and LinearM instances. -}
 
-instance (Monad m, BorderedM1 m rep Int e, LinearM1 m rep e) => Copyable m (AnyChunks rep e)
+instance (Monad m, BorderedM1 m rep Int e, LinearM1 m rep e)
+      => Copyable m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 
-instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep e) e
+instance (BorderedM1 m rep Int e, LinearM1 m rep e)
+      => LinearM m (AnyChunks rep e) e
   where
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
     
     prepend e' es' = AnyChunks <$> go e' (toChunks es')
       where
-        go e es@(x : xs) = do n <- getSizeOf x; n < lim ? (: xs) <$> prepend e x $ (: es) <$> newLinear [e]
-        go e           _ = pure <$> newLinear [e]
+        go e     []      = pure <$> newLinear [e]
+        go e es@(x : xs) = do
+          n <- getSizeOf x
+          n < lim ? (: xs) <$> prepend e x $ (: es) <$> newLinear [e]
     
     append es' e' = AnyChunks <$> go e' (toChunks es')
       where
-        go e es@(xs :< x) = do n <- getSizeOf x; n < lim ? (xs :<) <$> append x e $ (es :<) <$> newLinear [e]
-        go e            _ = pure <$> newLinear [e]
+        go e      []      = pure <$> newLinear [e]
+        go e es@(xs :< x) = do
+          n <- getSizeOf x
+          n < lim ? (xs :<) <$> append x e $ (es :<) <$> newLinear [e]
     
     newLinear = fmap AnyChunks . mapM newLinear . chunks lim
     
@@ -461,16 +474,18 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
     {-# INLINE writeM #-}
     writeM = go . toChunks
       where
-        go (x : xs) i e = do n <- getSizeOf x; i < n ? writeM x i e $ go xs (i - n) e
-        go _        _ _ = return ()
+        go    []    _ _ = return ()
+        go (x : xs) i e = do
+          n <- getSizeOf x
+          i < n ? writeM x i e $ go xs (i - n) e
     
     getLeft  (AnyChunks es) = concat <$> mapM getLeft es
     getRight (AnyChunks es) = (concat . reverse) <$> mapM getRight es
     reversed (AnyChunks es) = (AnyChunks . reverse) <$> mapM reversed es
     
-    filled c e = AnyChunks <$> sequence (replicate d (filled lim e) :< filled n e)
-      where
-        (d, n) = c `divMod` lim
+    filled c e =
+      let (d, n) = c `divMod` lim
+      in  AnyChunks <$> sequence (replicate d (filled lim e) :< filled n e)
     
     copied' xs l n = copied =<< takeM n =<< dropM l xs
     
@@ -539,9 +554,11 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyChunks rep 
 
 {- Set and SetWith instances. -}
 
-instance (Nullable (AnyChunks rep e), SetWith1 (AnyChunks rep) e, Ord e) => Set (AnyChunks rep e) e
+instance (Nullable (AnyChunks rep e), SetWith1 (AnyChunks rep) e, Ord e)
+      => Set (AnyChunks rep e) e
 
-instance (SetWith1 rep e, Linear1 rep e, Ord (rep e), Bordered1 rep Int e) => SetWith (AnyChunks rep e) e
+instance (SetWith1 rep e, Linear1 rep e, Ord (rep e), Bordered1 rep Int e)
+      => SetWith (AnyChunks rep e) e
   where
     insertWith f' e' = AnyChunks . go f' e' . toChunks
       where
@@ -630,7 +647,8 @@ instance (Indexed1 rep Int e) => Indexed (AnyChunks rep e) Int e
 
 {- MapM and IndexedM instances. -}
 
-instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e) => MapM m (AnyChunks rep e) Int e
+instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e)
+      => MapM m (AnyChunks rep e) Int e
   where
     newMap ascs = AnyChunks <$> sequence (go bnds ascs)
       where
@@ -691,7 +709,8 @@ instance (IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
 
 {- SortM instance. -}
 
-instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e) => SortM m (AnyChunks rep e) e
+instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e)
+      => SortM m (AnyChunks rep e) e
   where
     sortMBy     = timSortBy
     sortedMBy f = go . toChunks
@@ -705,7 +724,8 @@ instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e) => SortM m (
 --------------------------------------------------------------------------------
 
 -- | Creates new local immutable structure and thaw it unsafely.
-instance {-# OVERLAPPABLE #-} (Linear1 imm e, Thaw1 m imm mut e) => Thaw m (AnyChunks imm e) (mut e)
+instance {-# OVERLAPPABLE #-} (Linear1 imm e, Thaw1 m imm mut e)
+      => Thaw m (AnyChunks imm e) (mut e)
   where
     -- @concat [e]@ may return e
     thaw (AnyChunks [e]) = thaw e
@@ -715,29 +735,34 @@ instance {-# OVERLAPPABLE #-} (Linear1 imm e, Thaw1 m imm mut e) => Thaw m (AnyC
     unsafeThaw = unsafeThaw . concat . toChunks
 
 -- | Creates one-chunk mutable stream, may be memory inefficient.
-instance {-# OVERLAPPABLE #-} (Thaw1 m imm mut e) => Thaw m (imm e) (AnyChunks mut e)
+instance {-# OVERLAPPABLE #-} (Thaw1 m imm mut e)
+      => Thaw m (imm e) (AnyChunks mut e)
   where
     unsafeThaw = fmap (AnyChunks . single) . unsafeThaw
     thaw       = fmap (AnyChunks . single) . thaw
 
-instance {-# OVERLAPS #-} (Thaw1 m imm mut e) => Thaw m (AnyChunks imm e) (AnyChunks mut e)
+instance {-# OVERLAPS #-} (Thaw1 m imm mut e)
+      => Thaw m (AnyChunks imm e) (AnyChunks mut e)
   where
     unsafeThaw (AnyChunks imm) = AnyChunks <$> mapM unsafeThaw imm
     thaw       (AnyChunks imm) = AnyChunks <$> mapM thaw imm
 
 -- | Creates one-chunk immutable stream, may be memory inefficient.
-instance {-# OVERLAPPABLE #-} (Freeze1 m mut imm e) => Freeze m (mut e) (AnyChunks imm e)
+instance {-# OVERLAPPABLE #-} (Freeze1 m mut imm e)
+      => Freeze m (mut e) (AnyChunks imm e)
   where
     unsafeFreeze = fmap (AnyChunks . single) . unsafeFreeze
     freeze       = fmap (AnyChunks . single) . freeze
 
 -- | Creates new immutable structure using 'merged'.
-instance {-# OVERLAPPABLE #-} (LinearM1 m mut e, Freeze1 m mut imm e) => Freeze m (AnyChunks mut e) (imm e)
+instance {-# OVERLAPPABLE #-} (LinearM1 m mut e, Freeze1 m mut imm e)
+      => Freeze m (AnyChunks mut e) (imm e)
   where
     unsafeFreeze (AnyChunks es) = unsafeFreeze =<< merged es
     freeze       (AnyChunks es) = freeze       =<< merged es
 
-instance {-# OVERLAPS #-} (Freeze1 m mut imm e) => Freeze m (AnyChunks mut e) (AnyChunks imm e)
+instance {-# OVERLAPS #-} (Freeze1 m mut imm e)
+      => Freeze m (AnyChunks mut e) (AnyChunks imm e)
   where
     unsafeFreeze (AnyChunks mut) = AnyChunks <$> mapM unsafeFreeze mut
     freeze       (AnyChunks mut) = AnyChunks <$> mapM freeze mut

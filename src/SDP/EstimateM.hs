@@ -70,18 +70,23 @@ class Monad m => EstimateM m e
     lestimateMLT' :: e -> Int -> m Bool
     lestimateMLT' e i = (== LT) <$> lestimateM' e i
     
+    -- | Compare structure length with given number.
     lestimateMGT' :: e -> Int -> m Bool
     lestimateMGT' e i = (== GT) <$> lestimateM' e i
     
+    -- | Compare structure length with given number.
     lestimateMLE' :: e -> Int -> m Bool
     lestimateMLE' e i = (/= GT) <$> lestimateM' e i
     
+    -- | Compare structure length with given number.
     lestimateMGE' :: e -> Int -> m Bool
     lestimateMGE' e i = (/= LT) <$> lestimateM' e i
     
+    -- | Compare structure length with given number.
     lestimateMEQ' :: e -> Int -> m Bool
     lestimateMEQ' e i = (== EQ) <$> lestimateM' e i
     
+    -- | Compare structure length with given number.
     lestimateMNE' :: e -> Int -> m Bool
     lestimateMNE' e i = (/= EQ) <$> lestimateM' e i
     
@@ -89,18 +94,23 @@ class Monad m => EstimateM m e
     estimateMLT :: e -> e -> m Bool
     estimateMLT e1 e2 = (== LT) <$> estimateM e1 e2
     
+    -- | Compare pair of structures by length.
     estimateMGT :: e -> e -> m Bool
     estimateMGT e1 e2 = (== GT) <$> estimateM e1 e2
     
+    -- | Compare pair of structures by length.
     estimateMLE :: e -> e -> m Bool
     estimateMLE e1 e2 = (/= GT) <$> estimateM e1 e2
     
+    -- | Compare pair of structures by length.
     estimateMGE :: e -> e -> m Bool
     estimateMGE e1 e2 = (/= LT) <$> estimateM e1 e2
     
+    -- | Compare pair of structures by length.
     estimateMEQ :: e -> e -> m Bool
     estimateMEQ e1 e2 = (== EQ) <$> estimateM e1 e2
     
+    -- | Compare pair of structures by length.
     estimateMNE :: e -> e -> m Bool
     estimateMNE e1 e2 = (/= EQ) <$> estimateM e1 e2
 
@@ -114,18 +124,23 @@ restimateM' i e = (\ b -> case b of {LT -> GT; EQ -> EQ; GT -> LT}) <$> lestimat
 restimateMLT' :: EstimateM m e => Int -> e -> m Bool
 restimateMLT' =  flip lestimateMLT'
 
+-- | Compare given number with structure length.
 restimateMGT' :: EstimateM m e => Int -> e -> m Bool
 restimateMGT' =  flip lestimateMGT'
 
+-- | Compare given number with structure length.
 restimateMLE' :: EstimateM m e => Int -> e -> m Bool
 restimateMLE' =  flip lestimateMLE'
 
+-- | Compare given number with structure length.
 restimateMGE' :: EstimateM m e => Int -> e -> m Bool
 restimateMGE' =  flip lestimateMGE'
 
+-- | Compare given number with structure length.
 restimateMEQ' :: EstimateM m e => Int -> e -> m Bool
 restimateMEQ' =  flip lestimateMEQ'
 
+-- | Compare given number with structure length.
 restimateMNE' :: EstimateM m e => Int -> e -> m Bool
 restimateMNE' =  flip lestimateMNE'
 

@@ -6,7 +6,7 @@
 
 {- |
     Module      :  SDP.Forceable
-    Copyright   :  (c) Andrey Mulik 2021
+    Copyright   :  (c) Andrey Mulik 2021-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -53,17 +53,33 @@ class Forceable f
     force :: f -> f
     force =  id
 
--- | @since 0.3 'Forceable' contraint for @(Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Forceable' contraint for @(Type -> Type)@-kind types.
+-}
 type Forceable1 f e = Forceable (f e)
 
--- | @since 0.3 'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
+-}
 type Forceable2 f i e = Forceable (f i e)
 
 #if __GLASGOW_HASKELL__ >= 806
--- | @since 0.3 'Forceable' contraint for @(Type -> Type@-kind types.
+{- |
+  @since 0.3
+  
+  'Forceable' contraint for @(Type -> Type@-kind types.
+-}
 type Forceable' f = forall e . Forceable (f e)
 
--- | @since 0.3 'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
+-}
 type Forceable'' f = forall i e . Forceable (f i e)
 #endif
 
@@ -74,7 +90,6 @@ type Forceable'' f = forall i e . Forceable (f i e)
   memory, so 'force' is just 'id'.
 -}
 instance Forceable [a]
-
 
 
 

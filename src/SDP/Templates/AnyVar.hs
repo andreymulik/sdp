@@ -71,13 +71,16 @@ instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
     lestimateM' xs n = do xs' <- get this (fromAnyVar xs); lestimateM' xs' n
     estimateM        = on (join ... liftA2 estimateM) (get this.fromAnyVar)
 
-instance (Index i, MonadVar m, BorderedM1 m rep i e) => BorderedM m (AnyVar m rep e) i
+instance (Index i, MonadVar m, BorderedM1 m rep i e)
+      => BorderedM m (AnyVar m rep e) i
   where
     getIndices = getIndices <=< get this.fromAnyVar
     getSizeOf  = getSizeOf  <=< get this.fromAnyVar
     getBounds  = getBounds  <=< get this.fromAnyVar
     getLower   = getLower   <=< get this.fromAnyVar
     getUpper   = getUpper   <=< get this.fromAnyVar
+    
+    rebounded' bnds es = es <$ modifyRecordM this' (fromAnyVar es) (rebounded' bnds)
 
 --------------------------------------------------------------------------------
 
@@ -87,7 +90,8 @@ instance (MonadVar m, Copyable1 m rep e) => Copyable m (AnyVar m rep e)
   where
     copied = pack <=< copied <=< get this.fromAnyVar
 
-instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => LinearM m (AnyVar m rep e) e
+instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e)
+      => LinearM m (AnyVar m rep e) e
   where
     getHead = getHead <=< get this.fromAnyVar
     getLast = getLast <=< get this.fromAnyVar
@@ -141,7 +145,8 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e, LinearM1 m rep e) => Linear
 
 {- MapM and IndexedM instances. -}
 
-instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key e) => MapM m (AnyVar m rep e) key e
+instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key e)
+      => MapM m (AnyVar m rep e) key e
   where
     newMap' = pack <=<< newMap'
     newMap  = pack <=<  newMap
@@ -155,7 +160,8 @@ instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key 
     kfoldrM f base = kfoldrM f base <=< get this.fromAnyVar
     kfoldlM f base = kfoldlM f base <=< get this.fromAnyVar
 
-instance (MonadVar m, IndexedM1 m rep key e) => IndexedM m (AnyVar m rep e) key e
+instance (MonadVar m, IndexedM1 m rep key e)
+      => IndexedM m (AnyVar m rep e) key e
   where
     fromAssocs  (l, u)   = pack <=< fromAssocs  (l, u)
     fromAssocs' (l, u) e = pack <=< fromAssocs' (l, u) e
@@ -167,7 +173,8 @@ instance (MonadVar m, IndexedM1 m rep key e) => IndexedM m (AnyVar m rep e) key 
 
 {- SortM instances. -}
 
-instance (MonadVar m, SortM1 m rep e) => SortM m (AnyVar m rep e) e
+instance (MonadVar m, SortM1 m rep e)
+      => SortM m (AnyVar m rep e) e
   where
     sortedMBy f = sortedMBy f <=< get this.fromAnyVar
     sortMBy   f = sortMBy   f <=< get this.fromAnyVar
@@ -176,12 +183,14 @@ instance (MonadVar m, SortM1 m rep e) => SortM m (AnyVar m rep e) e
 
 {- Freeze and Thaw instances. -}
 
-instance (MonadVar m, Thaw m imm (mut e)) => Thaw m imm (AnyVar m mut e)
+instance (MonadVar m, Thaw m imm (mut e))
+      => Thaw m imm (AnyVar m mut e)
   where
     unsafeThaw = pack <=< unsafeThaw
     thaw       = pack <=< thaw
 
-instance (MonadVar m, Freeze m (imm e) mut) => Freeze m (AnyVar m imm e) mut
+instance (MonadVar m, Freeze m (imm e) mut)
+      => Freeze m (AnyVar m imm e) mut
   where
     unsafeFreeze = get this.fromAnyVar >=> unsafeFreeze
     freeze       = get this.fromAnyVar >=> freeze
@@ -196,5 +205,6 @@ pack =  fmap AnyVar . var
 withAnyVar :: (MonadVar m, Typeable m, Typeable rep, Typeable (Var m), Typeable e)
            => (rep e -> m (rep e)) -> AnyVar m rep e -> m ()
 withAnyVar f ps = () <$ modifyRecordM this' (fromAnyVar ps) f
+
 
 

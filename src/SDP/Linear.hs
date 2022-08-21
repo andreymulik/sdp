@@ -153,11 +153,11 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     
     -- | Separates line to 'head' and 'tail', deconstructor for ':>' pattern.
     uncons :: l -> (e, l)
-    uncons xs = case uncons' xs of {Just res -> res; _ -> emptyEx "(:>)"}
+    uncons xs = case uncons' xs of {Just res -> res; _ -> pfailEx "(:>)"}
     
     -- | Separates line to 'init' and 'last', deconstructor for ':<' pattern.
     unsnoc :: l -> (l, e)
-    unsnoc xs = case unsnoc' xs of {Just res -> res; _ -> emptyEx "(:<)"}
+    unsnoc xs = case unsnoc' xs of {Just res -> res; _ -> pfailEx "(:<)"}
     
     -- | Returns first element of line, may fail.
     head :: l -> e
@@ -206,7 +206,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     fromListN =  fromList ... L.take
     
     -- | Generalized 'fromList'.
-    fromFoldable :: (Foldable f) => f e -> l
+    fromFoldable :: Foldable f => f e -> l
     fromFoldable =  foldr toHead Z
     
     -- | @replicate n e@ returns a line of @n@ repetitions of the element @e@.
@@ -237,20 +237,53 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     write :: l -> Int -> e -> l
     write es = fromList ... write (listL es)
     
-    foreachO :: Monad m => (Int -> e -> m r) -> l -> m [r]
-    foreachO f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
+    {- |
+      @since 0.3
+      
+      Same as 'listWith'', but actions can be performed in any order (may be
+      parallel).
+    -}
+    listWith :: Monad m => (Int -> e -> m r) -> l -> m [r]
+    listWith =  listWith'
     
-    foreachO' :: Monad m => (Int -> e -> m e) -> l -> m l
-    foreachO' =  fmap fromList ... foreachO
+    {- |
+      @since 0.3
+      
+      @'listWith'' go es@ executes an action @go@ for each offset and element
+      of @es@ from left to right.
+      
+      @
+      listWith' go es === listWith' go (listL es) === mapWith' go (listL es)
+      @
+    -}
+    listWith' :: Monad m => (Int -> e -> m r) -> l -> m [r]
+    listWith' f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
+    
+    {- |
+      @since 0.3
+      
+      Same as 'mapWith'', but actions can be performed in any order (may be
+      parallel).
+    -}
+    mapWith :: Monad m => (Int -> e -> m e) -> l -> m l
+    mapWith =  fmap fromList ... listWith
+    
+    {- |
+      @since 0.3
+      
+      Same as 'listWith'', but keeps argument stucture like 'fmap'.
+    -}
+    mapWith' :: Monad m => (Int -> e -> m e) -> l -> m l
+    mapWith' =  fmap fromList ... listWith'
     
     {- Custom -}
     
     -- | Generalized concat.
-    concat :: (Foldable f) => f l -> l
+    concat :: Foldable f => f l -> l
     concat =  foldr (++) Z
     
     -- | Generalized concatMap.
-    concatMap :: (Foldable f) => (a -> l) -> f a -> l
+    concatMap :: Foldable f => (a -> l) -> f a -> l
     concatMap f = concat . foldr ((:) . f) []
     
     -- | Generalized intersperse.
@@ -270,7 +303,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     partition p es = (filter p es, except p es)
     
     -- | Generalization of partition, that select sublines by predicates.
-    partitions :: (Foldable f) => f (e -> Bool) -> l -> [l]
+    partitions :: Foldable f => f (e -> Bool) -> l -> [l]
     partitions ps es =
       let f = \ es' -> case es' of
             (x : xs) -> (\ (y, ys) -> (ys : y : xs)) . (`partition` x)
@@ -306,7 +339,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       remainder of @es@, returns a list of selections and the remainder of the
       last selection.
     -}
-    selects :: (Foldable f) => f (e -> Maybe a) -> l -> ([[a]], l)
+    selects :: Foldable f => f (e -> Maybe a) -> l -> ([[a]], l)
     selects fs es =
       let g = \ as -> first (: as) ... flip extract
       in  foldl (uncurry g) ([], es) fs
@@ -332,7 +365,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     iterate n = fromListN n ... iterate n
     
     -- | Same as @nubBy ('==')@.
-    nub :: (Eq e) => l -> l
+    nub :: Eq e => l -> l
     nub =  nubBy (==)
     
     -- | Generalization of nubBy.
@@ -369,25 +402,25 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     o_foldr1 :: (e -> e -> e) -> l -> e
     o_foldr1 f = \ es' -> case es' of
       (es :< e) -> o_foldr f e es
-      _         -> emptyEx "o_foldr1"
+      _         -> pfailEx "o_foldr1"
     
     -- | 'o_foldl1' is just 'Data.Foldable.foldl1' in 'Linear' context.
     o_foldl1 :: (e -> e -> e) -> l -> e
     o_foldl1 f = \ es' -> case es' of
       (e :> es) -> o_foldl f e es
-      _         -> emptyEx "o_foldl1"
+      _         -> pfailEx "o_foldl1"
     
     -- | 'o_foldr1'' is just strict 'Data.Foldable.foldr1' in 'Linear' context.
     o_foldr1' :: (e -> e -> e) -> l -> e
     o_foldr1' f = \ es' -> case es' of
       (es :< e) -> o_foldr' f e es
-      _         -> emptyEx "o_foldr1'"
+      _         -> pfailEx "o_foldr1'"
     
     -- | 'o_foldl1'' is just 'Data.Foldable.foldl1'' in 'Linear' context.
     o_foldl1' :: (e -> e -> e) -> l -> e
     o_foldl1' f = \ es' -> case es' of
       (e :> es) -> o_foldl' f e es
-      _         -> emptyEx "o_foldl1'"
+      _         -> pfailEx "o_foldl1'"
     
     {- Don't touch. -}
     
@@ -465,22 +498,22 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     -- | @take n es@ takes first @n@ elements of @es@.
     take :: Int -> l -> l
     take n es = sans (sizeOf es - n) es
-    default take :: (Bordered l i) => Int -> l -> l
+    default take :: Bordered l i => Int -> l -> l
     
     -- | @drop n es@ drops first @n@ elements of @es@.
     drop :: Int -> l -> l
     drop n es = keep (sizeOf es - n) es
-    default drop :: (Bordered l i) => Int -> l -> l
+    default drop :: Bordered l i => Int -> l -> l
     
     -- | @keep n es@ takes last @n@ elements of @es@.
     keep :: Int -> l -> l
     keep n es = drop (sizeOf es - n) es
-    default keep :: (Bordered l i) => Int -> l -> l
+    default keep :: Bordered l i => Int -> l -> l
     
     -- | @sans n es@ drops last @n@ elements of @es@.
     sans :: Int -> l -> l
     sans n es = take (sizeOf es - n) es
-    default sans :: (Bordered l i) => Int -> l -> l
+    default sans :: Bordered l i => Int -> l -> l
     
     -- | @split n es@ is same to @(take n es, drop n es)@.
     split :: Int -> l -> (l, l)
@@ -495,7 +528,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       
       > splits [5, 3, 12] ['a'..'z'] = ["abcde","fgh","ijklmnopqrst","uvwxyz"]
     -}
-    splits :: (Foldable f) => f Int -> l -> [l]
+    splits :: Foldable f => f Int -> l -> [l]
     splits ns es =
       let f = \ es' n -> case es' of
             (r : ds) -> let (d, r') = split n r in r' : d : ds
@@ -507,7 +540,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       
       > divides [5,3,12] ['a'..'z'] == ["abcdef","ghijk","lmn","opqrstuvwxyz"]
     -}
-    divides :: (Foldable f) => f Int -> l -> [l]
+    divides :: Foldable f => f Int -> l -> [l]
     divides ns es =
       let f = \ n es' -> case es' of
             (r : ds) -> let (r', d) = divide n r in r' : d : ds
@@ -579,7 +612,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       
       > replaceBy "foo" "bar" "foobafoorbaz" == "barbabarrbaz"
     -}
-    replaceBy :: (Eq e) => l -> l -> l -> l
+    replaceBy :: Eq e => l -> l -> l -> l
     replaceBy sub new = intercalate new . splitsOn sub
     
     {- |
@@ -588,7 +621,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       > removeAll = concat ... splitsOn
       > (`replaceBy` Z) = removeAll
     -}
-    removeAll :: (Eq e) => l -> l -> l
+    removeAll :: Eq e => l -> l -> l
     removeAll =  concat ... splitsOn
     
     {- |
@@ -655,12 +688,12 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
     isPrefixOf xs               ys = isNull xs && isNull ys
     
     -- | @sub `'isSuffixOf'` es@ checks if @sub@ is ending of @es@.
-    isSuffixOf :: (Eq e) => l -> l -> Bool
+    isSuffixOf :: Eq e => l -> l -> Bool
     isSuffixOf (xs :< x) (ys :< y) = x == y && xs `isSuffixOf` ys
     isSuffixOf xs               ys = isNull xs && isNull ys
     
     -- | isInfixOf checks whether the first line is the substring of the second
-    isInfixOf  :: (Eq e) => l -> l -> Bool
+    isInfixOf  :: Eq e => l -> l -> Bool
     isInfixOf _   Z = False
     isInfixOf xs ys = xs `isPrefixOf` ys || xs `isInfixOf` tail ys
     
@@ -681,7 +714,7 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
       > "abab" `infixes` "baababab" == [2]
       > "aaaa" `infixes` "aaaaaaaa" == [0, 4]
     -}
-    infixes :: (Eq e) => l -> l -> [Int]
+    infixes :: Eq e => l -> l -> [Int]
     infixes =  on infixes listL
     
     -- | @dropSide f = dropWhile f . dropEnd f@.
@@ -767,11 +800,11 @@ class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
 --------------------------------------------------------------------------------
 
 -- | Pattern @(':>')@ is left-size view of line. Same as 'uncons' and 'toHead'.
-pattern  (:>)   :: (Linear l e) => e -> l -> l
+pattern  (:>)   :: Linear l e => e -> l -> l
 pattern x :> xs <- (uncons' -> Just (x, xs)) where (:>) = toHead
 
 -- | Pattern @(':<')@ is right-size view of line. Same as 'unsnoc' and 'toLast'.
-pattern   (:<)  :: (Linear l e) => l -> e -> l
+pattern   (:<)  :: Linear l e => l -> e -> l
 pattern xs :< x <- (unsnoc' -> Just (xs, x)) where (:<) = toLast
 
 -- | 'Linear' contraint for @(Type -> Type)@-kind types.
@@ -801,10 +834,10 @@ instance Linear [e] e
     uncons' = isNull ?- uncons
     unsnoc' = isNull ?- unsnoc
     
-    uncons    []    = throw $ PatternMatchFail "in SDP.Linear.(:>)"
+    uncons    []    = pfailEx "(:>)"
     uncons (e : es) = (e, es)
     
-    unsnoc   [ ]    = throw $ PatternMatchFail "in SDP.Linear.(:<)"
+    unsnoc   [ ]    = pfailEx "(:<)"
     unsnoc   [e]    = ([], e)
     unsnoc (e : es) = let (es', e') = unsnoc es in (e : es', e')
     
@@ -907,14 +940,14 @@ instance Linear [e] e
   @save n es@ takes first @n@ elements of @es@ if @n > 0@ and last @-n@
   elements otherwise.
 -}
-save :: (Linear l e) => Int -> l -> l
+save :: Linear l e => Int -> l -> l
 save n = n > 0 ? take n $ keep (-n)
 
 {- |
   @skip n es@ drops first @n@ elements of @es@ if @n > 0@ and last @-n@
   elements otherwise.
 -}
-skip :: (Linear l e) => Int -> l -> l
+skip :: Linear l e => Int -> l -> l
 skip n = n > 0 ? drop n $ sans (-n)
 
 {- |
@@ -953,12 +986,12 @@ intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
 intercalate =  concat ... intersperse
 
 -- | @tails es@ returns sequence of @es@ tails.
-tails :: (Linear l e) => l -> [l]
+tails :: Linear l e => l -> [l]
 tails Z  = [Z]
 tails es = es : tails (tail es)
 
 -- | tails is generalization of inits.
-inits :: (Linear l e) => l -> [l]
+inits :: Linear l e => l -> [l]
 inits Z  = [Z]
 inits es = es : inits (init es)
 
@@ -974,7 +1007,9 @@ ascending =  all sorted ... flip splits
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
 
-emptyEx :: String -> a
-emptyEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+pfailEx :: String -> a
+pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+
+
 
 

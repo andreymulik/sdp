@@ -41,7 +41,7 @@ default ()
 -- | 'BorderedM' is 'Bordered' version for mutable data structures.
 class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
   where
-    {-# MINIMAL (getBounds|getLower, getUpper) #-}
+    {-# MINIMAL (getBounds|getLower, getUpper), rebounded' #-}
     
     -- | 'getBounds' returns 'bounds' of mutable data structure.
     getBounds :: b -> m (i, i)
@@ -78,6 +78,33 @@ class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
     -- | 'getIndices' returns 'indices' of mutable data structure.
     getIndices :: b -> m [i]
     getIndices =  fmap range . getBounds
+    
+    {- |
+      @since 0.3
+      
+      @'rebounded' es bnds@ changes structure bounds, if possible - in place.
+      
+      * If given bounds is empty, returns an empty structure (with *any* empty
+      bounds, e.g. @defaultBounds 0@).
+      * If the new range is lesser than the current size of the structure,
+      bounds of a suitable size must be set
+      * If the new range is larger than the current size of the structure, an
+      'UnacceptableExpansion' exception occurs
+      * If the transferred boundaries cannot be set for other reasons,
+      boundaries of the same size should be set.
+      
+      You can calculate new boundaries if given cannot be set in any way. Unless
+      otherwise stated, @'defaultBounds' ('size' bnds)@ is implied.
+    -}
+    rebounded :: (i, i) -> b -> m b
+    rebounded =  rebounded'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'rebounded', but always create new structure.
+    -}
+    rebounded' :: (i, i) -> b -> m b
 
 --------------------------------------------------------------------------------
 
@@ -94,7 +121,5 @@ type BorderedM' m l i = forall e . BorderedM m (l e) i
 -- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
 type BorderedM'' m l = forall i e . BorderedM m (l i e) i
 #endif
-
-
 
 

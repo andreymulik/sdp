@@ -226,6 +226,7 @@ instance Monad m => BorderedM m (SArray# e) Int
     getSizeOf  (SArray# c _ _) = return c
     
     getLower _ = return 0
+    rebounded' = return ... rebound
 
 --------------------------------------------------------------------------------
 
@@ -637,7 +638,7 @@ instance SetWith (SArray# e) e
             x = xs !^ i
             y = ys !^ j
     
-    memberWith = binaryContain
+    memberWith = memberSorted
     
     lookupLTWith _ _ Z = Nothing
     lookupLTWith f o es
@@ -867,6 +868,7 @@ instance BorderedM (ST s) (STArray# s e) Int
     getSizeOf  (STArray# c _ _) = return c
     
     getLower _ = return 0
+    rebounded' = takeM . size
 
 --------------------------------------------------------------------------------
 
@@ -1145,6 +1147,8 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
     getSizeOf  = return . sizeOf . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
+    
+    rebounded' = takeM . size
     getLower _ = return 0
 
 --------------------------------------------------------------------------------
@@ -1381,5 +1385,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
 
 

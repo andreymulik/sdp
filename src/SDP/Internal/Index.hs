@@ -78,7 +78,7 @@ class (Index i, Index j, Index (i :|: j)) => Sub i j
       
       @
       dropDim ([1,2,3,4] :: I4 Int)    ([] :: E)      === [1,2,3,4]
-      dropDim ([1,2,3,4] :: I4 Int) ([1,2] :: I2 Int) ===   [3,4]
+      dropDim ([1,2,3,4] :: I4 Int) ([1,2] :: I2 Int) ===   [3,4]@
     -}
     dropDim :: i -> j -> i :|: j
     
@@ -87,8 +87,7 @@ class (Index i, Index j, Index (i :|: j)) => Sub i j
       
       @
       joinDim ([1,2] :: I2 Int)  [3]  ===  [1,2,3]  :: I3 Int
-      joinDim ([1,2] :: I2 Int) [3,4] === [1,2,3,4] :: I4 Int
-      @
+      joinDim ([1,2] :: I2 Int) [3,4] === [1,2,3,4] :: I4 Int@
     -}
     joinDim :: j -> i :|: j -> i
     
@@ -97,8 +96,7 @@ class (Index i, Index j, Index (i :|: j)) => Sub i j
       
       @
       takeDim ([1,2,3,4] :: I4 Int) === [1] :: I1 Int
-      takeDim ([1,2,3,4] :: I4 Int) === E
-      @
+      takeDim ([1,2,3,4] :: I4 Int) === E@
     -}
     takeDim :: i -> j
 
@@ -524,7 +522,8 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
         lim :: Index i => (i' :& i :& i) -> i -> Integer
         lim =  const (fromMaybe n . defLimit)
     
-    extendBounds (i :& is) (l :& ls, u :& us) = (l' :& ls', u' :& us')
+    extendBounds i'@(i :& is) bnds@(l :& ls, u :& us) =
+        isEmpty bnds ? (i', i') $ (l' :& ls', u' :& us')
       where
         (ls', us') = extendBounds is (ls, us)
         (l',   u') = extendBounds i  (l,   u)
@@ -595,11 +594,12 @@ checkBounds bnds i res = case inBounds bnds i of
   UR -> throw . IndexUnderflow  . showString "in SDP.Index."
   IN -> const res
 
+--------------------------------------------------------------------------------
+
 emptyEx :: String -> a
 emptyEx =  throw . EmptyRange . showString "in SDP.Index."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Index."
-
 
 
