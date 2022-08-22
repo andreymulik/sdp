@@ -203,7 +203,7 @@ unpick (I# n#) f es = runST $ ST $ \ s1# -> case newArray# n# [] s1# of
 
 --------------------------------------------------------------------------------
 
-{-# DEPRECATED binaryContain "deprecated in favour 'SDP.Indexed.binaryContain' \
+{-# DEPRECATED binaryContain "deprecated in favour 'SDP.Indexed.memberSorted' \
       \will be removed in sdp-0.4" #-}
 
 -- | 'binaryContain' checks that sorted structure has equal element.
