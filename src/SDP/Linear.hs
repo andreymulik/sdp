@@ -2,6 +2,14 @@
 {-# LANGUAGE PatternSynonyms, ViewPatterns, BangPatterns, DefaultSignatures #-}
 {-# LANGUAGE Trustworthy, CPP, TypeFamilies, ConstraintKinds #-}
 
+#ifdef __GLASGOW_HASKELL__
+#define SDP_LINEAR_EXTRAS
+#endif
+
+#ifdef SDP_LINEAR_EXTRAS
+{-# LANGUAGE FlexibleContexts #-}
+#endif
+
 #if __GLASGOW_HASKELL__ >= 806
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
@@ -53,6 +61,10 @@ import SDP.Sort
 import SDP.Zip
 
 import qualified Data.List as L
+
+#ifdef SDP_LINEAR_EXTRAS
+import qualified GHC.Exts as L
+#endif
 
 import Control.Exception.SDP
 
@@ -124,11 +136,17 @@ infixl 9 !^
     select f = foldr (\ x es -> case f x of {Just e -> e : es; _ -> es}) []
   @
 -}
-#if MIN_VERSION_base(4,11,0)
-class (Nullable l, Forceable l, Monoid l) => Linear l e | l -> e
-#else
-class (Nullable l, Forceable l, Semigroup l, Monoid l) => Linear l e | l -> e
+class
+  (
+    Monoid l, Nullable l,
+#if !MIN_VERSION_base(4,11,0)
+    Semigroup l,
 #endif
+#ifdef SDP_LINEAR_EXTRAS
+    L.IsList l, L.Item l ~ e,
+#endif
+    Forceable l
+  ) => Linear l e | l -> e
   where
     {-# MINIMAL toHead, toLast, (take|sans), (drop|keep),
         (uncons'|(head,tail)|uncons), (unsnoc'|(init,last)|unsnoc) #-}
@@ -1009,7 +1027,4 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
-
-
 
