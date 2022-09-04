@@ -45,7 +45,7 @@ type Unlist = AnyChunks SArray#
 
 {- Eq1 and Ord1 instances. -}
 
-#if __GLASGOW_HASKELL__ < 806
+#ifndef SDP_QUALIFIED_CONSTRAINTS
 {- |
   Legacy 'Eq1' instance for @GHC < 8.6.1@
   
@@ -86,7 +86,7 @@ instance Ord1 Unlist
 
 {- Zip instance. -}
 
-#if __GLASGOW_HASKELL__ < 806
+#ifndef SDP_QUALIFIED_CONSTRAINTS
 {- |
   Legacy 'Zip' instance for @GHC < 8.6.1@
   

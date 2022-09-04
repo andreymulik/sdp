@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, MagicHash, PatternSynonyms, ViewPatterns, DefaultSignatures #-}
 {-# LANGUAGE Trustworthy, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -19,7 +19,7 @@ module SDP.Nullable
   -- * Nullable
   Nullable (..), Nullable1, Nullable2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Nullable', Nullable'',
@@ -108,7 +108,7 @@ type Nullable1 rep e = Nullable (rep e)
 -}
 type Nullable2 rep i e = Nullable (rep i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |
   @since 0.2.1
   'Nullable' contraint for @(Type -> Type)@-kind types.

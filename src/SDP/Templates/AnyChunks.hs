@@ -2,7 +2,7 @@
 {-# LANGUAGE Trustworthy, CPP, UndecidableInstances, BangPatterns #-}
 {-# LANGUAGE TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints #-}
 #endif
 
@@ -114,7 +114,7 @@ instance (Ord (rep e), Bordered1 rep Int e, Linear1 rep e) => Ord (AnyChunks rep
 
 {- Eq1 and Ord1 instances. -}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 instance (Bordered' rep Int, Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
   where
     liftEq f xs ys
@@ -196,7 +196,7 @@ instance Applicative rep => Applicative (AnyChunks rep)
     AnyChunks fs <*> AnyChunks es = AnyChunks $ liftA2 (<*>) fs es
     pure e = AnyChunks [pure e]
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 instance (Functor rep, Bordered' rep Int, Linear' rep) => Zip (AnyChunks rep)
   where
     all2 f as bs             = all2 f (listL as) (listL bs)

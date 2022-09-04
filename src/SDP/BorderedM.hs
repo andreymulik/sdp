@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -22,7 +22,7 @@ module SDP.BorderedM
   -- * Monadic Bordered
   BorderedM (..), BorderedM1, BorderedM2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   BorderedM', BorderedM''
@@ -114,7 +114,7 @@ type BorderedM1 m l i e = BorderedM m (l e) i
 -- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
 type BorderedM2 m l i e = BorderedM m (l i e) i
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'BorderedM' contraint for @(Type -> Type)@-kind types.
 type BorderedM' m l i = forall e . BorderedM m (l e) i
 

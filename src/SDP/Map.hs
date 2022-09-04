@@ -1,13 +1,13 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, ConstraintKinds, DefaultSignatures #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
 {- |
     Module      :  SDP.Map
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -22,7 +22,7 @@ module SDP.Map
   -- * Map
   Map (..), Map1, Map2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Map', Map''
@@ -54,7 +54,7 @@ infixl 9 .!, !, !?
   to 'Linear' data structures and aren't limited by the 'Bordered' context
   (doesn't restrict key type).
 -}
-class (Nullable map) => Map map key e | map -> key, map -> e
+class Nullable map => Map map key e | map -> key, map -> e
   where
     {-# MINIMAL toMap', ((.!) | (!?)) #-}
     
@@ -102,11 +102,11 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       default value.
     -}
     delete' :: key -> map -> map
-    default delete' :: (Eq key) => key -> map -> map
+    default delete' :: Eq key => key -> map -> map
     delete' k = toMap . except ((== k) . fst) . assocs
     
     -- | @'member'' key map@ checks if @key@ in @map@.
-    default member' :: (Bordered map key) => key -> map -> Bool
+    default member' :: Bordered map key => key -> map -> Bool
     member' :: key -> map -> Bool
     member' =  flip indexIn
     
@@ -139,7 +139,7 @@ class (Nullable map) => Map map key e | map -> key, map -> e
     
     -- | @('!')@ is well-safe reader, may 'throw' 'IndexException'.
     (!) :: map -> key -> e
-    default (!) :: (Bordered map key) => map -> key -> e
+    default (!) :: Bordered map key => map -> key -> e
     (!) es i = case inBounds (bounds es) i of
         IN -> es .! i
         ER -> empEx   msg
@@ -162,7 +162,7 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       
       'union'' merges/chooses elements with equal keys from two maps.
     -}
-    union' :: (Ord key) => (e -> e -> e) -> map -> map -> map
+    union' :: Ord key => (e -> e -> e) -> map -> map -> map
     union' f = toMap ... on go assocs
       where
         go xs'@(x'@(i, x) : xs) ys'@(y'@(j, y) : ys) = case i <=> j of
@@ -179,7 +179,7 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       
       Note that 'difference'' is poorer than a similar functions in containers.
     -}
-    difference' :: (Ord key) => (e -> e -> Maybe e) -> map -> map -> map
+    difference' :: Ord key => (e -> e -> Maybe e) -> map -> map -> map
     difference' f = toMap ... on go assocs
       where
         go xs'@(x'@(i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
@@ -193,7 +193,7 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       if @isJust (f x y)@ (where @(k1, x) <- mx, (k2, y) <- my, k1 == k2@),
       then element is added to result map.
     -}
-    intersection' :: (Ord key) => (e -> e -> e) -> map -> map -> map
+    intersection' :: Ord key => (e -> e -> e) -> map -> map -> map
     intersection' f = toMap ... on go assocs
       where
         go xs'@((i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
@@ -210,21 +210,21 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       @lookupLT' k map@ finds pair @(key, value)@ with smallest @key@, where
       @key < k@ (if any). @k@ may not be a @map@ element.
     -}
-    lookupLT' :: (Ord key) => key -> map -> Maybe (key, e)
+    lookupLT' :: Ord key => key -> map -> Maybe (key, e)
     lookupLT' k = lookupLTWith cmpfst (k, unreachEx "lookupLT'") . assocs
     
     {- |
       @lookupGT' k map@ finds pair @(key, value)@ with greatest @key@, where
       @key > k@ (if any). @k@ may not be a @map@ element.
     -}
-    lookupGT' :: (Ord key) => key -> map -> Maybe (key, e)
+    lookupGT' :: Ord key => key -> map -> Maybe (key, e)
     lookupGT' k = lookupGTWith cmpfst (k, unreachEx "lookupGT'") . assocs
     
     {- |
       @lookupLE' k map@ finds pair @(key, value)@ with smallest @key@, where
       @key <= k@ (if any). If @k@ is a @map@ element, returns @(k, e)@.
     -}
-    lookupLE' :: (Ord key) => key -> map -> Maybe (key, e)
+    lookupLE' :: Ord key => key -> map -> Maybe (key, e)
     lookupLE' k me = (,) k <$> (me !? k) <|> lookupLEWith cmpfst
       (k, unreachEx "lookupLE'") (assocs me)
     
@@ -232,7 +232,7 @@ class (Nullable map) => Map map key e | map -> key, map -> e
       @lookupGE' k map@ finds pair @(key, value)@ with  @key@, where
       @key >= k@ (if any).
     -}
-    lookupGE' :: (Ord key) => key -> map -> Maybe (key, e)
+    lookupGE' :: Ord key => key -> map -> Maybe (key, e)
     lookupGE' k me = (,) k <$> (me !? k) <|> lookupGEWith cmpfst
       (k, unreachEx "lookupGE'") (assocs me)
     
@@ -274,7 +274,7 @@ type Map1 map key e = Map (map e) key e
 -- | 'Map' contraint for @(Type -> Type -> Type)@-kind types.
 type Map2 map key e = Map (map key e) key e
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Map' contraint for @(Type -> Type)@-kind types.
 type Map' map key = forall e . Map (map e) key e
 

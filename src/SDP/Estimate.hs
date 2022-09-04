@@ -1,6 +1,6 @@
 {-# LANGUAGE Safe, CPP, ConstraintKinds, FlexibleInstances #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -22,7 +22,7 @@ module SDP.Estimate
   -- * Estimate
   Estimate (..), Estimate1, Estimate2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Estimate', Estimate'',
@@ -106,7 +106,7 @@ type Estimate1 rep e = Estimate (rep e)
 -- | @(Type -> Type -> Type)@ kind 'Estimate'.
 type Estimate2 rep i e = Estimate (rep i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Estimate' quantified contraint for @(Type -> Type)@-kind types.
 type Estimate' rep = forall e . Estimate (rep e)
 

@@ -2,15 +2,11 @@
 {-# LANGUAGE PatternSynonyms, ViewPatterns, BangPatterns, DefaultSignatures #-}
 {-# LANGUAGE Trustworthy, CPP, TypeFamilies, ConstraintKinds #-}
 
-#ifdef __GLASGOW_HASKELL__
-#define SDP_LINEAR_EXTRAS
-#endif
-
 #ifdef SDP_LINEAR_EXTRAS
 {-# LANGUAGE FlexibleContexts #-}
 #endif
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -39,7 +35,7 @@ module SDP.Linear
   -- * Linear class
   Linear (..), Linear1, Linear2, pattern (:>), pattern (:<),
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Linear', Linear'',
@@ -612,7 +608,7 @@ class
       > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
     -}
     splitsOn :: (Eq e) => l -> l -> [l]
-#if __GLASGOW_HASKELL__ >= 820
+#if __GLASGOW_HASKELL__ >= 802
     default splitsOn :: (Eq e, Bordered l i) => l -> l -> [l]
     splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
     -- ghc-8.0.1 has bug in default signatures, so this can be used with it
@@ -825,13 +821,15 @@ pattern x :> xs <- (uncons' -> Just (x, xs)) where (:>) = toHead
 pattern   (:<)  :: Linear l e => l -> e -> l
 pattern xs :< x <- (unsnoc' -> Just (xs, x)) where (:<) = toLast
 
+--------------------------------------------------------------------------------
+
 -- | 'Linear' contraint for @(Type -> Type)@-kind types.
 type Linear1 l e = Linear (l e) e
 
 -- | 'Linear' contraint for @(Type -> Type -> Type)@-kind types.
 type Linear2 l i e = Linear (l i e) e
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Linear' contraint for @(Type -> Type)@-kind types.
 type Linear' l = forall e . Linear (l e) e
 
@@ -1027,4 +1025,6 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+
+
 

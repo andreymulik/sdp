@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -19,7 +19,7 @@ module SDP.Sort
   -- * Sort
   Sort (..), Sort1, Sort2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Sort', Sort'',
@@ -69,7 +69,7 @@ type Sort1 rep e = Sort (rep e)
 -- | 'Sort' contraint for @(Type -> Type -> Type)@-kind types.
 type Sort2 rep i e = Sort (rep i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Sort' quantified contraint for @(Type -> Type)@-kind types.
 type Sort' rep = forall e . Sort (rep e)
 

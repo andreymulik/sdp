@@ -64,6 +64,16 @@ Library
     ghc-prim           >= 0.5 && < 0.9,
     data-default-class >= 0.1 && < 0.2
   
+  if impl(ghc)
+    cpp-options: -DSDP_LINEAR_EXTRAS
+  
+  if impl(ghc >= 8.6)
+    cpp-options: -DSDP_QUALIFIED_CONSTRAINTS
+  
+  -- GHC 8.0.2 bug
+  if impl(ghc == 8.0.2)
+    cpp-options: -DSDP_DISABLE_SHAPED
+  
   exposed-modules:
     -- Commons
     SDP.SafePrelude

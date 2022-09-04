@@ -2,7 +2,7 @@
 {-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, RankNTypes #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, GADTs, ViewPatterns, PatternSynonyms #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints #-}
 #endif
 
@@ -36,7 +36,7 @@ module SDP.LinearM
   (=+:), (+=:), (~=:),
 #endif
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   LinearM', LinearM''
@@ -567,7 +567,7 @@ type LinearM1 m l e = LinearM m (l e) e
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM2 m l i e = LinearM m (l i e) e
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'LinearM' contraint for @(Type -> Type)@-kind types.
 type LinearM' m l = forall e . LinearM m (l e) e
 

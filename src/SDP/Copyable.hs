@@ -1,6 +1,6 @@
 {-# LANGUAGE Safe, CPP, ConstraintKinds, MultiParamTypeClasses #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -20,7 +20,7 @@ module SDP.Copyable
   -- * Copyable
   Copyable (..), Copyable1, Copyable2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   Copyable', Copyable'',
 #endif
 )
@@ -56,7 +56,7 @@ type Copyable1 m c e = Copyable m (c e)
 -}
 type Copyable2 m c i e = Copyable m (c i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |
   @since 0.3
   

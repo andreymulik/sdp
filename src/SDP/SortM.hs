@@ -1,13 +1,13 @@
 {-# LANGUAGE Safe, CPP, MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
 {- |
     Module      :  SDP.SortM
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -19,7 +19,7 @@ module SDP.SortM
   -- * SortM
   SortM (..), SortM1, SortM2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   SortM', SortM'',
@@ -59,7 +59,7 @@ type SortM1 m s e = SortM m (s e) e
 -- | 'SortM' contraint for @(Type -> Type -> Type)@-kind types.
 type SortM2 m s i e = SortM m (s i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'SortM' quantified contraint for @(Type -> Type)@-kind types.
 type SortM' m s = forall e . SortM m (s e) e
 

@@ -3,7 +3,7 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
 {-# LANGUAGE DefaultSignatures, GADTs, CPP #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -28,7 +28,7 @@ module SDP.Indexed
   -- * Freeze
   Freeze (..), Freeze1, Freeze2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Indexed', Indexed'', Freeze', Freeze''
@@ -42,12 +42,7 @@ import SDP.Linear
 import SDP.Map
 
 import GHC.Exts
-  (
-    Int (..), newArray#, indexArray#, readArray#, writeArray#,
-    unsafeFreezeArray#, (-#)
-  )
-
-import GHC.ST ( ST (..) )
+import GHC.ST
 
 import Control.Exception.SDP
 
@@ -97,31 +92,86 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     accum :: (e -> e' -> e) -> v -> [(i, e')] -> v
     accum f es ies = bounds es `assoc` [ (i, es!i `f` e') | (i, e') <- ies ]
     
-    -- | @es !! ij@ returns subshape @ij@ of @es@.
-    (!!) :: (Indexed2 s j e, s i e ~ v, SubIndex i j) => s i e -> i :|: j -> s j e
+    {- |
+      @since 0.3
+      
+      @es !! ij@ returns subshape @ij@ of @es@.
+    -}
+    (!!) :: (Indexed2 s i e, Indexed2 s j e, SubIndex i j)
+         => v -> i :|: j -> s j e
+    
     es !! ij = toMap $ kfoldr (\ i e ies ->
         let (ij', j) = splitDim i
         in  ij' == ij ? (j, e) : ies $ ies
       ) [] es
     
-    -- | Returns list of @es@ subshapes.
-    slices ::
-      (
-        Indexed2 s (i :|: j) (s j e), s i e ~ v, SubIndex i j, Indexed2 s j e
-      ) => s i e -> s (i :|: j) (s j e)
+    {- |
+      @since 0.3
+      
+      Returns list of @es@ subshapes.
+    -}
+    slices :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j)
+           => v -> s (i :|: j) (s j e)
     
     slices es = let ((ls, l), (us, u)) = splitDim `both` bounds es in assoc (ls, us)
         [
           (ij, assoc (l, u) ies)
         | (ij, ies) <- size (ls, us) `unpick` offset (ls, us) $ kfoldr
           (\ i e xs -> flip (,) e `second` splitDim i : xs) [] es
-      ]
+        ]
     
-    -- | Unslice subshapes.
-    unslice :: (Indexed2 s (i :|: j) (s j e), SubIndex i j, s i e ~ v, Indexed2 s j e)
-            => s (i :|: j) (s j e) -> s i e
+    {- |
+      @since 0.3
+      
+      Unslice subshapes.
+    -}
+    unslice :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j)
+            => s (i :|: j) (s j e) -> v
     
     unslice = toMap . kfoldr (\ i -> (++) . (first (`joinDim` i) <$>) . assocs) []
+    
+#ifndef SDP_DISABLE_SHAPED
+    
+    {- |
+      @since 0.3
+      
+      Stricter version of @('!!')@, returns a subshape of the same type.
+      
+      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
+    -}
+    (!!!) ::
+      (
+        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
+      ) => s i e -> i :|: j -> s j e
+    (!!!) =  (!!)
+    
+    {- |
+      @since 0.3
+      
+      Stricter version of 'slices', returns list of subshapes of the same type.
+      
+      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
+    -}
+    slices' ::
+      (
+        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
+      ) => s i e -> s (i :|: j) (s j e)
+    slices' =  slices
+    
+    {- |
+      @since 0.3
+      
+      Stricter version of 'unslice', creates structure from list of subshapes of
+      the same type.
+      
+      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
+    -}
+    unslice' ::
+      (
+        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
+      ) => s (i :|: j) (s j e) -> s i e
+    unslice' =  unslice
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -157,7 +207,7 @@ type Freeze1 m v' v e = Freeze m (v' e) (v e)
 -- | 'Freeze' contraint for @(Type -> Type -> Type)@-kind types.
 type Freeze2 m v' v i e = Freeze m (v' i e) (v i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Indexed' contraint for @(Type -> Type)@-kind types.
 type Indexed' v i = forall e . Indexed (v e) i e
 

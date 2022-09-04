@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, ConstraintKinds, DefaultSignatures #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -19,7 +19,7 @@ module SDP.MapM
   -- * Mutable maps
   MapM (..), MapM1, MapM2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   MapM', MapM''
@@ -206,7 +206,7 @@ type MapM1 m map key e = MapM m (map e) key e
 -- | 'MapM' contraint for @(Type -> Type -> Type)@-kind types.
 type MapM2 m map key e = MapM m (map key e) key e
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'MapM' contraint for @(Type -> Type)@-kind types.
 type MapM' m map key = forall e . MapM m (map e) key e
 

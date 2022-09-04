@@ -2,7 +2,7 @@
 {-# LANGUAGE Trustworthy, CPP, TypeOperators, TypeFamilies, DefaultSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -23,7 +23,7 @@ module SDP.Set
   -- * Set
   Set (..), Set1, Set2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   SetWith', SetWith'', Set', Set''
@@ -283,7 +283,7 @@ type Set2 s i o = Set (s i o) o
 -- | 'SetWith' contraint for @(Type -> Type -> Type)@-kind types.
 type SetWith2 s i o = SetWith (s i o) o
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Set' quantified contraint for @(Type -> Type)@-kind types.
 type Set' s = forall o . Set (s o) o
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -25,7 +25,7 @@ module SDP.EstimateM
   -- * Estimate
   EstimateM (..), EstimateM1, EstimateM2, restimateM',
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   EstimateM', EstimateM'',
@@ -152,7 +152,7 @@ type EstimateM1 m rep e = EstimateM m (rep e)
 -- | @(Type -> Type -> Type)@ kind 'EstimateM'.
 type EstimateM2 m rep i e = EstimateM m (rep i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'EstimateM' quantified contraint for @(Type -> Type)@-kind types.
 type EstimateM' m rep = forall e . EstimateM m (rep e)
 

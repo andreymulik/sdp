@@ -1,6 +1,6 @@
 {-# LANGUAGE Safe, CPP, MultiParamTypeClasses, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -18,7 +18,7 @@ module SDP.NullableM
   -- * Monadic nullable
   NullableM (..), NullableM1, NullableM2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   NullableM', NullableM''
 #endif
 )
@@ -43,7 +43,7 @@ type NullableM1 m rep e = NullableM m (rep e)
 -- | @since 0.3 'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
 type NullableM2 m rep i e = NullableM m (rep i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 
 {- |
   @since 0.3 'NullableM' contraint for @(Type -> Type)@-kind types.

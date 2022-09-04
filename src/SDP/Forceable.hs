@@ -1,6 +1,6 @@
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -20,7 +20,7 @@ module SDP.Forceable
   -- * Forceable
   Forceable (..), Forceable1, Forceable2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   Forceable', Forceable'',
 #endif
 )
@@ -67,7 +67,7 @@ type Forceable1 f e = Forceable (f e)
 -}
 type Forceable2 f i e = Forceable (f i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |
   @since 0.3
   

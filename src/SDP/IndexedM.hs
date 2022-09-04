@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, DefaultSignatures #-}
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
@@ -27,7 +27,7 @@ module SDP.IndexedM
   -- * Thaw
   Thaw (..), Thaw1, Thaw2,
   
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   IndexedM', IndexedM'', Thaw', Thaw''
@@ -75,13 +75,13 @@ class (LinearM m v e, BorderedM m v i, MapM m v i e) => IndexedM m v i e
     swapM' es i j = do ei <- es >! i; writeM' es i =<< es >! j; writeM' es j ei
     
     -- | fromIndexed' is overloaded version of thaw.
-    fromIndexed' :: (Indexed v' j e) => v' -> m v
+    fromIndexed' :: Indexed v' j e => v' -> m v
     
     -- | fromIndexed converts one mutable structure to other.
-    fromIndexedM :: (IndexedM m v' j e) => v' -> m v
+    fromIndexedM :: IndexedM m v' j e => v' -> m v
     
     -- | reshaped creates new indexed structure from old with reshaping function.
-    reshaped :: (IndexedM m v' j e) => (i, i) -> v' -> (i -> j) -> m v
+    reshaped :: IndexedM m v' j e => (i, i) -> v' -> (i -> j) -> m v
     reshaped bnds es f = flip mupdate (\ i _ -> es !> f i) =<< fromAssocs bnds []
     
     {- |
@@ -96,7 +96,7 @@ class (LinearM m v e, BorderedM m v i, MapM m v i e) => IndexedM m v i e
 --------------------------------------------------------------------------------
 
 -- | Service class of immutable to mutable conversions.
-class (Monad m) => Thaw m v v' | v' -> m
+class Monad m => Thaw m v v' | v' -> m
   where
     {- |
       @thaw@ is safe way to convert a immutable structure to a mutable. @thaw@
@@ -125,7 +125,7 @@ type Thaw1 m v v' e = Thaw m (v e) (v' e)
 -- | 'Thaw' contraint for @(Type -> Type -> Type)@-kind types.
 type Thaw2 m v v' i e = Thaw m (v i e) (v' i e)
 
-#if __GLASGOW_HASKELL__ >= 806
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 
 -- | 'IndexedM' contraint for @(Type -> Type)@-kind types.
 type IndexedM' m v i = forall e . IndexedM m (v e) i e
