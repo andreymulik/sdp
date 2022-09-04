@@ -33,10 +33,10 @@ tested-with:
   GHC == 8.10.6,
   -- lts-18.24
   GHC == 8.10.7,
-  -- lts-19.16
+  -- lts-19.21
   GHC == 9.0.2,
-  -- nightly-2022-06-12
-  GHC == 9.2.3
+  -- nightly-2022-09-04
+  GHC == 9.2.4
 
 source-repository head
   type: git
