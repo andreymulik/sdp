@@ -119,7 +119,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
     
     -- | Monadic 'fromFoldable'.
     {-# INLINE fromFoldableM #-}
-    fromFoldableM :: (Foldable f) => f e -> m l
+    fromFoldableM :: Foldable f => f e -> m l
     fromFoldableM =  newLinear . toList
     
     -- | Left view of line.
@@ -156,7 +156,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
     reversed' es = ofoldr (\ i e go -> do writeM es i e; go) (return ()) =<< getRight es
     
     -- | Monadic 'concat'.
-    merged :: (Foldable f) => f l -> m l
+    merged :: Foldable f => f l -> m l
     merged =  newLinear . concat <=< sequence . foldr ((:) . getLeft) []
     
     -- | Monadic version of 'replicate'.
@@ -180,6 +180,16 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
     lshiftM es i j =
       let go k ej = when (k <= j) $ do ek <- es !#> k; writeM es k ej; go (k + 1) ek
       in  when (i < j) $ go i =<< (es !#> j)
+    
+    filterM :: (e -> m Bool) -> l -> m l
+    filterM go = newLinear <=< foldrM (\ e xs ->
+        do b <- go e; return (b ? e : xs $ xs)
+      ) []
+    
+    exceptM :: (e -> m Bool) -> l -> m l
+    exceptM go = newLinear <=< foldrM (\ e xs ->
+        do b <- go e; return (b ? xs $ e : xs)
+      ) []
     
     {- |
       @copyTo source soff target toff count@ writes @count@ elements of @source@
@@ -307,7 +317,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     takeM :: Int -> l -> m l
-    default takeM :: (BorderedM m l i) => Int -> l -> m l
+    default takeM :: BorderedM m l i => Int -> l -> m l
     takeM n es = do s <- getSizeOf es; sansM (s - n) es
     
     {- |
@@ -315,7 +325,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     dropM :: Int -> l -> m l
-    default dropM :: (BorderedM m l i) => Int -> l -> m l
+    default dropM :: BorderedM m l i => Int -> l -> m l
     dropM n es = do s <- getSizeOf es; keepM (s - n) es
     
     {- |
@@ -323,7 +333,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     keepM :: Int -> l -> m l
-    default keepM :: (BorderedM m l i) => Int -> l -> m l
+    default keepM :: BorderedM m l i => Int -> l -> m l
     keepM n es = do s <- getSizeOf es; dropM (s - n) es
     
     {- |
@@ -331,7 +341,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     sansM :: Int -> l -> m l
-    default sansM :: (BorderedM m l i) => Int -> l -> m l
+    default sansM :: BorderedM m l i => Int -> l -> m l
     sansM n es = do s <- getSizeOf es; takeM (s - n) es
     
     {- |
@@ -354,7 +364,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       @splitM ns es@ returns the sequence of @es@ prefix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    splitsM :: (Foldable f) => f Int -> l -> m [l]
+    splitsM :: Foldable f => f Int -> l -> m [l]
     splitsM ns es =
       let f ds' n = do ds <- ds'; (d,d') <- splitM n (head ds); pure (d':d:ds)
       in  reverse <$> foldl f (pure [es]) ns
@@ -363,7 +373,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       @dividesM ns es@ returns the sequence of @es@ suffix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    dividesM :: (Foldable f) => f Int -> l -> m [l]
+    dividesM :: Foldable f => f Int -> l -> m [l]
     dividesM ns es =
       let f n ds' = do ds <- ds'; (d, d') <- divideM n (head ds); pure (d':d:ds)
       in  foldr f (pure [es]) ns
@@ -372,7 +382,7 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       @partsM n es@ returns the sequence of @es@ prefix references, splitted by
       offsets in @es@. Changes in the source and results must be synchronous.
     -}
-    partsM :: (Foldable f) => f Int -> l -> m [l]
+    partsM :: Foldable f => f Int -> l -> m [l]
     partsM =  splitsM . go . toList where go is = zipWith (-) is (0 : is)
     
     {- |
@@ -424,22 +434,24 @@ data FieldLinearM l e m field record
   where
     Prepend :: (LinearM m l e, FieldGet field, FieldSet field)
             => e -> field m record l -> FieldLinearM l e m field record
+    
     Append  :: (LinearM m l e, FieldGet field, FieldSet field)
             => field m record l -> e -> FieldLinearM l e m field record
+    
     Delete  :: (LinearM m l e, FieldGet field, FieldSet field)
             => Int -> field m record l -> FieldLinearM l e m field record
   deriving ( Typeable )
 
 instance IsProp (FieldLinearM l e)
   where
-    performProp record (Append  field e) = setRecord field record =<<
-                         flip append e =<< getRecord field record
+    performProp record (Append field e) = setRecord field record
+                    =<< flip append e =<< getRecord field record
     
-    performProp record (Delete  n field) = setRecord field record =<<
-                             removed n =<< getRecord field record
+    performProp record (Delete n field) = setRecord field record
+                        =<< removed n =<< getRecord field record
     
-    performProp record (Prepend e field) = setRecord field record =<<
-                             prepend e =<< getRecord field record
+    performProp record (Prepend e field) = setRecord field record
+                         =<< prepend e =<< getRecord field record
 
 {- |
   @since 0.2.1
@@ -579,7 +591,5 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
-
-
 
 

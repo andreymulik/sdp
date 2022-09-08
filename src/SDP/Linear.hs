@@ -57,6 +57,7 @@ import SDP.Sort
 import SDP.Zip
 
 import qualified Data.List as L
+import Data.Maybe ( catMaybes )
 
 #ifdef SDP_LINEAR_EXTRAS
 import qualified GHC.Exts as L
@@ -255,7 +256,7 @@ class
       @since 0.3
       
       Same as 'listWith'', but actions can be performed in any order (may be
-      parallel).
+      parallel). Default: 'listWith''.
     -}
     listWith :: Monad m => (Int -> e -> m r) -> l -> m [r]
     listWith =  listWith'
@@ -277,7 +278,7 @@ class
       @since 0.3
       
       Same as 'mapWith'', but actions can be performed in any order (may be
-      parallel).
+      parallel). Default: 'mapWith''.
     -}
     mapWith :: Monad m => (Int -> e -> m e) -> l -> m l
     mapWith =  fmap fromList ... listWith
@@ -289,6 +290,23 @@ class
     -}
     mapWith' :: Monad m => (Int -> e -> m e) -> l -> m l
     mapWith' =  fmap fromList ... listWith'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'selectWith'', but actions can be performed in any order (may be
+      parallel). Default: 'selectWith''.
+    -}
+    selectWith :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
+    selectWith =  selectWith'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'listWith'', but drops 'Nothing' elements.
+    -}
+    selectWith' :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
+    selectWith' =  fmap catMaybes ... listWith'
     
     {- Custom -}
     
@@ -311,6 +329,9 @@ class
     -- | Inverted filter.
     except :: (e -> Bool) -> l -> l
     except p = filter (not . p)
+    
+    mfilter :: Monad m => (e -> m Bool) -> l -> m l
+    mfilter go = fmap fromList . mselect (\ e -> do b <- go e; return (b ? Just e $ Z))
     
     -- | Generalization of partition.
     partition :: (e -> Bool) -> l -> (l, l)
@@ -365,6 +386,48 @@ class
     -}
     selects' :: (Foldable f, t e ~ l, Linear1 t a) => f (e -> Maybe a) -> l -> ([t a], l)
     selects' =  first (map fromList) ... selects
+    
+    {- |
+      @since 0.3
+      
+      Monadic version of 'select'.
+    -}
+    mselect :: Monad m => (e -> m (Maybe a)) -> l -> m [a]
+    mselect go es = o_foldr (\ e xs -> do
+        b <- go e
+        case b of
+          Just x -> (x :) <$> xs
+          _      -> xs
+        ) (return []) es
+    
+    {- |
+      @since 0.3
+      
+      Monadic version of 'select''.
+    -}
+    mselect' :: (Monad m, t e ~ l, Linear1 t a) => (e -> m (Maybe a)) -> l -> m (t a)
+    mselect' =  fmap fromList ... mselect
+    
+    {- |
+      @since 0.3
+      
+      Monadic version of 'extract'.
+    -}
+    mextract :: Monad m => (e -> m (Maybe a)) -> l -> m ([a], l)
+    mextract go es = second fromList <$> o_foldr (\ y zs -> do
+      b <- go y; (xs, ys) <- zs;
+      return $ case b of
+        Just x -> (x : xs, ys)
+        _      -> (xs, y : ys)
+      ) (return ([], [])) es
+    
+    {- |
+      @since 0.3
+      
+      Monadic version of 'extract''.
+    -}
+    mextract' :: (Monad m, t e ~ l, Linear1 t a) => (e -> m (Maybe a)) -> l -> m (t a, l)
+    mextract' =  fmap (first fromList) ... mextract
     
     -- | Generalized reverse.
     reverse :: l -> l
