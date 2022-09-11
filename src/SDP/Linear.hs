@@ -142,7 +142,8 @@ class
 #ifdef SDP_LINEAR_EXTRAS
     L.IsList l, L.Item l ~ e,
 #endif
-    Forceable l
+    Forceable l,
+    Estimate l
   ) => Linear l e | l -> e
   where
     {-# MINIMAL toHead, toLast, (take|sans), (drop|keep),
@@ -572,22 +573,18 @@ class
     -- | @take n es@ takes first @n@ elements of @es@.
     take :: Int -> l -> l
     take n es = sans (sizeOf es - n) es
-    default take :: Bordered l i => Int -> l -> l
     
     -- | @drop n es@ drops first @n@ elements of @es@.
     drop :: Int -> l -> l
     drop n es = keep (sizeOf es - n) es
-    default drop :: Bordered l i => Int -> l -> l
     
     -- | @keep n es@ takes last @n@ elements of @es@.
     keep :: Int -> l -> l
     keep n es = drop (sizeOf es - n) es
-    default keep :: Bordered l i => Int -> l -> l
     
     -- | @sans n es@ drops last @n@ elements of @es@.
     sans :: Int -> l -> l
     sans n es = take (sizeOf es - n) es
-    default sans :: Bordered l i => Int -> l -> l
     
     -- | @split n es@ is same to @(take n es, drop n es)@.
     split :: Int -> l -> (l, l)
@@ -667,9 +664,8 @@ class
       
       > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
     -}
-    splitsOn :: (Eq e) => l -> l -> [l]
+    splitsOn :: Eq e => l -> l -> [l]
 #if __GLASGOW_HASKELL__ >= 802
-    default splitsOn :: (Eq e, Bordered l i) => l -> l -> [l]
     splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
     -- ghc-8.0.1 has bug in default signatures, so this can be used with it
 #else
@@ -1090,6 +1086,5 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
 
 

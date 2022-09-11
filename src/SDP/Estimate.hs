@@ -80,11 +80,14 @@ data SizeHint = SizeHint   {-# UNPACK #-} !Int {-# UNPACK #-} !Int
 -}
 class Estimate e
   where
-    {-# MINIMAL (<.=>), (<==>) #-}
+    {-# MINIMAL sizeOf, (<.=>), (<==>) #-}
     
     -- | Faster, but less precise version of 'SDP.Bordered.Bordered.sizeOf'.
     sizeHint :: e -> Maybe SizeHint
     sizeHint =  const Z
+    
+    -- | Returns actual size of structure.
+    sizeOf :: e -> Int
     
     -- | Compare structure length with given number.
     (<.=>) :: e -> Int -> Ordering
@@ -148,6 +151,8 @@ type Estimate'' rep = forall i e . Estimate (rep i e)
 
 instance Index i => Estimate (i, i)
   where
+    sizeOf = size
+    
     (<==>) = on (<=>) size
     (.<=.) = on (<=)  size
     (.>=.) = on (>=)  size
@@ -160,8 +165,12 @@ instance Index i => Estimate (i, i)
     (.>)   = (>)   . size
     (.<)   = (<)   . size
 
+--------------------------------------------------------------------------------
+
 instance Estimate [a]
   where
+    sizeOf = length
+    
     [] <==> [] = EQ
     [] <==>  _ = LT
     _  <==> [] = GT
@@ -171,5 +180,6 @@ instance Estimate [a]
     es <.=> n =
       let go xs c | c == 0 = GT | null xs = 0 <=> c | True = tail xs `go` (c - 1)
       in  if n < 0 then LT else go es n
+
 
 

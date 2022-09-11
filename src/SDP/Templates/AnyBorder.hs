@@ -153,6 +153,8 @@ instance (Index i, NullableM m (rep e)) => NullableM m (AnyBorder rep i e)
 
 instance Index i => Estimate (AnyBorder rep i e)
   where
+    sizeOf (AnyBorder l u _) = size (l, u)
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -188,7 +190,6 @@ instance Index i => Bordered (AnyBorder rep i e) i
     lower    (AnyBorder l _ _) = l
     upper    (AnyBorder _ u _) = u
     bounds   (AnyBorder l u _) = (l, u)
-    sizeOf   (AnyBorder l u _) = size    (l, u)
     indices  (AnyBorder l u _) = range   (l, u)
     indexOf  (AnyBorder l u _) = index   (l, u)
     indexIn  (AnyBorder l u _) = inRange (l, u)
@@ -659,7 +660,6 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
 
 
 

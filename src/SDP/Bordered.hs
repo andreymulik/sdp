@@ -64,11 +64,6 @@ class (Index i, Estimate b) => Bordered b i | b -> i
     upper :: b -> i
     upper =  snd . bounds
     
-    {-# INLINE sizeOf #-}
-    -- | Returns actual size of structure.
-    sizeOf :: b -> Int
-    sizeOf =  size . bounds
-    
     -- | Returns actual sizes of structure.
     sizesOf :: b -> [Int]
     sizesOf =  sizes . bounds
@@ -124,13 +119,11 @@ instance Index i => Bordered (i, i) i
     indexIn = inRange
     rebound = const
     
-    sizeOf   = size
     indexOf  = index
     offsetOf = offset
 
 instance Bordered [e] Int
   where
-    sizeOf  = length
     lower   = const 0
     rebound = L.take . size
     
@@ -151,5 +144,7 @@ type Bordered' l i = forall e . Bordered (l e) i
 -- | 'Bordered' contraint for @(Type -> Type -> Type)@-kind types.
 type Bordered'' l = forall i e . Bordered (l i e) i
 #endif
+
+
 
 

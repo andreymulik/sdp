@@ -174,6 +174,8 @@ instance Monad m => NullableM m (SArray# e)
 
 instance Estimate (SArray# e)
   where
+    sizeOf (SArray# c _ _) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -209,7 +211,6 @@ instance Bordered (SArray# e) Int
     lower _ = 0
     rebound = take . size
     
-    sizeOf   (SArray# c _ _) = c
     upper    (SArray# c _ _) = c - 1
     bounds   (SArray# c _ _) = (0, c - 1)
     indices  (SArray# c _ _) = [0 .. c - 1]
@@ -810,6 +811,8 @@ instance NullableM (ST s) (STArray# s e)
 
 instance Estimate (STArray# s e)
   where
+    sizeOf (STArray# c _ _) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -844,7 +847,6 @@ instance Bordered (STArray# s e) Int
   where
     lower _ = 0
     
-    sizeOf   (STArray# c _ _) = c
     upper    (STArray# c _ _) = c - 1
     bounds   (STArray# c _ _) = (0, c - 1)
     indices  (STArray# c _ _) = [0 .. c - 1]
@@ -1097,6 +1099,8 @@ instance (MonadIO io) => NullableM io (MIOArray# io e)
 
 instance Estimate (MIOArray# io e)
   where
+    sizeOf (MIOArray# (STArray# c _ _)) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -1132,7 +1136,6 @@ instance Bordered (MIOArray# io e) Int
     lower _ = 0
     rebound bnds (MIOArray# es) = MIOArray# (rebound bnds es)
     
-    sizeOf   (MIOArray# (STArray# c _ _)) = c
     upper    (MIOArray# (STArray# c _ _)) = c - 1
     bounds   (MIOArray# (STArray# c _ _)) = (0, c - 1)
     indices  (MIOArray# (STArray# c _ _)) = [0 .. c - 1]
@@ -1348,8 +1351,6 @@ unpack =  coerce
 pack :: (MonadIO io) => ST RealWorld (STArray# RealWorld e) -> io (MIOArray# io e)
 pack =  stToMIO . coerce
 
---------------------------------------------------------------------------------
-
 {-# INLINE done #-}
 done :: STArray# s e -> ST s (SArray# e)
 done (STArray# n o marr#) = ST $ \ s1# -> case unsafeFreezeArray# marr# s1# of
@@ -1385,6 +1386,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
 
 

@@ -87,7 +87,7 @@ toChunks =  E.coerce
 
 {- Eq and Ord instances. -}
 
-instance (Eq (rep e), Bordered1 rep Int e, Linear1 rep e) => Eq (AnyChunks rep e)
+instance (Eq (rep e), Linear1 rep e) => Eq (AnyChunks rep e)
   where
     Z == Z = True
     xs@(AnyChunks (x : xs')) == ys@(AnyChunks (y : ys')) = if n1 > n2
@@ -98,7 +98,7 @@ instance (Eq (rep e), Bordered1 rep Int e, Linear1 rep e) => Eq (AnyChunks rep e
         n2 = sizeOf y
     _ == _ = False
 
-instance (Ord (rep e), Bordered1 rep Int e, Linear1 rep e) => Ord (AnyChunks rep e)
+instance (Ord (rep e), Linear1 rep e) => Ord (AnyChunks rep e)
   where
     compare Z Z = EQ
     compare xs@(AnyChunks (x : xs')) ys@(AnyChunks (y : ys')) = if n1 > n2
@@ -115,7 +115,7 @@ instance (Ord (rep e), Bordered1 rep Int e, Linear1 rep e) => Ord (AnyChunks rep
 {- Eq1 and Ord1 instances. -}
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
-instance (Bordered' rep Int, Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
+instance (Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
   where
     liftEq f xs ys
         | isNull xs && isNull ys = True
@@ -126,7 +126,7 @@ instance (Bordered' rep Int, Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
         (x, xs') = uncons (toChunks xs); n1 = sizeOf x
         (y, ys') = uncons (toChunks ys); n2 = sizeOf y
 
-instance (Bordered' rep Int, Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
+instance (Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
   where
     liftCompare _ Z   Z = EQ
     liftCompare _ Z   _ = LT
@@ -197,7 +197,7 @@ instance Applicative rep => Applicative (AnyChunks rep)
     pure e = AnyChunks [pure e]
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
-instance (Functor rep, Bordered' rep Int, Linear' rep) => Zip (AnyChunks rep)
+instance (Functor rep, Linear' rep) => Zip (AnyChunks rep)
   where
     all2 f as bs             = all2 f (listL as) (listL bs)
     any2 f as bs             = any2 f (listL as) (listL bs)
@@ -252,7 +252,7 @@ instance (NullableM m (rep e)) => NullableM m (AnyChunks rep e)
 
 {- Estimate and EstimateM instances. -}
 
-instance Bordered1 rep Int e => Estimate (AnyChunks rep e)
+instance Estimate1 rep e => Estimate (AnyChunks rep e)
   where
     (<==>) = go 0
       where
@@ -266,6 +266,8 @@ instance Bordered1 rep Int e => Estimate (AnyChunks rep e)
     (AnyChunks (x : xs)) <.=> n = c > n ? GT $ AnyChunks xs <.=> (n - c)
       where
         c = sizeOf x
+    
+    sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
 
 instance (Monad m, BorderedM1 m rep Int e) => EstimateM m (AnyChunks rep e)
   where
@@ -290,8 +292,6 @@ instance (Monad m, BorderedM1 m rep Int e) => EstimateM m (AnyChunks rep e)
 
 instance Bordered1 rep Int e => Bordered (AnyChunks rep e) Int
   where
-    sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
-    
     indexIn es = \ i -> i >= 0 && i <. es
     
     -- | Quick unchecked offset.
@@ -337,7 +337,7 @@ instance Forceable1 rep e => Forceable (AnyChunks rep e)
   where
     force = AnyChunks . force . E.coerce
 
-instance (Bordered1 rep Int e, Linear1 rep e) => Linear (AnyChunks rep e) e
+instance (Estimate1 rep e, Linear1 rep e) => Linear (AnyChunks rep e) e
   where
     single e = AnyChunks [single e]
     
@@ -557,7 +557,7 @@ instance (BorderedM1 m rep Int e, LinearM1 m rep e)
 instance (Nullable (AnyChunks rep e), SetWith1 (AnyChunks rep) e, Ord e)
       => Set (AnyChunks rep e) e
 
-instance (SetWith1 rep e, Linear1 rep e, Ord (rep e), Bordered1 rep Int e)
+instance (SetWith1 rep e, Linear1 rep e, Ord (rep e))
       => SetWith (AnyChunks rep e) e
   where
     insertWith f' e' = AnyChunks . go f' e' . toChunks

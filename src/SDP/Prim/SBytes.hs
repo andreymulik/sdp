@@ -151,6 +151,8 @@ instance Unboxed e => Semigroup (SBytes# e)
 
 instance Estimate (SBytes# e)
   where
+    sizeOf (SBytes# c _ _) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -206,7 +208,6 @@ instance Bordered (SBytes# e) Int
       where
         n = size bnds
     
-    sizeOf   (SBytes# c _ _) = c
     upper    (SBytes# c _ _) = c - 1
     bounds   (SBytes# c _ _) = (0, c - 1)
     indices  (SBytes# c _ _) = [0 .. c - 1]
@@ -643,6 +644,8 @@ instance NullableM (ST s) (STBytes# s e)
 
 instance Estimate (STBytes# s e)
   where
+    sizeOf (STBytes# c _ _) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -675,7 +678,6 @@ instance EstimateM (ST s) (STBytes# s e)
 instance Bordered (STBytes# s e) Int
   where
     bounds (STBytes# c _ _) = (0, c - 1)
-    sizeOf (STBytes# c _ _) = c
     
     rebound bnds es@(STBytes# c o bytes#)
         | n < 0 = STBytes# 0 0 bytes#
@@ -924,6 +926,8 @@ instance MonadIO io => NullableM io (MIOBytes# io e)
 
 instance Estimate (MIOBytes# io e)
   where
+    sizeOf (MIOBytes# (STBytes# c _ _)) = c
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -959,7 +963,6 @@ instance Bordered (MIOBytes# io e) Int
     
     rebound bnds (MIOBytes# es) = MIOBytes# (rebound bnds es)
     
-    sizeOf   (MIOBytes# (STBytes# c _ _)) = c
     upper    (MIOBytes# (STBytes# c _ _)) = c - 1
     bounds   (MIOBytes# (STBytes# c _ _)) = (0, c - 1)
     indices  (MIOBytes# (STBytes# c _ _)) = [0 .. c - 1]
@@ -1259,7 +1262,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-
-
 

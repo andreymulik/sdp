@@ -40,6 +40,8 @@ type TArray# = MArray# STM
 pattern TArray# :: SArray# (Var STM e) -> TArray# e
 pattern TArray# es = MArray# es
 
+--------------------------------------------------------------------------------
+
 -- | Generalized array of variables.
 data MArray# m e
   where
@@ -73,6 +75,8 @@ instance MonadVar m => NullableM m (MArray# m e)
 
 instance Estimate (MArray# m e)
   where
+    sizeOf = sizeOf . unpack
+    
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
@@ -107,7 +111,6 @@ instance Bordered (MArray# m e) Int
   where
     lower _ = 0
     upper   = upper . unpack
-    sizeOf  = sizeOf . unpack
     indexIn = \ es i -> i >= 0 && i < sizeOf (unpack es)
     
     bounds   (MArray# es) = (0, upper es)
@@ -267,4 +270,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
 
