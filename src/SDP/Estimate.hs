@@ -20,7 +20,7 @@ module SDP.Estimate
   module Data.Functor.Classes,
   
   -- * Estimate
-  Estimate (..), Estimate1, Estimate2,
+  Estimate (..), Estimate1, Estimate2, SizeHint (..),
   
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
@@ -49,6 +49,30 @@ infixl 4 <=.>, <., >., <=., >=., ==., /=.
 --------------------------------------------------------------------------------
 
 {- |
+  @since 0.3
+  
+  * @'SizeHint' l u@ - size of structure is between @l@ and @u@
+  * @'SizeHintEQ' n@ - size of structure is strictly equal to @n@
+  * @'SizeHintLE' l@ - size of structure is lesser or equal than @l@
+  * @'SizeHintGE' u@ - size of structure is greater or equal than @u@
+  
+  Rules:
+  
+  @
+  SizeHint l u <- sizeHint es === es .>= l && es .<= u
+  SizeHintEQ n <- sizeHint es === es .== n
+  SizeHintLE l <- sizeHint es === es .<= l
+  SizeHintGE u <- sizeHint es === es .>= u
+  @
+-}
+data SizeHint = SizeHint   {-# UNPACK #-} !Int {-# UNPACK #-} !Int
+              | SizeHintEQ {-# UNPACK #-} !Int
+              | SizeHintLE {-# UNPACK #-} !Int
+              | SizeHintGE {-# UNPACK #-} !Int
+
+--------------------------------------------------------------------------------
+
+{- |
   'Estimate' class provides the lazy comparsion structures by length.
   
   For some types (e.g., lists), this allows you to speed up the comparison or
@@ -57,6 +81,10 @@ infixl 4 <=.>, <., >., <=., >=., ==., /=.
 class Estimate e
   where
     {-# MINIMAL (<.=>), (<==>) #-}
+    
+    -- | Faster, but less precise version of 'SDP.Bordered.Bordered.sizeOf'.
+    sizeHint :: e -> Maybe SizeHint
+    sizeHint =  const Z
     
     -- | Compare structure length with given number.
     (<.=>) :: e -> Int -> Ordering
@@ -84,12 +112,14 @@ class Estimate e
     e1 .==. e2 = case e1 <==> e2 of {EQ -> True; _ -> False}
     e1 ./=. e2 = case e1 <==> e2 of {EQ -> False; _ -> True}
 
+--------------------------------------------------------------------------------
+
 -- | Compare given number with structure length.
-(<=.>) :: (Estimate e) => Int -> e -> Ordering
+(<=.>) :: Estimate e => Int -> e -> Ordering
 i <=.> e = case e <.=> i of {LT -> GT; EQ -> EQ; GT -> LT}
 
 -- | Compare given number with structure length.
-(==.), (/=.), (<=.), (>=.), (<.), (>.) :: (Estimate e) => Int -> e -> Bool
+(==.), (/=.), (<=.), (>=.), (<.), (>.) :: Estimate e => Int -> e -> Bool
 
 (==.) = flip (.==)
 (/=.) = flip (./=)
