@@ -28,7 +28,11 @@ default ()
 
 --------------------------------------------------------------------------------
 
--- | @since 0.3 'NullableM' is class of types which value may be empty.
+{- |
+  @since 0.3
+  
+  'NullableM' is class of types which value may be empty.
+-}
 class Monad m => NullableM m e
   where
     -- | Monadic 'SDP.Nullable.lzero'.
@@ -37,29 +41,40 @@ class Monad m => NullableM m e
     -- | Monadic 'SDP.Nullable.isNull'.
     nowNull :: e -> m Bool
 
--- | @since 0.3 'NullableM' contraint for @(Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type)@-kind types.
+-}
 type NullableM1 m rep e = NullableM m (rep e)
 
--- | @since 0.3 'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
+-}
 type NullableM2 m rep i e = NullableM m (rep i e)
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 
 {- |
-  @since 0.3 'NullableM' contraint for @(Type -> Type)@-kind types.
+  @since 0.3
   
+  'NullableM' contraint for @(Type -> Type)@-kind types.
   Only for GHC >= 8.6.1
 -}
 type NullableM' m rep = forall e . NullableM m (rep e)
 
 {- |
-  @since 0.3 'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
+  @since 0.3
   
+  'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
   Only for GHC >= 8.6.1
 -}
 type NullableM'' m rep = forall i e . NullableM m (rep i e)
 
 #endif
+
 
 
 
