@@ -91,7 +91,7 @@ import Control.Category
 
 import Control.Monad.IO.Class
 import Control.Monad.ST
-import Control.Monad hiding ( zipWithM )
+import Control.Monad hiding ( zipWithM, mfilter )
 
 default ()
 
