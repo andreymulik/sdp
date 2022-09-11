@@ -69,13 +69,15 @@ instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
 instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
   where
     lestimateM' xs n = do xs' <- get this (fromAnyVar xs); lestimateM' xs' n
-    estimateM        = on (join ... liftA2 estimateM) (get this.fromAnyVar)
+    
+    estimateM = on (join ... liftA2 estimateM) (get this.fromAnyVar)
+    
+    getSizeOf = getSizeOf  <=< get this.fromAnyVar
 
 instance (Index i, MonadVar m, BorderedM1 m rep i e)
       => BorderedM m (AnyVar m rep e) i
   where
     getIndices = getIndices <=< get this.fromAnyVar
-    getSizeOf  = getSizeOf  <=< get this.fromAnyVar
     getBounds  = getBounds  <=< get this.fromAnyVar
     getLower   = getLower   <=< get this.fromAnyVar
     getUpper   = getUpper   <=< get this.fromAnyVar
@@ -205,6 +207,4 @@ pack =  fmap AnyVar . var
 withAnyVar :: (MonadVar m, Typeable m, Typeable rep, Typeable (Var m), Typeable e)
            => (rep e -> m (rep e)) -> AnyVar m rep e -> m ()
 withAnyVar f ps = () <$ modifyRecordM this' (fromAnyVar ps) f
-
-
 

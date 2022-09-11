@@ -169,6 +169,8 @@ instance Index i => Estimate (AnyBorder rep i e)
 
 instance (Monad m, Index i) => EstimateM m (AnyBorder rep i e)
   where
+    getSizeOf (AnyBorder l u _) = return $ size (l, u)
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -201,7 +203,6 @@ instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
   where
     nowIndexIn (AnyBorder l u _) = return . inRange (l, u)
     getIndices (AnyBorder l u _) = return $ range (l, u)
-    getSizeOf  (AnyBorder l u _) = return $ size (l, u)
     getBounds  (AnyBorder l u _) = return (l, u)
     getLower   (AnyBorder l _ _) = return l
     getUpper   (AnyBorder _ u _) = return u
@@ -660,6 +661,5 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
 
 

@@ -55,10 +55,6 @@ class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
     getUpper :: b -> m i
     getUpper =  snds . getBounds
     
-    -- | 'getSizeOf' returns 'size' of mutable data structure.
-    getSizeOf :: b -> m Int
-    getSizeOf =  fmap size . getBounds
-    
     -- | 'getSizesOf' returns 'sizes' of mutable data structure.
     getSizesOf :: b -> m [Int]
     getSizesOf =  fmap sizes . getBounds
@@ -121,5 +117,4 @@ type BorderedM' m l i = forall e . BorderedM m (l e) i
 -- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
 type BorderedM'' m l = forall i e . BorderedM m (l i e) i
 #endif
-
 

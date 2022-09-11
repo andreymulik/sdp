@@ -58,7 +58,10 @@ infixl 4 `lestimateMEQ'`, `lestimateMNE'`, `restimateMEQ'`, `restimateMNE'`
 -}
 class Monad m => EstimateM m e
   where
-    {-# MINIMAL estimateM, lestimateM' #-}
+    {-# MINIMAL getSizeOf, estimateM, lestimateM' #-}
+    
+    -- | 'getSizeOf' returns size'of mutable data structure.
+    getSizeOf :: e -> m Int
     
     -- | Compare pair of structures by length.
     estimateM :: e -> e -> m Ordering
@@ -159,7 +162,4 @@ type EstimateM' m rep = forall e . EstimateM m (rep e)
 -- | 'EstimateM' quantified contraint for @(Type -> Type -> Type)@-kind types.
 type EstimateM'' m rep = forall i e . EstimateM m (rep i e)
 #endif
-
-
-
 

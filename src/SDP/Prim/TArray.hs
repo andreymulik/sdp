@@ -91,6 +91,8 @@ instance Estimate (MArray# m e)
 
 instance Monad m => EstimateM m (MArray# m e)
   where
+    getSizeOf = return . sizeOf
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -125,7 +127,6 @@ instance MonadVar m => BorderedM m (MArray# m e) Int
     getIndexOf = return ... indexOf
     getIndices = return . indices
     getBounds  = return . bounds
-    getSizeOf  = return . sizeOf
     getUpper   = return . upper
     
     rebounded' = takeM . size
@@ -270,6 +271,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 
 

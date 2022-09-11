@@ -269,8 +269,10 @@ instance Estimate1 rep e => Estimate (AnyChunks rep e)
     
     sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
 
-instance (Monad m, BorderedM1 m rep Int e) => EstimateM m (AnyChunks rep e)
+instance (Monad m, EstimateM1 m rep e) => EstimateM m (AnyChunks rep e)
   where
+    getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
+    
     estimateM = go 0
       where
         go o (AnyChunks [])   (AnyChunks []) = return (o <=> 0)
@@ -316,8 +318,6 @@ instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
   where
     getLower = const $ return 0
     getUpper = fmap pred . getSizeOf
-    
-    getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
     
     getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
     nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)

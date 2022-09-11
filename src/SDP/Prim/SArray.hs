@@ -190,6 +190,8 @@ instance Estimate (SArray# e)
 
 instance Monad m => EstimateM m (SArray# e)
   where
+    getSizeOf (SArray# c _ _) = return c
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -224,7 +226,6 @@ instance Monad m => BorderedM m (SArray# e) Int
     getIndices (SArray# c _ _) = return [0 .. c - 1]
     getBounds  (SArray# c _ _) = return (0, c - 1)
     getUpper   (SArray# c _ _) = return (c - 1)
-    getSizeOf  (SArray# c _ _) = return c
     
     getLower _ = return 0
     rebounded' = return ... rebound
@@ -827,6 +828,8 @@ instance Estimate (STArray# s e)
 
 instance EstimateM (ST s) (STArray# s e)
   where
+    getSizeOf (STArray# c _ _) = return c
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -867,7 +870,6 @@ instance BorderedM (ST s) (STArray# s e) Int
     getIndices (STArray# c _ _) = return [0 .. c - 1]
     getBounds  (STArray# c _ _) = return (0, c - 1)
     getUpper   (STArray# c _ _) = return (c - 1)
-    getSizeOf  (STArray# c _ _) = return c
     
     getLower _ = return 0
     rebounded' = takeM . size
@@ -1115,6 +1117,8 @@ instance Estimate (MIOArray# io e)
 
 instance MonadIO io => EstimateM io (MIOArray# io e)
   where
+    getSizeOf = return . sizeOf . unpack
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -1147,7 +1151,6 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
   where
     getIndexOf = return ... indexOf . unpack
     getIndices = return . indices . unpack
-    getSizeOf  = return . sizeOf . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
     
@@ -1386,5 +1389,7 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
+
 
 

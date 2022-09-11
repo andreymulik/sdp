@@ -113,9 +113,13 @@ instance (Unboxed e, Ord e) => Ord (SBytes# e)
 
 {- Show and Read instances. -}
 
-instance (Unboxed e, Show e) => Show (SBytes# e) where showsPrec p = showsPrec p . listL
+instance (Unboxed e, Show e) => Show (SBytes# e)
+  where
+    showsPrec p = showsPrec p . listL
 
-instance (Unboxed e, Read e) => Read (SBytes# e) where readPrec = fromList <$> readPrec
+instance (Unboxed e, Read e) => Read (SBytes# e)
+  where
+    readPrec = fromList <$> readPrec
 
 --------------------------------------------------------------------------------
 
@@ -167,6 +171,8 @@ instance Estimate (SBytes# e)
 
 instance Monad m => EstimateM m (SBytes# e)
   where
+    getSizeOf (SBytes# c _ _) = return c
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -221,7 +227,6 @@ instance Monad m => BorderedM m (SBytes# e) Int
     getIndices (SBytes# c _ _) = return [0 .. c - 1]
     getBounds  (SBytes# c _ _) = return (0, c - 1)
     getUpper   (SBytes# c _ _) = return (c - 1)
-    getSizeOf  (SBytes# c _ _) = return c
     
     getLower _ = return 0
     rebounded' = return ... rebound
@@ -659,6 +664,8 @@ instance Estimate (STBytes# s e)
 
 instance EstimateM (ST s) (STBytes# s e)
   where
+    getSizeOf (STBytes# c _ _) = return c
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -695,7 +702,6 @@ instance Unboxed e => BorderedM (ST s) (STBytes# s e) Int
     getIndices (STBytes# c _ _) = return [0 .. c - 1]
     getBounds  (STBytes# c _ _) = return (0, c - 1)
     getUpper   (STBytes# c _ _) = return (c - 1)
-    getSizeOf  (STBytes# c _ _) = return c
 
 --------------------------------------------------------------------------------
 
@@ -941,6 +947,8 @@ instance Estimate (MIOBytes# io e)
 
 instance MonadIO io => EstimateM io (MIOBytes# io e)
   where
+    getSizeOf = return . sizeOf . unpack
+    
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
@@ -974,7 +982,6 @@ instance (MonadIO io, Unboxed e) => BorderedM io (MIOBytes# io e) Int
   where
     getIndexOf = return ... indexOf . unpack
     getIndices = return . indices . unpack
-    getSizeOf  = return . sizeOf . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
     
@@ -1262,4 +1269,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
+
+
 
