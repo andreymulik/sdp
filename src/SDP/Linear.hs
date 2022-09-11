@@ -1074,6 +1074,8 @@ inits :: Linear l e => l -> [l]
 inits Z  = [Z]
 inits es = es : inits (init es)
 
+--------------------------------------------------------------------------------
+
 {- |
   @ascending es lengths@ checks if the subsequences of @es@ of lengths @lengths@
   is sorted.
@@ -1084,7 +1086,7 @@ ascending =  all sorted ... flip splits
 --------------------------------------------------------------------------------
 
 unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
