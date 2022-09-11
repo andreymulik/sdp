@@ -71,7 +71,7 @@ type Forceable2 f i e = Forceable (f i e)
 {- |
   @since 0.3
   
-  'Forceable' contraint for @(Type -> Type@-kind types.
+  'Forceable' contraint for @(Type -> Type)@-kind types.
 -}
 type Forceable' f = forall e . Forceable (f e)
 
