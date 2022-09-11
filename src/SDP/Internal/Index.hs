@@ -32,7 +32,6 @@ import SDP.Internal.Utils
 import SDP.Shape
 
 import Data.Maybe
-import Data.Tuple
 import Data.Char ( ord )
 
 import GHC.Types
@@ -601,5 +600,6 @@ emptyEx =  throw . EmptyRange . showString "in SDP.Index."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Index."
+
 
 

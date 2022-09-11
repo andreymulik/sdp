@@ -312,15 +312,15 @@ class
     
     -- | Generalized concat.
     concat :: Foldable f => f l -> l
-    concat =  foldr (++) Z
+    concat =  fold
     
     -- | Generalized concatMap.
     concatMap :: Foldable f => (a -> l) -> f a -> l
-    concatMap f = concat . foldr ((:) . f) []
+    concatMap =  foldMap
     
     -- | Generalized intersperse.
     intersperse :: e -> l -> l
-    intersperse e = fromList . intersperse e . listL
+    intersperse e = fromList . L.intersperse e . listL
     
     -- | Generalized filter.
     filter :: (e -> Bool) -> l -> l
@@ -347,7 +347,7 @@ class
     
     -- | @select f es@ is selective map of @es@ elements to new list.
     select :: (e -> Maybe a) -> l -> [a]
-    select f = o_foldr (\ x es -> case f x of {Just e -> e : es; _ -> es}) []
+    select f = o_foldr (\ x es -> maybe es (: es) (f x)) []
     
     -- | @select' f es@ is selective map of @es@ elements to new line.
     select' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> t a
@@ -505,15 +505,12 @@ class
       The @isSubseqOf xs ys@ checks if all the elements of the @xs@ occur,
       in order, in the @ys@. The elements don't have to occur consecutively.
     -}
-    isSubseqOf :: (Eq e) => l -> l -> Bool
-    isSubseqOf =  isSubseqOf `on` listL
+    isSubseqOf :: Eq e => l -> l -> Bool
+    isSubseqOf =  L.isSubsequenceOf `on` listL
     
     -- | Generalized 'subsequences'.
     subsequences :: l -> [l]
-    subsequences =  (Z :) . go
-      where
-        go (x :> xs) = single x : foldr (\ ys r -> ys : (x :> ys) : r) [] (go xs)
-        go     _     = Z
+    subsequences =  map fromList . L.subsequences . listL
     
     {- New functions. -}
     
@@ -542,7 +539,7 @@ class
       > after es i e == before es (i + 1) e
     -}
     after :: l -> Int -> e -> l
-    after es i e = before es (i + 1) e
+    after es i = before es (i + 1)
     
     {- |
       @since 0.2.1
@@ -760,19 +757,16 @@ class
     eachFrom o n = each n . drop o
     
     -- | @sub `'isPrefixOf'` es@ checks if @sub@ is beginning of @es@.
-    isPrefixOf :: (Eq e) => l -> l -> Bool
-    isPrefixOf (x :> xs) (y :> ys) = x == y && xs `isPrefixOf` ys
-    isPrefixOf xs               ys = isNull xs && isNull ys
+    isPrefixOf :: Eq e => l -> l -> Bool
+    isPrefixOf =  isPrefixOf `on` listL
     
     -- | @sub `'isSuffixOf'` es@ checks if @sub@ is ending of @es@.
     isSuffixOf :: Eq e => l -> l -> Bool
-    isSuffixOf (xs :< x) (ys :< y) = x == y && xs `isSuffixOf` ys
-    isSuffixOf xs               ys = isNull xs && isNull ys
+    isSuffixOf =  isSuffixOf `on` listL
     
     -- | isInfixOf checks whether the first line is the substring of the second
-    isInfixOf  :: Eq e => l -> l -> Bool
-    isInfixOf _   Z = False
-    isInfixOf xs ys = xs `isPrefixOf` ys || xs `isInfixOf` tail ys
+    isInfixOf :: Eq e => l -> l -> Bool
+    isInfixOf =  isInfixOf `on` listL
     
     -- | prefix gives length of init, satisfying preducate.
     prefix :: (e -> Bool) -> l -> Int
@@ -1029,6 +1023,8 @@ save n = n > 0 ? take n $ keep (-n)
 skip :: Linear l e => Int -> l -> l
 skip n = n > 0 ? drop n $ sans (-n)
 
+--------------------------------------------------------------------------------
+
 {- |
   Splits structures into parts by given offsets.
   
@@ -1043,6 +1039,8 @@ parts :: (Linear l e, Foldable f) => f Int -> l -> [l]
 parts =
   let go o is' = case is' of {i : is -> (i - o) : go i is; _ -> []}
   in  splits . go 0 . toList
+
+--------------------------------------------------------------------------------
 
 -- | @stripPrefix sub line@ strips prefix @sub@ of @line@ (if any).
 stripPrefix :: (Linear l e, Bordered l i, Eq e) => l -> l -> l
@@ -1060,9 +1058,7 @@ stripPrefix' sub = isPrefixOf sub ?+ drop (sizeOf sub)
 stripSuffix' :: (Linear l e, Bordered l i, Eq e) => l -> l -> Maybe l
 stripSuffix' sub = isSuffixOf sub ?+ sans (sizeOf sub)
 
--- | intercalate is generalization of intercalate
-intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
-intercalate =  concat ... intersperse
+--------------------------------------------------------------------------------
 
 -- | @tails es@ returns sequence of @es@ tails.
 tails :: Linear l e => l -> [l]
@@ -1075,6 +1071,10 @@ inits Z  = [Z]
 inits es = es : inits (init es)
 
 --------------------------------------------------------------------------------
+
+-- | intercalate is generalization of intercalate
+intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
+intercalate =  concat ... intersperse
 
 {- |
   @ascending es lengths@ checks if the subsequences of @es@ of lengths @lengths@
