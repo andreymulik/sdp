@@ -60,7 +60,7 @@ type Copyable2 m c i e = Copyable m (c i e)
 {- |
   @since 0.3
   
-  'Copyable' contraint for @(Type -> Type@-kind types.
+  'Copyable' contraint for @(Type -> Type)@-kind types.
 -}
 type Copyable' m c = forall e . Copyable m (c e)
 
