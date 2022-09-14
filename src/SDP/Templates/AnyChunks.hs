@@ -73,7 +73,7 @@ fromChunks :: Nullable1 rep e => [rep e] -> AnyChunks rep e
 fromChunks =  AnyChunks . except isNull
 
 -- | Construct mutable 'AnyChunks' safely.
-fromChunksM :: BorderedM1 m rep Int e => [rep e] -> m (AnyChunks rep e)
+fromChunksM :: EstimateM1 m rep e => [rep e] -> m (AnyChunks rep e)
 fromChunksM =  fmap AnyChunks . go
   where
     go (x : xs) = do n <- getSizeOf x; n == 0 ? go xs $ (x :) <$> go xs
@@ -147,7 +147,7 @@ instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Show e) => Show (AnyChunks re
   where
     showsPrec = assocsPrec "unlist "
 
-instance (Indexed1 rep Int Char) => Show (AnyChunks rep Char)
+instance Indexed1 rep Int Char => Show (AnyChunks rep Char)
   where
     showsPrec = shows ... const listL
 
@@ -171,11 +171,11 @@ instance Default (AnyChunks rep e) where def    = AnyChunks []
 
 {- Overloaded Lists and Strings support. -}
 
-instance (Linear1 (AnyChunks rep) Char) => IsString (AnyChunks rep Char)
+instance Linear1 (AnyChunks rep) Char => IsString (AnyChunks rep Char)
   where
     fromString = fromList
 
-instance (Linear1 (AnyChunks rep) e) => E.IsList (AnyChunks rep e)
+instance Linear1 (AnyChunks rep) e => E.IsList (AnyChunks rep e)
   where
     type Item (AnyChunks rep e) = e
     
@@ -243,7 +243,7 @@ instance Nullable (AnyChunks rep e)
     isNull = \ (AnyChunks es) -> null es
     lzero  = AnyChunks []
 
-instance (NullableM m (rep e)) => NullableM m (AnyChunks rep e)
+instance NullableM m (rep e) => NullableM m (AnyChunks rep e)
   where
     nowNull = fmap and . mapM nowNull . toChunks
     newNull = return (AnyChunks [])
@@ -269,7 +269,7 @@ instance Estimate1 rep e => Estimate (AnyChunks rep e)
     
     sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
 
-instance (Monad m, EstimateM1 m rep e) => EstimateM m (AnyChunks rep e)
+instance EstimateM1 m rep e => EstimateM m (AnyChunks rep e)
   where
     getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
     
@@ -337,7 +337,7 @@ instance Forceable1 rep e => Forceable (AnyChunks rep e)
   where
     force = AnyChunks . force . E.coerce
 
-instance (Estimate1 rep e, Linear1 rep e) => Linear (AnyChunks rep e) e
+instance Linear1 rep e => Linear (AnyChunks rep e) e
   where
     single e = AnyChunks [single e]
     
@@ -439,13 +439,11 @@ instance (Estimate1 rep e, Linear1 rep e) => Linear (AnyChunks rep e) e
 
 {- Copyable and LinearM instances. -}
 
-instance (Monad m, BorderedM1 m rep Int e, LinearM1 m rep e)
-      => Copyable m (AnyChunks rep e)
+instance (Monad m, LinearM1 m rep e) => Copyable m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 
-instance (BorderedM1 m rep Int e, LinearM1 m rep e)
-      => LinearM m (AnyChunks rep e) e
+instance LinearM1 m rep e => LinearM m (AnyChunks rep e) e
   where
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
@@ -588,13 +586,13 @@ instance (SetWith1 rep e, Linear1 rep e, Ord (rep e))
 
 {- Scan instances. -}
 
-instance (Linear1 (AnyChunks rep) e) => Scan (AnyChunks rep e) e
+instance Linear1 (AnyChunks rep) e => Scan (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
 {- Map and Indexed instances. -}
 
-instance (Indexed1 rep Int e) => Map (AnyChunks rep e) Int e
+instance Indexed1 rep Int e => Map (AnyChunks rep e) Int e
   where
     toMap ascs =
       let bnds = rangeBounds (fsts ascs)
@@ -625,7 +623,7 @@ instance (Indexed1 rep Int e) => Map (AnyChunks rep e) Int e
     kfoldr f base es = let bnds = bounds es in kfoldr (f . index bnds) base es
     kfoldl f base es = let bnds = bounds es in kfoldl (f . index bnds) base es
 
-instance (Indexed1 rep Int e) => Indexed (AnyChunks rep e) Int e
+instance Indexed1 rep Int e => Indexed (AnyChunks rep e) Int e
   where
     assoc bnds ascs = AnyChunks (go bnds ascs)
       where
@@ -686,7 +684,7 @@ instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e)
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
-instance (IndexedM1 m rep Int e) => IndexedM m (AnyChunks rep e) Int e
+instance IndexedM1 m rep Int e => IndexedM m (AnyChunks rep e) Int e
   where
     fromAssocs bnds ascs = AnyChunks <$> sequence (go bnds ascs)
       where
@@ -735,24 +733,26 @@ instance {-# OVERLAPPABLE #-} (Linear1 imm e, Thaw1 m imm mut e)
     unsafeThaw = unsafeThaw . concat . toChunks
 
 -- | Creates one-chunk mutable stream, may be memory inefficient.
-instance {-# OVERLAPPABLE #-} (Thaw1 m imm mut e)
+instance {-# OVERLAPPABLE #-} Thaw1 m imm mut e
       => Thaw m (imm e) (AnyChunks mut e)
   where
     unsafeThaw = fmap (AnyChunks . single) . unsafeThaw
     thaw       = fmap (AnyChunks . single) . thaw
 
-instance {-# OVERLAPS #-} (Thaw1 m imm mut e)
+instance {-# OVERLAPS #-} Thaw1 m imm mut e
       => Thaw m (AnyChunks imm e) (AnyChunks mut e)
   where
     unsafeThaw (AnyChunks imm) = AnyChunks <$> mapM unsafeThaw imm
     thaw       (AnyChunks imm) = AnyChunks <$> mapM thaw imm
 
 -- | Creates one-chunk immutable stream, may be memory inefficient.
-instance {-# OVERLAPPABLE #-} (Freeze1 m mut imm e)
+instance {-# OVERLAPPABLE #-} Freeze1 m mut imm e
       => Freeze m (mut e) (AnyChunks imm e)
   where
     unsafeFreeze = fmap (AnyChunks . single) . unsafeFreeze
     freeze       = fmap (AnyChunks . single) . freeze
+
+--------------------------------------------------------------------------------
 
 -- | Creates new immutable structure using 'merged'.
 instance {-# OVERLAPPABLE #-} (LinearM1 m mut e, Freeze1 m mut imm e)
@@ -761,7 +761,7 @@ instance {-# OVERLAPPABLE #-} (LinearM1 m mut e, Freeze1 m mut imm e)
     unsafeFreeze (AnyChunks es) = unsafeFreeze =<< merged es
     freeze       (AnyChunks es) = freeze       =<< merged es
 
-instance {-# OVERLAPS #-} (Freeze1 m mut imm e)
+instance {-# OVERLAPS #-} Freeze1 m mut imm e
       => Freeze m (AnyChunks mut e) (AnyChunks imm e)
   where
     unsafeFreeze (AnyChunks mut) = AnyChunks <$> mapM unsafeFreeze mut

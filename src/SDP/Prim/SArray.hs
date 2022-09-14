@@ -48,13 +48,10 @@ import GHC.Exts
   (
     Array#, MutableArray#, State#, Int#,
     
-    newArray#, indexArray#, readArray#, writeArray#,
-    
+    newArray#, indexArray#, readArray#, writeArray#, sameMutableArray#,
     thawArray#, unsafeThawArray#, freezeArray#, unsafeFreezeArray#,
-    
     copyArray#, copyMutableArray#, cloneArray#, cloneMutableArray#,
-    
-    sameMutableArray#, (+#), (-#), (==#)
+    (+#), (-#), (==#)
   )
 
 import GHC.Types
@@ -1090,7 +1087,7 @@ type IOArray# = MIOArray# IO
 
 {- NullableM instance. -}
 
-instance (MonadIO io) => NullableM io (MIOArray# io e)
+instance MonadIO io => NullableM io (MIOArray# io e)
   where
     newNull = pack newNull
     nowNull = stToMIO . nowNull . unpack
@@ -1389,7 +1386,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
-
 
 

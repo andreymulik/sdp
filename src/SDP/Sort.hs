@@ -64,17 +64,17 @@ instance Sort [a] a
 --------------------------------------------------------------------------------
 
 -- | 'Sort' contraint for @(Type -> Type)@-kind types.
-type Sort1 rep e = Sort (rep e)
+type Sort1 rep e = Sort (rep e) e
 
 -- | 'Sort' contraint for @(Type -> Type -> Type)@-kind types.
-type Sort2 rep i e = Sort (rep i e)
+type Sort2 rep i e = Sort (rep i e) e
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Sort' quantified contraint for @(Type -> Type)@-kind types.
-type Sort' rep = forall e . Sort (rep e)
+type Sort' rep = forall e . Sort (rep e) e
 
 -- | 'Sort' quantified contraint for @(Type -> Type -> Type)@-kind types.
-type Sort'' rep = forall i e . Sort (rep i e)
+type Sort'' rep = forall i e . Sort (rep i e) e
 #endif
 
 --------------------------------------------------------------------------------

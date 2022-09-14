@@ -68,7 +68,13 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
+class
+  (
+    Monad m,
+    Copyable m l,
+    NullableM m l,
+    EstimateM m l
+  ) => LinearM m l e | l -> m, l -> e
   where
     {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
         (getLeft|getRight), (!#>), writeM, copyTo #-}
@@ -317,7 +323,6 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     takeM :: Int -> l -> m l
-    default takeM :: BorderedM m l i => Int -> l -> m l
     takeM n es = do s <- getSizeOf es; sansM (s - n) es
     
     {- |
@@ -325,7 +330,6 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     dropM :: Int -> l -> m l
-    default dropM :: BorderedM m l i => Int -> l -> m l
     dropM n es = do s <- getSizeOf es; keepM (s - n) es
     
     {- |
@@ -333,7 +337,6 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     keepM :: Int -> l -> m l
-    default keepM :: BorderedM m l i => Int -> l -> m l
     keepM n es = do s <- getSizeOf es; dropM (s - n) es
     
     {- |
@@ -341,7 +344,6 @@ class (Monad m, NullableM m l, Copyable m l) => LinearM m l e | l -> m, l -> e
       Changes in the source and result must be synchronous.
     -}
     sansM :: Int -> l -> m l
-    default sansM :: BorderedM m l i => Int -> l -> m l
     sansM n es = do s <- getSizeOf es; takeM (s - n) es
     
     {- |
@@ -568,7 +570,6 @@ field +=: e = Prop (Prepend field e)
     Typeable m, Typeable record, Typeable field
   ) => Int -> field -> Prop m record
 n ~=: field = Prop (Delete n field)
-
 #endif
 
 --------------------------------------------------------------------------------
@@ -591,5 +592,4 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
-
 

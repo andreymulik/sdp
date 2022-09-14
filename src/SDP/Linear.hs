@@ -1039,19 +1039,19 @@ parts =
 --------------------------------------------------------------------------------
 
 -- | @stripPrefix sub line@ strips prefix @sub@ of @line@ (if any).
-stripPrefix :: (Linear l e, Bordered l i, Eq e) => l -> l -> l
+stripPrefix :: (Linear l e, Eq e) => l -> l -> l
 stripPrefix sub line = sub `isPrefixOf` line ? drop (sizeOf sub) line $ line
 
 -- | @stripSuffix sub line@ strips suffix @sub@ of @line@ (if any).
-stripSuffix :: (Linear l e, Bordered l i, Eq e) => l -> l -> l
+stripSuffix :: (Linear l e, Eq e) => l -> l -> l
 stripSuffix sub line = sub `isSuffixOf` line ? sans (sizeOf sub) line $ line
 
 -- | @stripPrefix' sub line@ strips prefix @sub@ of @line@ or returns 'Nothing'.
-stripPrefix' :: (Linear l e, Bordered l i, Eq e) => l -> l -> Maybe l
+stripPrefix' :: (Linear l e, Eq e) => l -> l -> Maybe l
 stripPrefix' sub = isPrefixOf sub ?+ drop (sizeOf sub)
 
 -- | @stripSuffix sub line@ strips suffix @sub@ of @line@ or returns 'Nothing'.
-stripSuffix' :: (Linear l e, Bordered l i, Eq e) => l -> l -> Maybe l
+stripSuffix' :: (Linear l e, Eq e) => l -> l -> Maybe l
 stripSuffix' sub = isSuffixOf sub ?+ sans (sizeOf sub)
 
 --------------------------------------------------------------------------------

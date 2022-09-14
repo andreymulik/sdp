@@ -102,12 +102,12 @@ instance (Index i, Read i, Read e, Indexed1 rep Int e) => Read (AnyBorder rep i 
 
 {- Overloaded Lists and String support. -}
 
-instance (Index i, IsString (rep Char), Bordered1 rep Int Char)
+instance (Index i, IsString (rep Char), Estimate1 rep Char)
       => IsString (AnyBorder rep i Char)
   where
     fromString = withBounds . fromString
 
-instance (Index i, E.IsList (rep e), Bordered1 rep Int e)
+instance (Index i, E.IsList (rep e), Estimate1 rep e)
       => E.IsList (AnyBorder rep i e)
   where
     type Item (AnyBorder rep i e) = E.Item (rep e)
@@ -122,7 +122,7 @@ instance (Index i, E.IsList (rep e), Bordered1 rep Int e)
 
 instance (Index i, Nullable1 rep e) => Default (AnyBorder rep i e) where def = Z
 
-instance (Index i, Semigroup (rep e), Bordered1 rep Int e)
+instance (Index i, Semigroup (rep e), Estimate1 rep e)
       => Semigroup (AnyBorder rep i e)
   where
     (<>) = withBounds ... on (<>) unpack
@@ -137,12 +137,12 @@ instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e)
 
 {- Nullable and NullableM instances. -}
 
-instance (Index i, Nullable (rep e)) => Nullable (AnyBorder rep i e)
+instance (Index i, Nullable1 rep e) => Nullable (AnyBorder rep i e)
   where
     isNull = \ (AnyBorder l u rep) -> isEmpty (l, u) || isNull rep
     lzero  = uncurry AnyBorder (defaultBounds 0) Z
 
-instance (Index i, NullableM m (rep e)) => NullableM m (AnyBorder rep i e)
+instance (Index i, NullableM1 m rep e) => NullableM m (AnyBorder rep i e)
   where
     nowNull (AnyBorder l u es) = isEmpty (l, u) ? return True $ nowNull es
     newNull = uncurry AnyBorder (defaultBounds 0) <$> newNull
@@ -291,8 +291,7 @@ instance Forceable1 rep e => Forceable (AnyBorder rep i e)
   where
     force (AnyBorder l u rep) = AnyBorder l u (force rep)
 
-instance (Index i, Linear1 rep e, Bordered1 rep Int e)
-      => Linear (AnyBorder rep i e) e
+instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
   where
     single = withBounds . single
     
@@ -369,8 +368,7 @@ instance Copyable1 m rep e => Copyable m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
-instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e)
-      => LinearM m (AnyBorder rep i e) e
+instance (Index i, LinearM1 m rep e) => LinearM m (AnyBorder rep i e) e
   where
     getHead = getHead . unpack
     getLast = getLast . unpack
@@ -460,7 +458,7 @@ instance (Index i, LinearM1 m rep e, BorderedM1 m rep Int e)
 instance (SetWith1 (AnyBorder rep i) e, Nullable (AnyBorder rep i e), Ord e)
       => Set (AnyBorder rep i e) e
 
-instance (Index i, SetWith1 rep e, Linear1 rep e, Bordered1 rep Int e)
+instance (Index i, SetWith1 rep e, Linear1 rep e)
       => SetWith (AnyBorder rep i e) e
   where
     isSubsetWith f = isSubsetWith f `on` unpack
@@ -487,9 +485,9 @@ instance (Index i, SetWith1 rep e, Linear1 rep e, Bordered1 rep Int e)
 
 {- Scan and Sort instances. -}
 
-instance (Linear1 (AnyBorder rep i) e) => Scan (AnyBorder rep i e) e
+instance (Linear2 (AnyBorder rep) i e) => Scan (AnyBorder rep i e) e
 
-instance (Index i, Sort (rep e) e) => Sort (AnyBorder rep i e) e
+instance (Index i, Sort1 rep e) => Sort (AnyBorder rep i e) e
   where
     sortBy cmp = \ (AnyBorder l u rep) -> AnyBorder l u (sortBy cmp rep)
     sortedBy f = sortedBy f . unpack
@@ -614,7 +612,7 @@ instance {-# OVERLAPPABLE #-} (Index i, Thaw m (rep e) mut)
     thaw       = thaw . unpack
 
 -- Prim to bordered (with any index).
-instance {-# OVERLAPPABLE #-} (Index i, Thaw m imm (rep e), Bordered1 rep Int e)
+instance {-# OVERLAPPABLE #-} (Index i, Thaw m imm (rep e), Estimate1 rep e)
       => Thaw m imm (AnyBorder rep i e)
   where
     unsafeThaw = fmap withBounds . unsafeThaw
@@ -635,7 +633,7 @@ instance {-# OVERLAPPABLE #-} (Index i, Freeze m (rep e) imm)
     freeze       = freeze . unpack
 
 -- Prim to bordered (with any index).
-instance {-# OVERLAPPABLE #-} (Index i, Freeze m mut (rep e), Bordered1 rep Int e)
+instance {-# OVERLAPPABLE #-} (Index i, Freeze m mut (rep e), Estimate1 rep e)
       => Freeze m mut (AnyBorder rep i e)
   where
     unsafeFreeze = fmap withBounds . unsafeFreeze
@@ -655,11 +653,13 @@ unpack :: AnyBorder rep i e -> rep e
 unpack =  \ (AnyBorder _ _ es) -> es
 
 {-# INLINE withBounds #-}
-withBounds :: (Index i, Bordered1 rep Int e) => rep e -> AnyBorder rep i e
+withBounds :: (Index i, Estimate1 rep e) => rep e -> AnyBorder rep i e
 withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 
 {-# INLINE withBounds' #-}
-withBounds' :: (Index i, BorderedM1 m rep Int e) => rep e -> m (AnyBorder rep i e)
+withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
 
 
