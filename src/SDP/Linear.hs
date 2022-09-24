@@ -47,7 +47,12 @@ module SDP.Linear
   csfoldr', csfoldl', msfoldr, msfoldl, spanl, breakl, spanr, breakr,
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
   selectWhile', selectEnd', extractWhile', extractEnd',
-  each, eachFrom, after, combo, ascending
+  each, eachFrom, after, combo, ascending,
+  
+  -- ** Legacy
+  o_foldr1, o_foldl1, o_foldr1', o_foldl1',
+  o_foldr, o_foldl, o_foldr', o_foldl',
+  dropWhile, dropEnd, dropSide
 )
 where
 
@@ -1149,12 +1154,72 @@ instance Linear [e] e
 
 --------------------------------------------------------------------------------
 
+{- Legacy. -}
+
+{-# DEPRECATED o_foldr  "in favour 'sfoldr'"  #-}
+{-# DEPRECATED o_foldl  "in favour 'sfoldl'"  #-}
+{-# DEPRECATED o_foldr' "in favour 'sfoldr''" #-}
+{-# DEPRECATED o_foldl' "in favour 'sfoldl''" #-}
+
+-- | Same as 'sfoldr'.
+o_foldr :: Linear l e => (e -> b -> b) -> b -> l -> b
+o_foldr =  sfoldr
+
+-- | Same as 'sfoldl'.
+o_foldl :: Linear l e => (b -> e -> b) -> b -> l -> b
+o_foldl  =  sfoldl
+
+-- | Same as 'sfoldr''.
+o_foldr' :: Linear l e => (e -> b -> b) -> b -> l -> b
+o_foldr' =  sfoldr'
+
+-- | Same as 'sfoldl''.
+o_foldl' :: Linear l e => (b -> e -> b) -> b -> l -> b
+o_foldl' =  sfoldl'
+
+{-# DEPRECATED o_foldr1  "in favour 'sfoldr1'"  #-}
+{-# DEPRECATED o_foldl1  "in favour 'sfoldl1'"  #-}
+{-# DEPRECATED o_foldr1' "in favour 'sfoldr1''" #-}
+{-# DEPRECATED o_foldl1' "in favour 'sfoldl1''" #-}
+
+-- | Same as 'sfoldr1'.
+o_foldr1 :: Linear l e => (e -> e -> e) -> l -> e
+o_foldr1 =  sfoldr1
+
+-- | Same as 'sfoldl1'.
+o_foldl1 :: Linear l e => (e -> e -> e) -> l -> e
+o_foldl1  =  sfoldl1
+
+-- | Same as 'sfoldr1''.
+o_foldr1' :: Linear l e => (e -> e -> e) -> l -> e
+o_foldr1' =  sfoldr1'
+
+-- | Same as ''.
+o_foldl1' :: Linear l e => (e -> e -> e) -> l -> e
+o_foldl1' =  sfoldl1'
+
+{-# DEPRECATED dropWhile "in favour 'trimL"  #-}
+{-# DEPRECATED dropSide  "in favour 'trim'"  #-}
+{-# DEPRECATED dropEnd   "in favour 'trimR'" #-}
+
+-- | Same as 'trimL'.
+dropWhile :: Linear l e => (e -> Bool) -> l -> l
+dropWhile =  trimL
+
+-- | Same as 'trimR'.
+dropEnd :: Linear l e => (e -> Bool) -> l -> l
+dropEnd =  trimR
+
+-- | Same as 'trim'.
+dropSide :: Linear l e => (e -> Bool) -> l -> l
+dropSide =  trim
+
+--------------------------------------------------------------------------------
+
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
-
 
 
