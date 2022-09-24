@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms, ViewPatterns, BangPatterns, DefaultSignatures #-}
 {-# LANGUAGE Trustworthy, CPP, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE PatternSynonyms, ViewPatterns, BangPatterns #-}
 
 #ifdef SDP_LINEAR_EXTRAS
 {-# LANGUAGE FlexibleContexts #-}
@@ -665,16 +665,7 @@ class
       > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
     -}
     splitsOn :: Eq e => l -> l -> [l]
-#if __GLASGOW_HASKELL__ >= 802
     splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
-    -- ghc-8.0.1 has bug in default signatures, so this can be used with it
-#else
-    {-
-      Not tested, but should be significantly slower than the definitions below.
-      If you plan to support ghc-8.0.1, override splitsOn in all your instances.
-    -}
-    splitsOn sub line = fromList <$> splitsOn (listL sub) (listL line)
-#endif
     
     {- |
       @replaceBy sub new line@ replace every non-overlapping occurrence of @sub@
@@ -1086,5 +1077,4 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
 
