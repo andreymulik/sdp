@@ -138,7 +138,7 @@ instance MonadVar m => BorderedM m (MArray# m e) Int
 
 instance MonadVar m => Copyable m (MArray# m e)
   where
-    copied (MArray# arr) = MArray# <$> mapWith' (const $ var <=< get this') arr
+    copied (MArray# arr) = MArray# <$> mapMLinear' (const $ var <=< get this') arr
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where

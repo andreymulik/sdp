@@ -42,9 +42,12 @@ module SDP.Linear
 #endif
   
   -- * Related functions
+  splitBy, divideBy, splits, divides, tails, inits, parts, chunks, save, skip,
+  partitions, subsequences, intersperse, intercalate, trim, except, mexcept,
+  csfoldr', csfoldl', msfoldr, msfoldl, spanl, breakl, spanr, breakr,
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
-  intercalate, tails, inits, ascending, save, skip, parts,
-  csfoldr', csfoldl', msfoldr, msfoldl
+  selectWhile', selectEnd', extractWhile', extractEnd',
+  each, eachFrom, after, combo, ascending
 )
 where
 
@@ -99,39 +102,46 @@ infixl 9 !^
   'Linear' structures must follow some rules:
   
   @
+    mconcat === fold
     mempty  === lzero
     mappend === (<>) === (++)
-    mconcat === fold === concat
     
     isNull  (single e)   === True
     isNull (toHead x xs) === True
     isNull (toLast xs x) === True
     
+    sfoldr  === ofoldr . const
+    sfoldl  === ofoldl . const
+    sfoldr1 === ofoldr1 . const
+    sfoldl1 === ofoldl1 . const
+    
     reverse . reverse === id
     listL === reverse . listR === listR . reverse
     listR === reverse . listL === listL . reverse
     
+    concat === fold
+    concatMap === foldMap
     fromList === fromFoldable
     fromFoldable === foldr toHead Z
     
+    ofoldr f base xs === sfoldr (uncurry f) base (assocs xs)
+    filter p = fromList . sfoldr (\ x xs -> p x ? x : xs $ xs) []
+    select f = sfoldr (\ x es -> case f x of {Just e -> e : es; _ -> es}) []
+    
     -- For 'Foldable' instances:
+    toList === listL
+    length === sizeOf
+    length (replicate n e) === n
     length (toHead x xs) === length xs + 1
     length (toLast xs x) === length xs + 1
     
-    length (replicate n e) === n
-    
-    isNull === length == 0
-    length === length . listL === length . listR
-    toList === listL === reverse . listR === listR . reverse
+    isNull xs === length xs == 0
+    length xs === length (listL xs) === length (listR xs)
     
     sfoldr  === foldr
     sfoldl  === foldl
     sfoldr1 === foldr1
     sfoldl1 === foldl1
-    
-    ofoldr f base xs === foldr (uncurry f) base (assocs xs)
-    filter p = fromList . foldr (\ x xs -> p x ? x : xs $ xs) []
-    select f = foldr (\ x es -> case f x of {Just e -> e : es; _ -> es}) []
   @
 -}
 class
@@ -147,10 +157,10 @@ class
     Estimate l
   ) => Linear l e | l -> e
   where
-    {-# MINIMAL toHead, toLast, (take|sans), (drop|keep),
-        (uncons'|(head,tail)|uncons), (unsnoc'|(init,last)|unsnoc) #-}
+    {-# MINIMAL (toHead|single), (uncons|(head,last)|uncons'), (take|sans),
+                                 (unsnoc|(init,last)|unsnoc'), (drop|keep) #-}
     
-    {- Core: basis for other definitions. -}
+    {- Item-level operations. -}
     
     -- | Prepends element to line, constructor for ':>' pattern.
     toHead :: e -> l -> l
@@ -192,6 +202,36 @@ class
     last :: l -> e
     last =  snd . unsnoc
     
+    {- Item(s) from/to sequence. -}
+    
+    -- | Just singleton.
+    single :: e -> l
+    single =  (`toHead` Z)
+    
+    -- | @replicate n e@ returns a line of @n@ repetitions of the element @e@.
+    replicate :: Int -> e -> l
+    replicate n = fromListN n . replicate n
+    
+    -- | Creates line from list.
+    fromList :: [e] -> l
+    fromList =  fromFoldable
+    
+    {- |
+      @since 0.3
+      
+      Creates line from list.
+    -}
+    fromList' :: Maybe SizeHint -> [e] -> l
+    fromList' =  const fromFoldable
+    
+    -- | Create finite line from (possibly infinite) list.
+    fromListN :: Int -> [e] -> l
+    fromListN n es = Just (SizeHintEQ n) `fromList'` L.take n es
+    
+    -- | Generalized 'fromList'.
+    fromFoldable :: Foldable f => f e -> l
+    fromFoldable =  foldr toHead Z
+    
     -- | Left to right view of line, same to 'toList'.
     listL :: l -> [e]
     listL =  L.unfoldr uncons'
@@ -200,258 +240,11 @@ class
     listR :: l -> [e]
     listR =  L.reverse . listL
     
-    -- | 'ofoldr' is right fold with offset.
-    ofoldr :: (Int -> e -> b -> b) -> b -> l -> b
-    ofoldr f base = ofoldr f base . listL
-    
-    -- | 'ofoldl' is left fold with offset.
-    ofoldl :: (Int -> b -> e -> b) -> b -> l -> b
-    ofoldl f base = ofoldl f base . listL
-    
-    {- Perf: most sensitive for performance -}
-    
-    -- | Just singleton.
-    single :: e -> l
-    single =  (`toHead` Z)
-    
-    -- | Creates line from list.
-    fromList :: [e] -> l
-    fromList =  fromFoldable
-    
-    -- | Create finite line from (possibly infinite) list.
-    fromListN :: Int -> [e] -> l
-    fromListN =  fromList ... L.take
-    
-    -- | Generalized 'fromList'.
-    fromFoldable :: Foldable f => f e -> l
-    fromFoldable =  foldr toHead Z
-    
-    -- | @replicate n e@ returns a line of @n@ repetitions of the element @e@.
-    replicate :: Int -> e -> l
-    replicate n = fromListN n . replicate n
-    
-    -- | Concatenation of two lines.
-    (++) :: l -> l -> l
-    (++) =  (<>)
-    
-    {- |
-      Returns the element of a sequence by offset, may be completely unsafe.
-      This is an optimistic read function and shouldn't perform checks for
-      efficiency reasons.
-      
-      If you need safety, use (!) or (!?). The generalization of this function
-      by index type (.!).
-      
-      > es !^ i = listL es !! i
-    -}
-    (!^) :: l -> Int -> e
-    (!^) =  (L.!!) . listL
-    
-    {- |
-      @write es n e@ writes value @e@ in position @n@ (offset), returns new
-      structure. If @n@ is out of range, returns equal structure (@es@ or copy).
-    -}
-    write :: l -> Int -> e -> l
-    write es = fromList ... write (listL es)
-    
-    {- |
-      @since 0.3
-      
-      Same as 'listWith'', but actions can be performed in any order (may be
-      parallel). Default: 'listWith''.
-    -}
-    listWith :: Monad m => (Int -> e -> m r) -> l -> m [r]
-    listWith =  listWith'
-    
-    {- |
-      @since 0.3
-      
-      @'listWith'' go es@ executes an action @go@ for each offset and element
-      of @es@ from left to right.
-      
-      @
-      listWith' go es === listWith' go (listL es) === mapWith' go (listL es)
-      @
-    -}
-    listWith' :: Monad m => (Int -> e -> m r) -> l -> m [r]
-    listWith' f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
-    
-    {- |
-      @since 0.3
-      
-      Same as 'mapWith'', but actions can be performed in any order (may be
-      parallel). Default: 'mapWith''.
-    -}
-    mapWith :: Monad m => (Int -> e -> m e) -> l -> m l
-    mapWith =  fmap fromList ... listWith
-    
-    {- |
-      @since 0.3
-      
-      Same as 'listWith'', but keeps argument stucture like 'fmap'.
-    -}
-    mapWith' :: Monad m => (Int -> e -> m e) -> l -> m l
-    mapWith' =  fmap fromList ... listWith'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'selectWith'', but actions can be performed in any order (may be
-      parallel). Default: 'selectWith''.
-    -}
-    selectWith :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
-    selectWith =  selectWith'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'listWith'', but drops 'Nothing' elements.
-    -}
-    selectWith' :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
-    selectWith' =  fmap catMaybes ... listWith'
-    
-    {- Custom -}
-    
-    -- | Generalized concat.
-    concat :: Foldable f => f l -> l
-    concat =  fold
-    
-    -- | Generalized concatMap.
-    concatMap :: Foldable f => (a -> l) -> f a -> l
-    concatMap =  foldMap
-    
-    -- | Generalized intersperse.
-    intersperse :: e -> l -> l
-    intersperse e = fromList . L.intersperse e . listL
-    
-    -- | Generalized filter.
-    filter :: (e -> Bool) -> l -> l
-    filter p = fromList . sfoldr (\ x xs -> p x ? x : xs $ xs) []
-    
-    -- | Inverted filter.
-    except :: (e -> Bool) -> l -> l
-    except p = filter (not . p)
-    
-    mfilter :: Monad m => (e -> m Bool) -> l -> m l
-    mfilter go = fmap fromList . mselect (\ e -> do b <- go e; return (b ? Just e $ Z))
-    
-    -- | Generalization of partition.
-    partition :: (e -> Bool) -> l -> (l, l)
-    partition p es = (filter p es, except p es)
-    
-    -- | Generalization of partition, that select sublines by predicates.
-    partitions :: Foldable f => f (e -> Bool) -> l -> [l]
-    partitions ps es =
-      let f = \ es' -> case es' of
-            (x : xs) -> (\ (y, ys) -> (ys : y : xs)) . (`partition` x)
-            _        -> unreachEx "partitions"
-      in  L.reverse $ foldl f [es] ps
-    
-    -- | @select f es@ is selective map of @es@ elements to new list.
-    select :: (e -> Maybe a) -> l -> [a]
-    select f = sfoldr (\ x es -> maybe es (: es) (f x)) []
-    
-    -- | @select' f es@ is selective map of @es@ elements to new line.
-    select' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> t a
-    select' =  fromList ... select
-    
-    {- |
-      @extract f es@ returns a selective map of @es@ elements to new list and
-      the remaining elements of the line.
-    -}
-    extract :: (e -> Maybe a) -> l -> ([a], l)
-    extract f =
-      let g = \ b -> second (b :) `maybe` (first . (:)) $ f b
-      in  fmap fromList . sfoldr' g ([], [])
-    
-    {- |
-      @extract' f es@ returns a selective map of @es@ elements to new line and
-      the remaining elements of the line.
-    -}
-    extract' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> (t a, l)
-    extract' =  first fromList ... extract
-    
-    {- |
-      @selects fs es@ sequentially applies the functions from @fs@ to the
-      remainder of @es@, returns a list of selections and the remainder of the
-      last selection.
-    -}
-    selects :: Foldable f => f (e -> Maybe a) -> l -> ([[a]], l)
-    selects fs es =
-      let g = \ as -> first (: as) ... flip extract
-      in  foldl (uncurry g) ([], es) fs
-    
-    {- |
-      @selects' fs es@ sequentially applies the functions from @fs@ to the
-      remainder of @es@, returns a line of selections and the remainder of the
-      last selection.
-    -}
-    selects' :: (Foldable f, t e ~ l, Linear1 t a) => f (e -> Maybe a) -> l -> ([t a], l)
-    selects' =  first (map fromList) ... selects
-    
-    {- |
-      @since 0.3
-      
-      Monadic version of 'select'.
-    -}
-    mselect :: Monad m => (e -> m (Maybe a)) -> l -> m [a]
-    mselect go es = sfoldr (\ e xs -> do
-        b <- go e
-        case b of
-          Just x -> (x :) <$> xs
-          _      -> xs
-        ) (return []) es
-    
-    {- |
-      @since 0.3
-      
-      Monadic version of 'select''.
-    -}
-    mselect' :: (Monad m, t e ~ l, Linear1 t a) => (e -> m (Maybe a)) -> l -> m (t a)
-    mselect' =  fmap fromList ... mselect
-    
-    {- |
-      @since 0.3
-      
-      Monadic version of 'extract'.
-    -}
-    mextract :: Monad m => (e -> m (Maybe a)) -> l -> m ([a], l)
-    mextract go es = second fromList <$> sfoldr (\ y zs -> do
-      b <- go y; (xs, ys) <- zs;
-      return $ case b of
-        Just x -> (x : xs, ys)
-        _      -> (xs, y : ys)
-      ) (return ([], [])) es
-    
-    {- |
-      @since 0.3
-      
-      Monadic version of 'extract''.
-    -}
-    mextract' :: (Monad m, t e ~ l, Linear1 t a) => (e -> m (Maybe a)) -> l -> m (t a, l)
-    mextract' =  fmap (first fromList) ... mextract
-    
-    -- | Generalized reverse.
+    -- | Returns sequence with reversed element order.
     reverse :: l -> l
-    reverse =  fromList . listR
+    reverse es = fromList' (sizeHint es) (listR es)
     
-    {- |
-      @iterate n f x@ returns sequence of @n@ applications of @f@ to @x@.
-      
-      Note that @iterate@ returns finite sequence, instead "Prelude" prototype.
-    -}
-    iterate :: Int -> (e -> e) -> e -> l
-    iterate n = fromListN n ... iterate n
-    
-    -- | Same as @nubBy ('==')@.
-    nub :: Eq e => l -> l
-    nub =  nubBy (==)
-    
-    -- | Generalization of nubBy.
-    nubBy :: Equal e -> l -> l
-    nubBy f = fromList . nubBy f . listL
-    
-    {- Additional folds. -}
+    {- Folds. -}
     
     -- | 'sfoldr' is just 'foldr' in 'Linear' context.
     sfoldr :: (e -> b -> b) -> b -> l -> b
@@ -460,14 +253,6 @@ class
     -- | 'sfoldl' is just 'foldl' in 'Linear' context.
     sfoldl :: (b -> e -> b) -> b -> l -> b
     sfoldl =  ofoldl . const
-    
-    -- | 'ofoldr'' is strict version of 'ofoldr'.
-    ofoldr' :: (Int -> e -> b -> b) -> b -> l -> b
-    ofoldr' f = ofoldr (\ !i e !b -> f i e b)
-    
-    -- | 'ofoldl'' is strict version of 'ofoldl'.
-    ofoldl' :: (Int -> b -> e -> b) -> b -> l -> b
-    ofoldl' f = ofoldl (\ !i !b e -> f i b e)
     
     -- | 'sfoldr'' is just 'foldr'' in 'Linear' context.
     sfoldr' :: (e -> b -> b) -> b -> l -> b
@@ -501,62 +286,6 @@ class
       (e :> es) -> sfoldl' f e es
       _         -> pfailEx "sfoldl1'"
     
-    {- Don't touch. -}
-    
-    {- |
-      The @isSubseqOf xs ys@ checks if all the elements of the @xs@ occur,
-      in order, in the @ys@. The elements don't have to occur consecutively.
-    -}
-    isSubseqOf :: Eq e => l -> l -> Bool
-    isSubseqOf =  L.isSubsequenceOf `on` listL
-    
-    -- | Generalized 'subsequences'.
-    subsequences :: l -> [l]
-    subsequences =  map fromList . L.subsequences . listL
-    
-    {- New functions. -}
-    
-    {- |
-      @since 0.2.1
-      
-      @'before' es i e@ insert @e@ to @es@ before element with offset @i@. If
-      @i@ goes beyond the lower or upper bounds, @e@ is prepended or appended to
-      @es@ respectively.
-      
-      > before [0 .. 5] (-1) 7 == [7,0,1,2,3,4,5]
-      > before [0 .. 5]   0  7 == [7,0,1,2,3,4,5]
-      > before [0 .. 5]   3  7 == [0,1,2,7,3,4,5]
-      > before [0 .. 5]   5  7 == [0,1,2,3,4,7,5]
-      > before [0 .. 5]   6  7 == [0,1,2,3,4,5,7]
-      > before [0 .. 5]  19  7 == [0,1,2,3,4,5,7]
-    -}
-    before :: l -> Int -> e -> l
-    before es = fromList ... before (listL es)
-    
-    {- |
-      @since 0.2.1
-      
-      @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
-      
-      > after es i e == before es (i + 1) e
-    -}
-    after :: l -> Int -> e -> l
-    after es i = before es (i + 1)
-    
-    {- |
-      @since 0.2.1
-      
-      @'remove' es i@ delete element with offset @i@ from @es@.
-      
-      > remove (-1) [0 .. 5] == [0 .. 5]
-      > remove   6  [0 .. 5] == [0 .. 5]
-      > remove   0  [0 .. 5] == [1,2,3,4,5]
-      > remove   3  [0 .. 5] == [0,1,2,4,5]
-      > remove   5  [0 .. 5] == [0,1,2,3,4]
-    -}
-    remove :: Int -> l -> l
-    remove n = fromList . remove n . listL
-    
     {- |
       @since 0.3
       
@@ -569,7 +298,64 @@ class
     unfoldr :: (b -> Maybe (e, b)) -> b -> l
     unfoldr =  fromList ... L.unfoldr
     
-    {- From Split -}
+    {- Folds with offset. -}
+    
+    -- | 'ofoldr' is right fold with offset.
+    ofoldr :: (Int -> e -> b -> b) -> b -> l -> b
+    ofoldr f base = ofoldr f base . listL
+    
+    -- | 'ofoldl' is left fold with offset.
+    ofoldl :: (Int -> b -> e -> b) -> b -> l -> b
+    ofoldl f base = ofoldl f base . listL
+    
+    -- | 'ofoldr'' is strict version of 'ofoldr'.
+    ofoldr' :: (Int -> e -> b -> b) -> b -> l -> b
+    ofoldr' f = ofoldr (\ !i e !b -> f i e b)
+    
+    -- | 'ofoldl'' is strict version of 'ofoldl'.
+    ofoldl' :: (Int -> b -> e -> b) -> b -> l -> b
+    ofoldl' f = ofoldl (\ !i !b e -> f i b e)
+    
+    {- |
+      @iterate n f x@ returns sequence of @n@ applications of @f@ to @x@.
+      
+      Note that @iterate@ returns finite sequence, instead "Prelude" prototype.
+    -}
+    iterate :: Int -> (e -> e) -> e -> l
+    iterate n = fromListN n ... iterate n
+    
+    {- Filtering operations. -}
+    
+    -- | Generalized filter.
+    filter :: (e -> Bool) -> l -> l
+    filter p = fromList . sfoldr (\ x xs -> p x ? x : xs $ xs) []
+    
+    mfilter :: Monad m => (e -> m Bool) -> l -> m l
+    mfilter go = fmap fromList . mselect (\ e -> do b <- go e; return (b ? Just e $ Z))
+    
+    -- | Generalization of partition.
+    partition :: (e -> Bool) -> l -> (l, l)
+    partition p es = (filter p es, except p es)
+    
+    -- | Monadic version of 'partition'.
+    mpartition :: Monad m => (e -> m Bool) -> l -> m (l, l)
+    mpartition p es = liftA2 (,) (mfilter p es) (mexcept p es)
+    
+    {- Concatenation. -}
+    
+    -- | Concatenation of two lines.
+    (++) :: l -> l -> l
+    (++) =  (<>)
+    
+    -- | Generalized concat.
+    concat :: Foldable f => f l -> l
+    concat =  fold
+    
+    -- | Generalized concatMap.
+    concatMap :: Foldable f => (a -> l) -> f a -> l
+    concatMap =  foldMap
+    
+    {- Splits. -}
     
     -- | @take n es@ takes first @n@ elements of @es@.
     take :: Int -> l -> l
@@ -579,6 +365,10 @@ class
     drop :: Int -> l -> l
     drop n es = keep (sizeOf es - n) es
     
+    -- | @split n es@ is same to @(take n es, drop n es)@.
+    split :: Int -> l -> (l, l)
+    split n es = (take n es, drop n es)
+    
     -- | @keep n es@ takes last @n@ elements of @es@.
     keep :: Int -> l -> l
     keep n es = drop (sizeOf es - n) es
@@ -587,174 +377,13 @@ class
     sans :: Int -> l -> l
     sans n es = take (sizeOf es - n) es
     
-    -- | @split n es@ is same to @(take n es, drop n es)@.
-    split :: Int -> l -> (l, l)
-    split n es = (take n es, drop n es)
-    
     -- | @divide n es@ is same to @(sans n es, keep n es)@.
     divide :: Int -> l -> (l, l)
     divide n es = (sans n es, keep n es)
     
-    {- |
-      Splits line into sequences of given sizes (left to right).
-      
-      > splits [5, 3, 12] ['a'..'z'] = ["abcde","fgh","ijklmnopqrst","uvwxyz"]
-    -}
-    splits :: Foldable f => f Int -> l -> [l]
-    splits ns es =
-      let f = \ es' n -> case es' of
-            (r : ds) -> let (d, r') = split n r in r' : d : ds
-            _        -> unreachEx "splits: must be non-empty"
-      in  reverse $ foldl f [es] ns
-    
-    {- |
-      Splits line into sequences of given sizes (right to left).
-      
-      > divides [5,3,12] ['a'..'z'] == ["abcdef","ghijk","lmn","opqrstuvwxyz"]
-    -}
-    divides :: Foldable f => f Int -> l -> [l]
-    divides ns es =
-      let f = \ n es' -> case es' of
-            (r : ds) -> let (r', d) = divide n r in r' : d : ds
-            _        -> unreachEx "divides: must be non-empty"
-      in  foldr f [es] ns
-    
-    {- |
-      Splits structures into chunks of size @n@ and the rest.
-      
-      > chunks x [] = [] -- forall x
-      > chunks 0 es = [] -- forall es
-      
-      > chunks 3 [1 .. 10] == [[1,2,3],[4,5,6],[7,8,9],[10]]
-    -}
-    chunks :: Int -> l -> [l]
-    chunks n es = isNull es || n < 1 ? [] $ let (x, xs) = split n es in x : chunks n xs
-    
-    {- |
-      Split line by first (left) separation element. If there is no such
-      element, @splitBy es = (es, Z)@.
-      
-      > splitBy (== '.') "foo" == ("foo","")
-      > splitBy (== '.') "foo." == ("foo","")
-      > splitBy (== '.') ".foo" == ("","foo")
-      > splitBy (== '.') "foo.bar" == ("foo","bar")
-      > splitBy (== '.') "foo.bar.baz" == ("foo","bar.baz")
-    -}
-    splitBy :: (e -> Bool) -> l -> (l, l)
-    splitBy f = bimap fromList fromList . splitBy f . listL
-    
-    {- |
-      Split line by last (right) separation element. If there is no such
-      element, @divide es = (Z, es)@.
-      
-      > divideBy (== '.') "foo" == ("","foo")
-      > divideBy (== '.') ".foo" == ("","foo")
-      > divideBy (== '.') "foo." == ("foo","")
-      > divideBy (== '.') "foo.bar" == ("foo","bar")
-      > divideBy (== '.') "foo.bar.baz" == ("foo.bar","baz")
-    -}
-    divideBy :: (e -> Bool) -> l -> (l, l)
-    divideBy f = bimap fromList fromList . divideBy f . listL
-    
     -- | Splits line by separation elements.
     splitsBy :: (e -> Bool) -> l -> [l]
     splitsBy e = map fromList . splitsBy e . listL
-    
-    {- |
-      @splitsOn sub line@ splits @line@ by @sub@.
-      
-      > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
-    -}
-    splitsOn :: Eq e => l -> l -> [l]
-    splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
-    
-    {- |
-      @replaceBy sub new line@ replace every non-overlapping occurrence of @sub@
-      in @line@ with @new@.
-      
-      > replaceBy "foo" "bar" "foobafoorbaz" == "barbabarrbaz"
-    -}
-    replaceBy :: Eq e => l -> l -> l -> l
-    replaceBy sub new = intercalate new . splitsOn sub
-    
-    {- |
-      Removes every non-overlapping occurrence of @sub@ with 'Z'.
-      
-      > removeAll = concat ... splitsOn
-      > (`replaceBy` Z) = removeAll
-    -}
-    removeAll :: Eq e => l -> l -> l
-    removeAll =  concat ... splitsOn
-    
-    {- |
-      @combo f es@ returns the length of the @es@ subsequence (left to tight)
-      whose elements are in order @f@.
-      
-      > combo (<) [] == 0
-      > combo (<) [1] == 1
-      > combo (<) [7, 4, 12] == 1
-      > combo (<) [1, 7, 3, 12] == 2
-    -}
-    combo :: Equal e -> l -> Int
-    combo f = combo f . listL
-    
-    {- |
-      @justifyL n e es@ prepends @(n - sizeOf es)@ elements @e@ to @es@ from the
-      left side if @(sizeOf es < n)@. Otherwise returns the first @n@ elements
-      of @es@, like @'take' n es@ do.
-    -}
-    justifyL :: Int -> e -> l -> l
-    justifyL n e = take n . (++ replicate n e)
-    
-    {- |
-      @justifyR n e es@ appends @(n - sizeOf es)@ elements @e@ to @es@ from the
-      right side if @(sizeOf es < n)@. Otherwise returns the first @n@ elements
-      of @es@, like @'keep' n es@ do.
-    -}
-    justifyR :: Int -> e -> l -> l
-    justifyR n e = keep n . (replicate n e ++)
-    
-    {- |
-      @each n es@ returns each @n@-th element of structure.
-      
-      @
-        each n [1 .. 5] = []
-        each 1 [1 .. 5] = [1 .. 5]
-        each 2 [1 .. 5] = [1, 3, 5]
-      @
-      
-      If @n == 1@, returns @es@.
-      If @n < 1@, returns 'Z'.
-    -}
-    each :: Int -> l -> l
-    each n es = case n <=> 1 of
-      GT -> fromList $ ofoldr (\ i x xs -> mod i n == 0 ? x : xs $ xs) [] es
-      EQ -> es
-      LT -> Z
-    
-    {- |
-      @eachFrom o n es@ returns each nth element of structure, beginning from o.
-      
-      @
-        eachFrom o n = each n . drop o
-        eachFrom 0 2 [1 .. 20] == [2, 4 .. 20]
-        eachFrom 1 2 [1 .. 20] == [3, 5 .. 19]
-      @
-    -}
-    eachFrom :: Int -> Int -> l -> l
-    eachFrom o n = each n . drop o
-    
-    -- | @sub `'isPrefixOf'` es@ checks if @sub@ is beginning of @es@.
-    isPrefixOf :: Eq e => l -> l -> Bool
-    isPrefixOf =  isPrefixOf `on` listL
-    
-    -- | @sub `'isSuffixOf'` es@ checks if @sub@ is ending of @es@.
-    isSuffixOf :: Eq e => l -> l -> Bool
-    isSuffixOf =  isSuffixOf `on` listL
-    
-    -- | isInfixOf checks whether the first line is the substring of the second
-    isInfixOf :: Eq e => l -> l -> Bool
-    isInfixOf =  isInfixOf `on` listL
     
     -- | prefix gives length of init, satisfying preducate.
     prefix :: (e -> Bool) -> l -> Int
@@ -776,85 +405,305 @@ class
     infixes :: Eq e => l -> l -> [Int]
     infixes =  on infixes listL
     
-    -- | @dropSide f = dropWhile f . dropEnd f@.
-    dropSide :: (e -> Bool) -> l -> l
-    dropSide f = dropWhile f . dropEnd f
-    
     -- | Takes the longest 'prefix' by predicate.
     takeWhile :: (e -> Bool) -> l -> l
     takeWhile p es = take (prefix p es) es
-    
-    -- | Drops the longest 'prefix' by predicate.
-    dropWhile :: (e -> Bool) -> l -> l
-    dropWhile p es = drop (prefix p es) es
     
     -- | Takes the longest 'suffix' by predicate.
     takeEnd :: (e -> Bool) -> l -> l
     takeEnd p es = keep (suffix p es) es
     
+    {- |
+      @splitsOn sub line@ splits @line@ by @sub@.
+      
+      > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
+    -}
+    splitsOn :: Eq e => l -> l -> [l]
+    splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
+    
+    {- Pad/remove/replace. -}
+    
+    {- |
+      @since 0.3
+      
+      @'padL' n e es@ returns n-element line. Prepend missing elements to @es@ if
+      @sizeOf es < n@, otherwise 'keep' @n@.
+    -}
+    padL :: Int -> e -> l -> l
+    padL n e = keep n . (replicate n e ++)
+
+    {- |
+      @since 0.3
+      
+      @'padR' n e es@ returns n-element line. Append missing elements to @es@ if
+      @sizeOf es < n@, otherwise 'take' @n@.
+    -}
+    padR :: Int -> e -> l -> l
+    padR n e = take n . (++ replicate n e)
+    
+    -- | Drops the longest 'prefix' by predicate.
+    trimL :: (e -> Bool) -> l -> l
+    trimL p es = drop (prefix p es) es
+    
     -- | Drops the longest 'suffix' by predicate.
-    dropEnd :: (e -> Bool) -> l -> l
-    dropEnd p es = sans (suffix p es) es
+    trimR :: (e -> Bool) -> l -> l
+    trimR p es = sans (suffix p es) es
     
-    -- | Left-side span.
-    spanl :: (e -> Bool) -> l -> (l, l)
-    spanl p es = (takeWhile p es, dropWhile p es)
+    {- |
+      @replaceBy sub new line@ replace every non-overlapping occurrence of @sub@
+      in @line@ with @new@.
+      
+      > replaceBy "foo" "bar" "foobafoorbaz" == "barbabarrbaz"
+    -}
+    replaceBy :: Eq e => l -> l -> l -> l
+    replaceBy sub new = intercalate new . splitsOn sub
     
-    -- | Left-side break.
-    breakl :: (e -> Bool) -> l -> (l, l)
-    breakl p es = (takeWhile (not . p) es, dropWhile (not . p) es)
+    {- |
+      Removes every non-overlapping occurrence of @sub@ with 'Z'.
+      
+      > removeAll = concat ... splitsOn
+      > (`replaceBy` Z) = removeAll
+    -}
+    removeAll :: Eq e => l -> l -> l
+    removeAll =  concat ... splitsOn
     
-    -- | Right-side span.
-    spanr :: (e -> Bool) -> l -> (l, l)
-    spanr p es = (dropEnd p es, takeEnd p es)
+    {- Deduplication. -}
     
-    -- | Right-side break.
-    breakr :: (e -> Bool) -> l -> (l, l)
-    breakr p es = (dropEnd (not . p) es, takeEnd (not . p) es)
+    -- | Same as @nubBy ('==')@.
+    nub :: Eq e => l -> l
+    nub =  nubBy (==)
+    
+    -- | Generalization of nubBy.
+    nubBy :: Equal e -> l -> l
+    nubBy f = fromList . nubBy f . listL
+    
+    {- Subsequences. -}
+    
+    {- |
+      The @isSubseqOf xs ys@ checks if all the elements of the @xs@ occur,
+      in order, in the @ys@. The elements don't have to occur consecutively.
+    -}
+    isSubseqOf :: Eq e => l -> l -> Bool
+    isSubseqOf =  L.isSubsequenceOf `on` listL
+    
+    -- | @sub `'isPrefixOf'` es@ checks if @sub@ is beginning of @es@.
+    isPrefixOf :: Eq e => l -> l -> Bool
+    isPrefixOf =  isPrefixOf `on` listL
+    
+    -- | @sub `'isSuffixOf'` es@ checks if @sub@ is ending of @es@.
+    isSuffixOf :: Eq e => l -> l -> Bool
+    isSuffixOf =  isSuffixOf `on` listL
+    
+    -- | isInfixOf checks whether the first line is the substring of the second
+    isInfixOf :: Eq e => l -> l -> Bool
+    isInfixOf =  isInfixOf `on` listL
+    
+    {- Selections. -}
+    
+    -- | @select f es@ is selective map of @es@ elements to new list.
+    select :: (e -> Maybe a) -> l -> [a]
+    select f = sfoldr (\ x es -> maybe es (: es) (f x)) []
+    
+    -- | @select' f es@ is selective map of @es@ elements to new line.
+    select' :: (e -> Maybe e) -> l -> l
+    select' =  fromList ... select
+    
+    {- |
+      @extract f es@ returns a selective map of @es@ elements to new list and
+      the remaining elements of the line.
+    -}
+    extract :: (e -> Maybe a) -> l -> ([a], [e])
+    extract f =
+      let g = \ b -> second (b :) `maybe` (first . (:)) $ f b
+      in  sfoldr' g ([], [])
+    
+    {- |
+      @extract' f es@ returns a selective map of @es@ elements to new line and
+      the remaining elements of the line.
+    -}
+    extract' :: (e -> Maybe e) -> l -> (l, l)
+    extract' =  both fromList ... extract
     
     {- |
       @selectWhile f es@ selects results of applying @f@ to @es@ (left to right)
       untill first fail.
     -}
     selectWhile :: (e -> Maybe a) -> l -> [a]
-    selectWhile f = selectWhile f . listL
+    selectWhile f =
+      let go e xs = case f e of {Just x -> x : xs; _ -> []}
+      in  sfoldr go []
     
     {- |
       @selectEnd f es@ selects results of applying @f@ to @es@ (right to left)
       untill first fail.
     -}
     selectEnd :: (e -> Maybe a) -> l -> [a]
-    selectEnd f = selectEnd f . listL
+    selectEnd f =
+      let go xs e = case f e of {Just x -> x : xs; _ -> []}
+      in  reverse . sfoldl go []
     
     {- |
       @extractWhile f es@ selects results of applying @f@ to @es@ (left to
       right) untill first fail. Returns selected results and rest of line.
     -}
     extractWhile :: (e -> Maybe a) -> l -> ([a], l)
-    extractWhile f es = let as = selectWhile f es in (as, length as `drop` es)
+    extractWhile f es =
+      let go e xs = case f e of {Just x -> x : xs; _ -> []}
+      in  second (`drop` es) . swap $ csfoldr' go [] es
     
     {- |
       @extractEnd f es@ selects results of applying @f@ to @es@ (right to left)
       untill first fail. Returns rest of line and selected results.
     -}
     extractEnd :: (e -> Maybe a) -> l -> (l, [a])
-    extractEnd f es = let as = selectEnd f es in (length as `sans` es, as)
+    extractEnd f es =
+      let go xs e = case f e of {Just x -> x : xs; _ -> []}
+      in  bimap (`sans` es) reverse $ csfoldl' go [] es
     
-    -- | @selectWhile'@ is 'selectWhile' version for generalized structures.
-    selectWhile' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> t a
-    selectWhile' =  fromList ... selectWhile
+    {- |
+      @since 0.3
+      
+      Monadic version of 'select'.
+    -}
+    mselect :: Monad m => (e -> m (Maybe a)) -> l -> m [a]
+    mselect go = msfoldr (\ e xs -> maybe xs (: xs) <$> go e) []
     
-    -- | @selectEnd'@ is 'selectEnd' version for generalized structures.
-    selectEnd' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> t a
-    selectEnd' =  fromList ... selectEnd
+    {- |
+      @since 0.3
+      
+      Monadic version of 'select''.
+    -}
+    mselect' :: Monad m => (e -> m (Maybe e)) -> l -> m l
+    mselect' =  fmap fromList ... mselect
     
-    -- | @extractWhile'@ is 'extractWhile' version for generalized structures.
-    extractWhile' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> (t a, l)
-    extractWhile' =  first fromList ... extractWhile
+    {- |
+      @since 0.3
+      
+      Monadic version of 'extract'.
+    -}
+    mextract :: Monad m => (e -> m (Maybe a)) -> l -> m ([a], [e])
+    mextract go =
+      let f e (xs, es) = maybe (xs, e : es) (\ x -> (x : xs, es)) <$> go e
+      in  msfoldr f ([], [])
     
-    -- | @extractEnd'@ is 'extractEnd' version for generalized structures.
-    extractEnd' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> (l, t a)
-    extractEnd' =  second fromList ... extractEnd
+    {- |
+      @since 0.3
+      
+      Monadic version of 'extract''.
+    -}
+    mextract' :: Monad m => (e -> m (Maybe e)) -> l -> m (l, l)
+    mextract' =  fmap (both fromList) ... mextract
+    
+    {- Traversable. -}
+    
+    {- |
+      @since 0.3
+      
+      Same as 'runMLinear'', but actions can be performed in any order (may be
+      parallel). Default: 'runMLinear''.
+    -}
+    runMLinear :: Monad m => (Int -> e -> m r) -> l -> m [r]
+    runMLinear =  runMLinear'
+    
+    {- |
+      @since 0.3
+      
+      @'runMLinear'' go es@ executes an action @go@ for each offset and element
+      of @es@ from left to right.
+      
+      @
+      runMLinear' go es === runMLinear' go (listL es) === mapMLinear' go (listL es)
+      @
+    -}
+    runMLinear' :: Monad m => (Int -> e -> m r) -> l -> m [r]
+    runMLinear' f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
+    
+    {- |
+      @since 0.3
+      
+      Same as 'mapMLinear'', but actions can be performed in any order (may be
+      parallel). Default: 'mapMLinear''.
+    -}
+    mapMLinear :: Monad m => (Int -> e -> m e) -> l -> m l
+    mapMLinear =  fmap fromList ... runMLinear
+    
+    {- |
+      @since 0.3
+      
+      Same as 'runMLinear'', but keeps argument stucture like 'fmap'.
+    -}
+    mapMLinear' :: Monad m => (Int -> e -> m e) -> l -> m l
+    mapMLinear' =  fmap fromList ... runMLinear'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'selectMLinear'', but actions can be performed in any order (may be
+      parallel). Default: 'selectMLinear''.
+    -}
+    selectMLinear :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
+    selectMLinear =  selectMLinear'
+    
+    {- |
+      @since 0.3
+      
+      Same as 'runMLinear'', but drops 'Nothing' elements.
+    -}
+    selectMLinear' :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
+    selectMLinear' =  fmap catMaybes ... runMLinear'
+    
+    {- Operations with elements. -}
+    
+    {- |
+      Returns the element of a sequence by offset, may be completely unsafe.
+      This is an optimistic read function and shouldn't perform checks for
+      efficiency reasons.
+      
+      If you need safety, use (!) or (!?). The generalization of this function
+      by index type (.!).
+      
+      > es !^ i = listL es !! i
+    -}
+    (!^) :: l -> Int -> e
+    (!^) =  (L.!!) . listL
+    
+    {- |
+      @write es n e@ writes value @e@ in position @n@ (offset), returns new
+      structure. If @n@ is out of range, returns equal structure (@es@ or copy).
+    -}
+    write :: l -> Int -> e -> l
+    write es = fromList ... write (listL es)
+    
+    {- |
+      @since 0.2.1
+      
+      @'before' es i e@ insert @e@ to @es@ before element with offset @i@. If
+      @i@ goes beyond the lower or upper bounds, @e@ is prepended or appended to
+      @es@ respectively.
+      
+      > before [0 .. 5] (-1) 7 == [7,0,1,2,3,4,5]
+      > before [0 .. 5]   0  7 == [7,0,1,2,3,4,5]
+      > before [0 .. 5]   3  7 == [0,1,2,7,3,4,5]
+      > before [0 .. 5]   5  7 == [0,1,2,3,4,7,5]
+      > before [0 .. 5]   6  7 == [0,1,2,3,4,5,7]
+      > before [0 .. 5]  19  7 == [0,1,2,3,4,5,7]
+    -}
+    before :: l -> Int -> e -> l
+    before es = fromList ... before (listL es)
+    
+    {- |
+      @since 0.2.1
+      
+      @'remove' es i@ delete element with offset @i@ from @es@.
+      
+      > remove (-1) [0 .. 5] == [0 .. 5]
+      > remove   6  [0 .. 5] == [0 .. 5]
+      > remove   0  [0 .. 5] == [1,2,3,4,5]
+      > remove   3  [0 .. 5] == [0,1,2,4,5]
+      > remove   5  [0 .. 5] == [0,1,2,3,4]
+    -}
+    remove :: Int -> l -> l
+    remove n = fromList . remove n . listL
 
 --------------------------------------------------------------------------------
 
@@ -918,6 +767,288 @@ msfoldl go = sfoldl (flip $ (=<<) . flip go) . return
 
 --------------------------------------------------------------------------------
 
+{- |
+  @save n es@ takes first @n@ elements of @es@ if @n > 0@ and last @-n@
+  elements otherwise.
+-}
+save :: Linear l e => Int -> l -> l
+save n = n > 0 ? take n $ keep (-n)
+
+{- |
+  @skip n es@ drops first @n@ elements of @es@ if @n > 0@ and last @-n@
+  elements otherwise.
+-}
+skip :: Linear l e => Int -> l -> l
+skip n = n > 0 ? drop n $ sans (-n)
+
+{- |
+  @since 0.3
+  
+  Splits structures into parts by given offsets.
+  
+  @
+    parts [0,5,6,12,26] ['a'..'z'] = ["","abcde","f","ghijkl","mnopqrstuvwxyz",""]
+    -- if previous offset is equal or greater, subline is empty and next
+    -- begins from previous:
+    parts [0, 5, 4, 12, 26] ['a' .. 'z'] = ["","abcde","","fghijklm","nopqrstuvwxyz",""]
+  @
+-}
+parts :: (Linear l e, Foldable f) => f Int -> l -> [l]
+parts =
+  let go o is' = case is' of {i : is -> (i - o) : go i is; _ -> []}
+  in  splits . go 0 . toList
+
+{- |
+  @since 0.3
+  
+  Splits structures into chunks of size @n@ and the rest.
+  
+  > chunks x [] = [] -- forall x
+  > chunks 0 es = [] -- forall es
+  
+  > chunks 3 [1 .. 10] == [[1,2,3],[4,5,6],[7,8,9],[10]]
+-}
+chunks :: Linear l e => Int -> l -> [l]
+chunks n es = isNull es || n < 1 ? [] $ let (x, xs) = split n es in x : chunks n xs
+
+--------------------------------------------------------------------------------
+
+-- | Left-side span.
+spanl :: Linear l e => (e -> Bool) -> l -> (l, l)
+spanl p es = (takeWhile p es, trimL p es)
+
+-- | Left-side break.
+breakl :: Linear l e => (e -> Bool) -> l -> (l, l)
+breakl =  spanl . (not .)
+
+-- | Right-side span.
+spanr :: Linear l e => (e -> Bool) -> l -> (l, l)
+spanr p es = (trimR p es, takeEnd p es)
+
+-- | Right-side break.
+breakr :: Linear l e => (e -> Bool) -> l -> (l, l)
+breakr =  spanr . (not .)
+
+{- |
+  @since 0.3
+  
+  @trim f = trimL f . trimR f@.
+-}
+trim :: Linear l e => (e -> Bool) -> l -> l
+trim f = trimL f . trimR f
+
+--------------------------------------------------------------------------------
+
+-- | @'except' p es = 'filter' (not . p) es@
+except :: Linear l e => (e -> Bool) -> l -> l
+except =  filter . (not .)
+
+{- |
+  @since 0.3
+  
+  Monadic version 'except'.
+-}
+mexcept :: (Monad m, Linear l e) => (e -> m Bool) -> l -> m l
+mexcept =  mfilter . (fmap not .)
+
+--------------------------------------------------------------------------------
+
+-- | Generalization of partition, that select sublines by predicates.
+partitions :: (Linear l e, Foldable f) => f (e -> Bool) -> l -> [l]
+partitions ps es =
+  let f = \ es' -> case es' of
+        (x : xs) -> (\ (y, ys) -> (ys : y : xs)) . (`partition` x)
+        _        -> unreachEx "partitions"
+  in  L.reverse $ foldl f [es] ps
+
+-- | Generalized 'intersperse'.
+intersperse :: Linear l e => e -> l -> l
+intersperse e es =
+  let xs = drop 1 $ sfoldr ((e :) ... (:)) [] es
+  in  es .< 2 ? es $ fromList xs
+
+-- | Generalized 'subsequences'.
+subsequences :: Linear l e => l -> [l]
+subsequences =  map fromList . L.subsequences . listL
+
+--------------------------------------------------------------------------------
+
+-- | 'tails' returns sequence of @es@ 'tail'.
+tails :: Linear l e => l -> [l]
+tails Z  = [Z]
+tails es = es : tails (tail es)
+
+-- | 'inits' returns sequence of @es@  'init'.
+inits :: Linear l e => l -> [l]
+inits Z  = [Z]
+inits es = es : inits (init es)
+
+--------------------------------------------------------------------------------
+
+{- |
+  Split line by first (left) separation element. If there is no such
+  element, @splitBy es = (es, Z)@.
+  
+  > splitBy (== '.') "foo" == ("foo","")
+  > splitBy (== '.') "foo." == ("foo","")
+  > splitBy (== '.') ".foo" == ("","foo")
+  > splitBy (== '.') "foo.bar" == ("foo","bar")
+  > splitBy (== '.') "foo.bar.baz" == ("foo","bar.baz")
+-}
+splitBy :: Linear l e => (e -> Bool) -> l -> (l, l)
+splitBy =  second (drop 1) ... breakl
+
+{- |
+  Split line by last (right) separation element. If there is no such
+  element, @divide es = (Z, es)@.
+  
+  > divideBy (== '.') "foo" == ("","foo")
+  > divideBy (== '.') ".foo" == ("","foo")
+  > divideBy (== '.') "foo." == ("foo","")
+  > divideBy (== '.') "foo.bar" == ("foo","bar")
+  > divideBy (== '.') "foo.bar.baz" == ("foo.bar","baz")
+-}
+divideBy :: Linear l e => (e -> Bool) -> l -> (l, l)
+divideBy =  first (sans 1) ... breakr
+
+--------------------------------------------------------------------------------
+
+{- |
+  Splits line into sequences of given sizes (left to right).
+  
+  > splits [5, 3, 12] ['a'..'z'] = ["abcde","fgh","ijklmnopqrst","uvwxyz"]
+-}
+splits :: (Linear l e, Foldable f) => f Int -> l -> [l]
+splits ns es =
+  let f = \ es' n -> case es' of
+        (r : ds) -> let (d, r') = split n r in r' : d : ds
+        _        -> unreachEx "splits: must be non-empty"
+  in  reverse $ foldl f [es] ns
+
+{- |
+  Splits line into sequences of given sizes (right to left).
+  
+  > divides [5,3,12] ['a'..'z'] == ["abcdef","ghijk","lmn","opqrstuvwxyz"]
+-}
+divides :: (Linear l e, Foldable f) => f Int -> l -> [l]
+divides ns es =
+  let f = \ n es' -> case es' of
+        (r : ds) -> let (r', d) = divide n r in r' : d : ds
+        _        -> unreachEx "divides: must be non-empty"
+  in  foldr f [es] ns
+
+--------------------------------------------------------------------------------
+
+-- | @selectWhile'@ is 'selectWhile' version for generalized structures.
+selectWhile' :: Linear l e => (e -> Maybe e) -> l -> l
+selectWhile' =  fromList ... selectWhile
+
+-- | @selectEnd'@ is 'selectEnd' version for generalized structures.
+selectEnd' :: Linear l e => (e -> Maybe e) -> l -> l
+selectEnd' =  fromList ... selectEnd
+
+-- | @extractWhile'@ is 'extractWhile' version for generalized structures.
+extractWhile' :: Linear l e => (e -> Maybe e) -> l -> (l, l)
+extractWhile' =  first fromList ... extractWhile
+
+-- | @extractEnd'@ is 'extractEnd' version for generalized structures.
+extractEnd' :: Linear l e => (e -> Maybe e) -> l -> (l, l)
+extractEnd' =  second fromList ... extractEnd
+
+--------------------------------------------------------------------------------
+
+-- | @stripPrefix sub line@ strips prefix @sub@ of @line@ (if any).
+stripPrefix :: (Linear l e, Eq e) => l -> l -> l
+stripPrefix sub line = sub `isPrefixOf` line ? drop (sizeOf sub) line $ line
+
+-- | @stripSuffix sub line@ strips suffix @sub@ of @line@ (if any).
+stripSuffix :: (Linear l e, Eq e) => l -> l -> l
+stripSuffix sub line = sub `isSuffixOf` line ? sans (sizeOf sub) line $ line
+
+-- | @stripPrefix' sub line@ strips prefix @sub@ of @line@ or returns 'Nothing'.
+stripPrefix' :: (Linear l e, Eq e) => l -> l -> Maybe l
+stripPrefix' sub = isPrefixOf sub ?+ drop (sizeOf sub)
+
+-- | @stripSuffix sub line@ strips suffix @sub@ of @line@ or returns 'Nothing'.
+stripSuffix' :: (Linear l e, Eq e) => l -> l -> Maybe l
+stripSuffix' sub = isSuffixOf sub ?+ sans (sizeOf sub)
+
+--------------------------------------------------------------------------------
+
+{- |
+  @each n es@ returns each @n@-th element of structure.
+  
+  @
+    each n [1 .. 5] = []
+    each 1 [1 .. 5] = [1 .. 5]
+    each 2 [1 .. 5] = [1, 3, 5]
+  @
+  
+  If @n == 1@, returns @es@.
+  If @n < 1@, returns 'Z'.
+-}
+each :: Linear l e => Int -> l -> l
+each n es = case n <=> 1 of
+  GT -> fromList $ ofoldr (\ i x xs -> mod i n == 0 ? x : xs $ xs) [] es
+  EQ -> es
+  LT -> Z
+
+{- |
+  @eachFrom o n es@ returns each nth element of structure, beginning from o.
+  
+  @
+    eachFrom o n = each n . drop o
+    eachFrom 0 2 [1 .. 20] == [2, 4 .. 20]
+    eachFrom 1 2 [1 .. 20] == [3, 5 .. 19]
+  @
+-}
+eachFrom :: Linear l e => Int -> Int -> l -> l
+eachFrom o n = each n . drop o
+
+{- |
+  @since 0.2.1
+  
+  @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
+  
+  > after es i e == before es (i + 1) e
+-}
+after :: Linear l e => l -> Int -> e -> l
+after es i = before es (i + 1)
+
+--------------------------------------------------------------------------------
+
+{- |
+  @combo f es@ returns the length of the @es@ subsequence (left to tight)
+  whose elements are in order @f@.
+  
+  > combo (<) [] == 0
+  > combo (<) [1] == 1
+  > combo (<) [7, 4, 12] == 1
+  > combo (<) [1, 7, 3, 12] == 2
+-}
+combo :: Linear l e => Equal e -> l -> Int
+combo f = go . listL
+  where
+    go [ ] = 0
+    go [_] = 1
+    go (e1 : e2 : es) = f e1 e2 ? go' 2 e2 es $ 1
+      where
+        go' !i p (x : xs) = f p x ? go' (i + 1) x xs $ i
+        go'  i _    _     = i
+
+-- | intercalate is generalization of intercalate
+intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
+intercalate =  concat ... intersperse
+
+{- |
+  @ascending es lengths@ checks if the subsequences of @es@ of lengths @lengths@
+  is sorted.
+-}
+ascending :: (Sort l e, Linear l e, Ord e) => l -> [Int] -> Bool
+ascending =  all sorted ... flip splits
+
+--------------------------------------------------------------------------------
+
 {-# COMPLETE [], (:>) #-}
 {-# COMPLETE [], (:<) #-}
 
@@ -965,15 +1096,14 @@ instance Linear [e] e
         go i (x : xs) = i == 0 ? e : xs $ x : go (i - 1) xs
         go _ _ = []
     
-    nubBy       = L.nubBy
-    filter      = L.filter
-    concat      = L.concat
-    reverse     = L.reverse
-    unfoldr     = L.unfoldr
-    concatMap   = L.concatMap
-    partition   = L.partition
-    intersperse = L.intersperse
-    isSubseqOf  = L.isSubsequenceOf
+    nubBy      = L.nubBy
+    filter     = L.filter
+    concat     = L.concat
+    reverse    = L.reverse
+    unfoldr    = L.unfoldr
+    concatMap  = L.concatMap
+    partition  = L.partition
+    isSubseqOf = L.isSubsequenceOf
     
     sfoldr' = foldr'
     sfoldl' = foldl'
@@ -1006,23 +1136,11 @@ instance Linear [e] e
         
         n = sizeOf sub
     
-    combo _ [ ] = 0
-    combo _ [_] = 1
-    combo f (e1 : e2 : es) = e1 `f` e2 ? go 2 e2 es $ 1
-      where
-        go !i p (x : xs) = p `f` x ? go (i + 1) x xs $ i
-        go  i _    _     = i
-    
-    splitBy  f es = let (as, bs) = breakl f es in isNull bs ? (es, []) $ (as, tail bs)
-    divideBy f es = let (as, bs) = breakr f es in isNull as ? ([], es) $ (init as, bs)
-    splitsBy f es = dropWhile f <$> L.findIndices f es `parts` es
+    splitsBy f es = trimL f <$> L.findIndices f es `parts` es
     
     isPrefixOf = L.isPrefixOf
     isSuffixOf = L.isSuffixOf
     isInfixOf  = L.isInfixOf
-    
-    breakl = L.break
-    spanl  = L.span
     
     selectWhile _    []    = []
     selectWhile f (x : xs) = case f x of {(Just e) -> e : select f xs; _ -> []}
@@ -1031,85 +1149,12 @@ instance Linear [e] e
 
 --------------------------------------------------------------------------------
 
-{- |
-  @save n es@ takes first @n@ elements of @es@ if @n > 0@ and last @-n@
-  elements otherwise.
--}
-save :: Linear l e => Int -> l -> l
-save n = n > 0 ? take n $ keep (-n)
-
-{- |
-  @skip n es@ drops first @n@ elements of @es@ if @n > 0@ and last @-n@
-  elements otherwise.
--}
-skip :: Linear l e => Int -> l -> l
-skip n = n > 0 ? drop n $ sans (-n)
-
---------------------------------------------------------------------------------
-
-{- |
-  Splits structures into parts by given offsets.
-  
-  @
-    parts [0,5,6,12,26] ['a'..'z'] = ["","abcde","f","ghijkl","mnopqrstuvwxyz",""]
-    -- if previous offset is equal or greater, subline is empty and next
-    -- begins from previous:
-    parts [0, 5, 4, 12, 26] ['a' .. 'z'] = ["","abcde","","fghijklm","nopqrstuvwxyz",""]
-  @
--}
-parts :: (Linear l e, Foldable f) => f Int -> l -> [l]
-parts =
-  let go o is' = case is' of {i : is -> (i - o) : go i is; _ -> []}
-  in  splits . go 0 . toList
-
---------------------------------------------------------------------------------
-
--- | @stripPrefix sub line@ strips prefix @sub@ of @line@ (if any).
-stripPrefix :: (Linear l e, Eq e) => l -> l -> l
-stripPrefix sub line = sub `isPrefixOf` line ? drop (sizeOf sub) line $ line
-
--- | @stripSuffix sub line@ strips suffix @sub@ of @line@ (if any).
-stripSuffix :: (Linear l e, Eq e) => l -> l -> l
-stripSuffix sub line = sub `isSuffixOf` line ? sans (sizeOf sub) line $ line
-
--- | @stripPrefix' sub line@ strips prefix @sub@ of @line@ or returns 'Nothing'.
-stripPrefix' :: (Linear l e, Eq e) => l -> l -> Maybe l
-stripPrefix' sub = isPrefixOf sub ?+ drop (sizeOf sub)
-
--- | @stripSuffix sub line@ strips suffix @sub@ of @line@ or returns 'Nothing'.
-stripSuffix' :: (Linear l e, Eq e) => l -> l -> Maybe l
-stripSuffix' sub = isSuffixOf sub ?+ sans (sizeOf sub)
-
---------------------------------------------------------------------------------
-
--- | @tails es@ returns sequence of @es@ tails.
-tails :: Linear l e => l -> [l]
-tails Z  = [Z]
-tails es = es : tails (tail es)
-
--- | tails is generalization of inits.
-inits :: Linear l e => l -> [l]
-inits Z  = [Z]
-inits es = es : inits (init es)
-
---------------------------------------------------------------------------------
-
--- | intercalate is generalization of intercalate
-intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
-intercalate =  concat ... intersperse
-
-{- |
-  @ascending es lengths@ checks if the subsequences of @es@ of lengths @lengths@
-  is sorted.
--}
-ascending :: (Linear l e, Sort l e, Ord e) => l -> [Int] -> Bool
-ascending =  all sorted ... flip splits
-
---------------------------------------------------------------------------------
-
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+
+
+
 

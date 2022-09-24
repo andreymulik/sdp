@@ -379,9 +379,7 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
     
     partition p = both fromList . partition p . listL
     
-    select  f (AnyChunks es) = concatMap (select f) es
-    reverse   (AnyChunks es) = AnyChunks (reverse <$> reverse es)
-    extract f (AnyChunks es) = bimap concat AnyChunks . unzip $ extract f <$> es
+    reverse (AnyChunks es) = AnyChunks (reverse <$> reverse es)
     
     before (AnyChunks ess) i e = AnyChunks $ go (max 0 i) ess
       where
@@ -399,8 +397,6 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
           where
             c = sizeOf xs
         go _     []     = []
-    
-    selects fs = second fromList . selects fs . listL
     
     ofoldr f' base' = go 0 f' base' . toChunks
       where
@@ -433,7 +429,6 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
     
     prefix f = foldr' (\ e n -> let p = prefix f e in p ==. e ? p + n $ p) 0 . toChunks
     suffix f = foldl' (\ n e -> let s = suffix f e in s ==. e ? s + n $ s) 0 . toChunks
-    combo  f = foldr' (\ e n -> let c = combo  f e in c ==. e ? c + n $ c) 0 . toChunks
 
 --------------------------------------------------------------------------------
 

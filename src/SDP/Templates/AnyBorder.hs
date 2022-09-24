@@ -321,18 +321,11 @@ instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
     concatMap = withBounds ... concatMap . (unpack .)
     concat    = withBounds  .  concatMap unpack
     
-    partitions  f = fmap fromList . partitions f . listL
-    intersperse e = withBounds . intersperse e . unpack
-    
     filter  f = withBounds . filter f . unpack
     remove  n = withBounds . remove n . unpack
     before es = withBounds ... before (unpack es)
     
     reverse (AnyBorder l u rep) = AnyBorder l u (reverse rep)
-    
-    select   f = select f . unpack
-    extract  f = second withBounds . extract  f . unpack
-    selects fs = second withBounds . selects fs . unpack
     
     nubBy f = withBounds . nubBy f . unpack
     nub     = withBounds .   nub   . unpack
@@ -348,11 +341,8 @@ instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
     keep n = withBounds . keep n . unpack
     sans n = withBounds . sans n . unpack
     
-    splits ns = fmap withBounds . splits ns . unpack
-    chunks ns = fmap withBounds . chunks ns . unpack
-    
-    justifyL n e = withBounds . justifyL n e . unpack
-    justifyR n e = withBounds . justifyR n e . unpack
+    padL n e = withBounds . padL n e . unpack
+    padR n e = withBounds . padR n e . unpack
     
     isPrefixOf xs ys = xs .<=. ys && on isPrefixOf unpack xs ys
     isSuffixOf xs ys = xs .<=. ys && on isSuffixOf unpack xs ys

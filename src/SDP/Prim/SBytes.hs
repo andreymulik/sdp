@@ -309,13 +309,6 @@ instance Unboxed e => Linear (SBytes# e) e
             s4# -> case unsafeFreezeByteArray# marr# s4# of
               (# s5#, res# #) -> (# s5#, SBytes# (c - 1) 0 res# #)
     
-    select  f = sfoldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
-    extract f =
-      let g o = second (o :) `maybe` (first . (:)) $ f o
-      in  second fromList . sfoldr g ([], [])
-    
-    selects fs = second fromList . selects fs . listL
-    
     ofoldr f base = \ arr@(SBytes# c _ _) ->
       let go i = c == i ? base $ f i (arr !^ i) (go $ i + 1)
       in  go 0
@@ -368,14 +361,9 @@ instance Unboxed e => Linear (SBytes# e) e
       | n >= c = (es, Z)
       |  True  = (SBytes# n (o + c - n) arr#, SBytes# (c - n) o arr#)
     
-    splitsBy f es = dropWhile f <$> f *$ es `parts` es
+    splitsBy f es = trimL f <$> f *$ es `parts` es
     
-    combo _                  Z = 0
-    combo f es@(SBytes# n _ _) =
-      let go e i = let e' = es !^ i in i == n || not (f e e') ? i $ go e' (i + 1)
-      in  go (head es) 1
-    
-    justifyL n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) src#) = case c <=> n of
+    padL n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es
       GT -> take n es
       LT -> runST $ ST $ \ s1# -> case newUnboxed' e n# s1# of
@@ -383,17 +371,13 @@ instance Unboxed e => Linear (SBytes# e) e
           s3# -> case unsafeFreezeByteArray# mbytes# s3# of
             (# s4#, bytes# #) -> (# s4#, SBytes# n 0 bytes# #)
     
-    justifyR n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) src#) = case c <=> n of
+    padR n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es
       GT -> take n es
       LT -> runST $ ST $ \ s1# -> case newUnboxed' e n# s1# of
         (# s2#, mbytes# #) -> case copyUnboxed# e src# o# mbytes# (n# -# c#) c# s2# of
           s3# -> case unsafeFreezeByteArray# mbytes# s3# of
             (# s4#, bytes# #) -> (# s4#, SBytes# n 0 bytes# #)
-    
-    each n es@(SBytes# c _ _) =
-      let go i = i < c ? es!^i : go (i + n) $ []
-      in  case n <=> 1 of {LT -> Z; EQ -> es; GT -> fromList $ go (n - 1)}
     
     isPrefixOf xs@(SBytes# c1 _ _) ys@(SBytes# c2 _ _) =
       let eq i = i == c1 || (xs !^ i) == (ys !^ i) && eq (i + 1)
@@ -1175,6 +1159,12 @@ fromSTBytes# :: Unboxed e => STBytes# s e -> State# s -> (# State# s, MutableByt
 fromSTBytes# es = \ s1# -> case cloneSTBytes# es of
   ST rep -> case rep s1# of (# s2#, (STBytes# _ _ marr#) #) -> (# s2#, marr# #)
 
+cloneSTBytes# :: Unboxed e => STBytes# s e -> ST s (STBytes# s e)
+cloneSTBytes# es@(STBytes# c@(I# c#) (I# o#) marr#) = do
+  copy@(STBytes# _ _ copy#) <- alloc c
+  ST $ \ s1# -> (# pcopyUnboxedM es marr# o# copy# 0# c# s1#, () #)
+  return copy
+
 {- |
   'unsafeCoerceSTBytes#' is unsafe low-lowel coerce of an mutable array with
   recounting the number of elements and offset (with possible rounding).
@@ -1239,6 +1229,8 @@ done (STBytes# n o marr#) = ST $ \ s1# -> case unsafeFreezeByteArray# marr# s1# 
 done' :: MonadIO io => MIOBytes# io e -> io (SBytes# e)
 done' =  \ (MIOBytes# arr) -> stToMIO (done arr)
 
+--------------------------------------------------------------------------------
+
 -- | Create 'filled' by default value pseudo-primitive.
 alloc :: Unboxed e => Int -> ST s (STBytes# s e)
 alloc c@(I# c#) =
@@ -1246,11 +1238,7 @@ alloc c@(I# c#) =
         (# s2#, marr# #) -> (# s2#, STBytes# c 0 marr# #)
   in  res
 
-cloneSTBytes# :: Unboxed e => STBytes# s e -> ST s (STBytes# s e)
-cloneSTBytes# es@(STBytes# c@(I# c#) (I# o#) marr#) = do
-  copy@(STBytes# _ _ copy#) <- alloc c
-  ST $ \ s1# -> (# pcopyUnboxedM es marr# o# copy# 0# c# s1#, () #)
-  return copy
+--------------------------------------------------------------------------------
 
 {-# INLINE nubSorted #-}
 nubSorted :: Unboxed e => Compare e -> SBytes# e -> SBytes# e
@@ -1269,7 +1257,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-
-
 

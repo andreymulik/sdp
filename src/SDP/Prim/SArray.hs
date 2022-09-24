@@ -470,14 +470,6 @@ instance Linear (SArray# e) e
             s4# -> case unsafeFreezeArray# marr# s4# of
               (# s5#, res# #) -> (# s5#, SArray# (c - 1) 0 res# #)
     
-    select  f = foldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
-    
-    extract f =
-      let g = \ o -> case f o of {Just e -> first (e :); _ -> second (o :)}
-      in  second fromList . foldr g ([], [])
-    
-    selects fs = second fromList . selects fs . listL
-    
     ofoldr f base = \ arr@(SArray# c _ _) ->
       let go i = c == i ? base $ f i (arr !^ i) (go $ i + 1)
       in  go 0
@@ -525,9 +517,9 @@ instance Linear (SArray# e) e
       | n >= c = (es, Z)
       |  True  = (SArray# n (o + c - n) arr#, SArray# (c - n) o arr#)
     
-    splitsBy f es = dropWhile f <$> f *$ es `parts` es
+    splitsBy f es = trimL f <$> f *$ es `parts` es
     
-    justifyL n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) src#) = case c <=> n of
+    padL n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es
       GT -> take n es
       LT -> runST $ ST $ \ s1# -> case newArray# n# e s1# of
@@ -535,22 +527,13 @@ instance Linear (SArray# e) e
           s3# -> case unsafeFreezeArray# marr# s3# of
             (# s4#, arr# #) -> (# s4#, SArray# n 0 arr# #)
     
-    justifyR n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) src#) = case c <=> n of
+    padR n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es
       GT -> take n es
       LT -> runST $ ST $ \ s1# -> case newArray# n# e s1# of
         (# s2#, marr# #) -> case copyArray# src# o# marr# (n# -# c#) c# s2# of
           s3# -> case unsafeFreezeArray# marr# s3# of
             (# s4#, arr# #) -> (# s4#, SArray# n 0 arr# #)
-    
-    combo _                  Z = 0
-    combo f es@(SArray# n _ _) =
-      let go e i = let e' = es !^ i in i == n || not (f e e') ? i $ go e' (i + 1)
-      in  go (head es) 1
-    
-    each n es@(SArray# c _ _) =
-      let go i = i < c ? es!^i : go (i + n) $ []
-      in  case n <=> 1 of {LT -> Z; EQ -> es; GT -> fromList $ go (n - 1)}
     
     isPrefixOf xs@(SArray# c1 _ _) ys@(SArray# c2 _ _) =
       let eq i = i == c1 || (xs !^ i) == (ys !^ i) && eq (i + 1)
@@ -1386,5 +1369,7 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
+
 
 
