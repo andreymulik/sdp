@@ -412,8 +412,8 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
         go o f base (x : xs) = go (o + sizeOf x) f (ofoldl (f . (o +)) base x) xs
         go _ _ base _ = base
     
-    o_foldr f base = foldr (flip $ o_foldr f) base . toChunks
-    o_foldl f base = foldl (o_foldl f) base . toChunks
+    sfoldr f base = foldr (flip $ sfoldr f) base . toChunks
+    sfoldl f base = foldl (sfoldl f) base . toChunks
     
     take n = AnyChunks . go n . toChunks
       where
@@ -580,7 +580,7 @@ instance (SetWith1 rep e, Linear1 rep e, Ord (rep e))
     
     memberWith f x (AnyChunks es) = memberWith f x `any` es
     
-    isSubsetWith f xs ys = o_foldr (\ e b -> memberWith f e ys && b) True xs
+    isSubsetWith f xs ys = sfoldr (\ e b -> memberWith f e ys && b) True xs
 
 --------------------------------------------------------------------------------
 

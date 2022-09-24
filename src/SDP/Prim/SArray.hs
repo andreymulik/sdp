@@ -486,8 +486,8 @@ instance Linear (SArray# e) e
       let go i = -1 == i ? base $ f i (go $ i - 1) (arr !^ i)
       in  go (c - 1)
     
-    o_foldr = foldr
-    o_foldl = foldl
+    sfoldr = foldr
+    sfoldl = foldl
     
     -- | O(1) 'take', O(1) memory.
     take n es@(SArray# c o arr#)

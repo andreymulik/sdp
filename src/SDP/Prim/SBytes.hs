@@ -277,8 +277,8 @@ instance Unboxed e => Linear (SBytes# e) e
     
     replicate n e = runST $ filled n e >>= done
     
-    listL = o_foldr (:) []
-    listR = flip (:) `o_foldl` []
+    listL = sfoldr (:) []
+    listR = flip (:) `sfoldl` []
     
     concat ess = runST $ do
       let n = foldr' ((+) . sizeOf) 0 ess
@@ -309,10 +309,10 @@ instance Unboxed e => Linear (SBytes# e) e
             s4# -> case unsafeFreezeByteArray# marr# s4# of
               (# s5#, res# #) -> (# s5#, SBytes# (c - 1) 0 res# #)
     
-    select  f = o_foldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
+    select  f = sfoldr (\ o es -> case f o of {Just e -> e : es; _ -> es}) []
     extract f =
       let g o = second (o :) `maybe` (first . (:)) $ f o
-      in  second fromList . o_foldr g ([], [])
+      in  second fromList . sfoldr g ([], [])
     
     selects fs = second fromList . selects fs . listL
     
@@ -324,11 +324,11 @@ instance Unboxed e => Linear (SBytes# e) e
       let go i = -1 == i ? base $ f i (go $ i - 1) (arr !^ i)
       in  go (c - 1)
     
-    o_foldr f base = \ arr@(SBytes# c _ _) ->
+    sfoldr f base = \ arr@(SBytes# c _ _) ->
       let go i = c == i ? base $ f (arr !^ i) (go $ i + 1)
       in  go 0
     
-    o_foldl f base = \ arr@(SBytes# c _ _) ->
+    sfoldl f base = \ arr@(SBytes# c _ _) ->
       let go i = -1 == i ? base $ f (go $ i - 1) (arr !^ i)
       in  go (c - 1)
     
@@ -549,7 +549,7 @@ instance Unboxed e => SetWith (SBytes# e) e
             j = l + (u - l) `div` 2
             e = es !^ j
     
-    isSubsetWith f xs ys = o_foldr (\ x b -> b && memberWith f x ys) True xs
+    isSubsetWith f xs ys = sfoldr (\ x b -> b && memberWith f x ys) True xs
 
 --------------------------------------------------------------------------------
 

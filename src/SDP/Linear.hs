@@ -123,10 +123,10 @@ infixl 9 !^
     length === length . listL === length . listR
     toList === listL === reverse . listR === listR . reverse
     
-    o_foldr  === foldr
-    o_foldl  === foldl
-    o_foldr1 === foldr1
-    o_foldl1 === foldl1
+    sfoldr  === foldr
+    sfoldl  === foldl
+    sfoldr1 === foldr1
+    sfoldl1 === foldl1
     
     ofoldr f base xs === foldr (uncurry f) base (assocs xs)
     filter p = fromList . foldr (\ x xs -> p x ? x : xs $ xs) []
@@ -325,7 +325,7 @@ class
     
     -- | Generalized filter.
     filter :: (e -> Bool) -> l -> l
-    filter p = fromList . o_foldr (\ x xs -> p x ? x : xs $ xs) []
+    filter p = fromList . sfoldr (\ x xs -> p x ? x : xs $ xs) []
     
     -- | Inverted filter.
     except :: (e -> Bool) -> l -> l
@@ -348,7 +348,7 @@ class
     
     -- | @select f es@ is selective map of @es@ elements to new list.
     select :: (e -> Maybe a) -> l -> [a]
-    select f = o_foldr (\ x es -> maybe es (: es) (f x)) []
+    select f = sfoldr (\ x es -> maybe es (: es) (f x)) []
     
     -- | @select' f es@ is selective map of @es@ elements to new line.
     select' :: (t e ~ l, Linear1 t a) => (e -> Maybe a) -> l -> t a
@@ -361,7 +361,7 @@ class
     extract :: (e -> Maybe a) -> l -> ([a], l)
     extract f =
       let g = \ b -> second (b :) `maybe` (first . (:)) $ f b
-      in  fmap fromList . o_foldr' g ([], [])
+      in  fmap fromList . sfoldr' g ([], [])
     
     {- |
       @extract' f es@ returns a selective map of @es@ elements to new line and
@@ -394,7 +394,7 @@ class
       Monadic version of 'select'.
     -}
     mselect :: Monad m => (e -> m (Maybe a)) -> l -> m [a]
-    mselect go es = o_foldr (\ e xs -> do
+    mselect go es = sfoldr (\ e xs -> do
         b <- go e
         case b of
           Just x -> (x :) <$> xs
@@ -415,7 +415,7 @@ class
       Monadic version of 'extract'.
     -}
     mextract :: Monad m => (e -> m (Maybe a)) -> l -> m ([a], l)
-    mextract go es = second fromList <$> o_foldr (\ y zs -> do
+    mextract go es = second fromList <$> sfoldr (\ y zs -> do
       b <- go y; (xs, ys) <- zs;
       return $ case b of
         Just x -> (x : xs, ys)
@@ -452,13 +452,13 @@ class
     
     {- Additional folds. -}
     
-    -- | 'o_foldr' is just 'foldr' in 'Linear' context.
-    o_foldr :: (e -> b -> b) -> b -> l -> b
-    o_foldr =  ofoldr . const
+    -- | 'sfoldr' is just 'foldr' in 'Linear' context.
+    sfoldr :: (e -> b -> b) -> b -> l -> b
+    sfoldr =  ofoldr . const
     
-    -- | 'o_foldl' is just 'foldl' in 'Linear' context.
-    o_foldl :: (b -> e -> b) -> b -> l -> b
-    o_foldl =  ofoldl . const
+    -- | 'sfoldl' is just 'foldl' in 'Linear' context.
+    sfoldl :: (b -> e -> b) -> b -> l -> b
+    sfoldl =  ofoldl . const
     
     -- | 'ofoldr'' is strict version of 'ofoldr'.
     ofoldr' :: (Int -> e -> b -> b) -> b -> l -> b
@@ -468,37 +468,37 @@ class
     ofoldl' :: (Int -> b -> e -> b) -> b -> l -> b
     ofoldl' f = ofoldl (\ !i !b e -> f i b e)
     
-    -- | 'o_foldr'' is just 'foldr'' in 'Linear' context.
-    o_foldr' :: (e -> b -> b) -> b -> l -> b
-    o_foldr' =  ofoldr' . const
+    -- | 'sfoldr'' is just 'foldr'' in 'Linear' context.
+    sfoldr' :: (e -> b -> b) -> b -> l -> b
+    sfoldr' =  ofoldr' . const
     
-    -- | 'o_foldl'' is just 'foldl'' in 'Linear' context.
-    o_foldl' :: (b -> e -> b) -> b -> l -> b
-    o_foldl' =  ofoldl' . const
+    -- | 'sfoldl'' is just 'foldl'' in 'Linear' context.
+    sfoldl' :: (b -> e -> b) -> b -> l -> b
+    sfoldl' =  ofoldl' . const
     
-    -- | 'o_foldr1' is just 'Data.Foldable.foldr1' in 'Linear' context.
-    o_foldr1 :: (e -> e -> e) -> l -> e
-    o_foldr1 f = \ es' -> case es' of
-      (es :< e) -> o_foldr f e es
-      _         -> pfailEx "o_foldr1"
+    -- | 'sfoldr1' is just 'Data.Foldable.foldr1' in 'Linear' context.
+    sfoldr1 :: (e -> e -> e) -> l -> e
+    sfoldr1 f = \ es' -> case es' of
+      (es :< e) -> sfoldr f e es
+      _         -> pfailEx "sfoldr1"
     
-    -- | 'o_foldl1' is just 'Data.Foldable.foldl1' in 'Linear' context.
-    o_foldl1 :: (e -> e -> e) -> l -> e
-    o_foldl1 f = \ es' -> case es' of
-      (e :> es) -> o_foldl f e es
-      _         -> pfailEx "o_foldl1"
+    -- | 'sfoldl1' is just 'Data.Foldable.foldl1' in 'Linear' context.
+    sfoldl1 :: (e -> e -> e) -> l -> e
+    sfoldl1 f = \ es' -> case es' of
+      (e :> es) -> sfoldl f e es
+      _         -> pfailEx "sfoldl1"
     
-    -- | 'o_foldr1'' is just strict 'Data.Foldable.foldr1' in 'Linear' context.
-    o_foldr1' :: (e -> e -> e) -> l -> e
-    o_foldr1' f = \ es' -> case es' of
-      (es :< e) -> o_foldr' f e es
-      _         -> pfailEx "o_foldr1'"
+    -- | 'sfoldr1'' is just strict 'Data.Foldable.foldr1' in 'Linear' context.
+    sfoldr1' :: (e -> e -> e) -> l -> e
+    sfoldr1' f = \ es' -> case es' of
+      (es :< e) -> sfoldr' f e es
+      _         -> pfailEx "sfoldr1'"
     
-    -- | 'o_foldl1'' is just 'Data.Foldable.foldl1'' in 'Linear' context.
-    o_foldl1' :: (e -> e -> e) -> l -> e
-    o_foldl1' f = \ es' -> case es' of
-      (e :> es) -> o_foldl' f e es
-      _         -> pfailEx "o_foldl1'"
+    -- | 'sfoldl1'' is just 'Data.Foldable.foldl1'' in 'Linear' context.
+    sfoldl1' :: (e -> e -> e) -> l -> e
+    sfoldl1' f = \ es' -> case es' of
+      (e :> es) -> sfoldl' f e es
+      _         -> pfailEx "sfoldl1'"
     
     {- Don't touch. -}
     
@@ -757,11 +757,11 @@ class
     
     -- | prefix gives length of init, satisfying preducate.
     prefix :: (e -> Bool) -> l -> Int
-    prefix p = o_foldr' (\ e c -> p e ? succ c $ 0) 0
+    prefix p = sfoldr' (\ e c -> p e ? succ c $ 0) 0
     
     -- | suffix gives length of tail, satisfying predicate.
     suffix :: (e -> Bool) -> l -> Int
-    suffix p = o_foldl' (\ c e -> p e ? succ c $ 0) 0
+    suffix p = sfoldl' (\ c e -> p e ? succ c $ 0) 0
     
     {- |
       @infixes inf es@ returns a list of @inf@ positions in @es@, without
@@ -940,10 +940,10 @@ instance Linear [e] e
     intersperse = L.intersperse
     isSubseqOf  = L.isSubsequenceOf
     
-    o_foldr' = foldr'
-    o_foldl' = foldl'
-    o_foldr  = foldr
-    o_foldl  = foldl
+    sfoldr' = foldr'
+    sfoldl' = foldl'
+    sfoldr  = foldr
+    sfoldl  = foldl
     
     iterate n f e = n < 1 ? [] $ e : iterate (n - 1) f (f e)
     

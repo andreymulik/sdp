@@ -340,8 +340,8 @@ instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
     ofoldr f base = ofoldr f base . unpack
     ofoldl f base = ofoldl f base . unpack
     
-    o_foldr f base = o_foldr f base . unpack
-    o_foldl f base = o_foldl f base . unpack
+    sfoldr f base = sfoldr f base . unpack
+    sfoldl f base = sfoldl f base . unpack
     
     take n = withBounds . take n . unpack
     drop n = withBounds . drop n . unpack
