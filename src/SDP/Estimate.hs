@@ -69,6 +69,7 @@ data SizeHint = SizeHint   {-# UNPACK #-} !Int {-# UNPACK #-} !Int
               | SizeHintEQ {-# UNPACK #-} !Int
               | SizeHintLE {-# UNPACK #-} !Int
               | SizeHintGE {-# UNPACK #-} !Int
+  deriving ( Eq, Show, Read )
 
 --------------------------------------------------------------------------------
 
@@ -180,6 +181,5 @@ instance Estimate [a]
     es <.=> n =
       let go xs c | c == 0 = GT | null xs = 0 <=> c | True = tail xs `go` (c - 1)
       in  if n < 0 then LT else go es n
-
 
 

@@ -227,7 +227,7 @@ class
       Creates line from list.
     -}
     fromList' :: Maybe SizeHint -> [e] -> l
-    fromList' =  const fromFoldable
+    fromList' =  const fromList
     
     -- | Create finite line from (possibly infinite) list.
     fromListN :: Int -> [e] -> l
