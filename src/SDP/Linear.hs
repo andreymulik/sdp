@@ -43,7 +43,8 @@ module SDP.Linear
   
   -- * Related functions
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
-  intercalate, tails, inits, ascending, save, skip, parts
+  intercalate, tails, inits, ascending, save, skip, parts,
+  csfoldr', csfoldl', msfoldr, msfoldl
 )
 where
 
@@ -880,6 +881,40 @@ type Linear' l = forall e . Linear (l e) e
 -- | 'Linear' contraint for @(Type -> Type -> Type)@-kind types.
 type Linear'' l = forall i e . Linear (l i e) e
 #endif
+
+--------------------------------------------------------------------------------
+
+{- |
+  @since 0.3
+  
+  Same as 'sfoldr', but also returns the length of the structure.
+-}
+csfoldr' :: Linear l e => (e -> a -> a) -> a -> l -> (Int, a)
+csfoldr' f base = sfoldr' (\ e (!n, e') -> (n + 1, f e e')) (0, base)
+
+{- |
+  @since 0.3
+  
+  Same as 'sfoldr', but also returns the length of the structure.
+-}
+csfoldl' :: Linear l e => (a -> e -> a) -> a -> l -> (Int, a)
+csfoldl' f base = sfoldl' (\ (!n, e') e -> (n + 1, f e' e)) (0, base)
+
+{- |
+  @since 0.3
+  
+  Monadic version of 'sfoldr'.
+-}
+msfoldr :: (Monad m, Linear l e) => (e -> a -> m a) -> a -> l -> m a
+msfoldr go = sfoldr ((=<<) . go) . return
+
+{- |
+  @since 0.3
+  
+  Monadic version of 'sfoldl'.
+-}
+msfoldl :: (Monad m, Linear l e) => (a -> e -> m a) -> a -> l -> m a
+msfoldl go = sfoldl (flip $ (=<<) . flip go) . return
 
 --------------------------------------------------------------------------------
 
