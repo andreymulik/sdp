@@ -64,7 +64,8 @@ Library
     ghc-prim           >= 0.5 && < 0.9,
     data-default-class >= 0.1 && < 0.2
   
-  if impl(ghc)
+  -- GHC 8.2.2 bug
+  if impl(ghc >= 8.4)
     cpp-options: -DSDP_LINEAR_EXTRAS
   
   if impl(ghc >= 8.6)
@@ -160,6 +161,5 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
-
 
 
