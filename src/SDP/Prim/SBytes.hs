@@ -361,7 +361,7 @@ instance Unboxed e => Linear (SBytes# e) e
       | n >= c = (es, Z)
       |  True  = (SBytes# n (o + c - n) arr#, SBytes# (c - n) o arr#)
     
-    splitsBy f es = trimL f <$> f *$ es `parts` es
+    splitsBy f es = dropWhile f <$> f *$ es `parts` es
     
     padL n@(I# n#) e es@(SBytes# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es

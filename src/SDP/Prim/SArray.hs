@@ -517,7 +517,7 @@ instance Linear (SArray# e) e
       | n >= c = (es, Z)
       |  True  = (SArray# n (o + c - n) arr#, SArray# (c - n) o arr#)
     
-    splitsBy f es = trimL f <$> f *$ es `parts` es
+    splitsBy f es = dropWhileEnd f <$> f *$ es `parts` es
     
     padL n@(I# n#) e es@(SArray# c@(I# c#) (I# o#) src#) = case c <=> n of
       EQ -> es

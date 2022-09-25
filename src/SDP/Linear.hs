@@ -43,16 +43,15 @@ module SDP.Linear
   
   -- * Related functions
   splitBy, divideBy, splits, divides, tails, inits, parts, chunks, save, skip,
-  partitions, subsequences, intersperse, intercalate, trim, except, mexcept,
+  partitions, subsequences, intersperse, intercalate, except, mexcept,
   csfoldr', csfoldl', msfoldr, msfoldl, spanl, breakl, spanr, breakr,
+  selectWhile', selectEnd', extractWhile', extractEnd', dropWhileEnd,
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
-  selectWhile', selectEnd', extractWhile', extractEnd',
   each, eachFrom, after, combo, ascending,
   
   -- ** Legacy
   o_foldr1, o_foldl1, o_foldr1', o_foldl1',
-  o_foldr, o_foldl, o_foldr', o_foldl',
-  dropWhile, dropEnd, dropSide
+  o_foldr, o_foldl, o_foldr', o_foldl'
 )
 where
 
@@ -447,12 +446,12 @@ class
     padR n e = take n . (++ replicate n e)
     
     -- | Drops the longest 'prefix' by predicate.
-    trimL :: (e -> Bool) -> l -> l
-    trimL p es = drop (prefix p es) es
+    dropWhile :: (e -> Bool) -> l -> l
+    dropWhile p es = drop (prefix p es) es
     
     -- | Drops the longest 'suffix' by predicate.
-    trimR :: (e -> Bool) -> l -> l
-    trimR p es = sans (suffix p es) es
+    dropEnd :: (e -> Bool) -> l -> l
+    dropEnd p es = sans (suffix p es) es
     
     {- |
       @replaceBy sub new line@ replace every non-overlapping occurrence of @sub@
@@ -820,7 +819,7 @@ chunks n es = isNull es || n < 1 ? [] $ let (x, xs) = split n es in x : chunks n
 
 -- | Left-side span.
 spanl :: Linear l e => (e -> Bool) -> l -> (l, l)
-spanl p es = (takeWhile p es, trimL p es)
+spanl p es = (takeWhile p es, dropWhile p es)
 
 -- | Left-side break.
 breakl :: Linear l e => (e -> Bool) -> l -> (l, l)
@@ -828,7 +827,7 @@ breakl =  spanl . (not .)
 
 -- | Right-side span.
 spanr :: Linear l e => (e -> Bool) -> l -> (l, l)
-spanr p es = (trimR p es, takeEnd p es)
+spanr p es = (dropEnd p es, takeEnd p es)
 
 -- | Right-side break.
 breakr :: Linear l e => (e -> Bool) -> l -> (l, l)
@@ -837,10 +836,10 @@ breakr =  spanr . (not .)
 {- |
   @since 0.3
   
-  @trim f = trimL f . trimR f@.
+  @dropWhileEnd f = dropWhile f . dropEnd f@.
 -}
-trim :: Linear l e => (e -> Bool) -> l -> l
-trim f = trimL f . trimR f
+dropWhileEnd :: Linear l e => (e -> Bool) -> l -> l
+dropWhileEnd f = dropWhile f . dropEnd f
 
 --------------------------------------------------------------------------------
 
@@ -1141,7 +1140,7 @@ instance Linear [e] e
         
         n = sizeOf sub
     
-    splitsBy f es = trimL f <$> L.findIndices f es `parts` es
+    splitsBy f es = dropWhile f <$> L.findIndices f es `parts` es
     
     isPrefixOf = L.isPrefixOf
     isSuffixOf = L.isSuffixOf
@@ -1198,22 +1197,6 @@ o_foldr1' =  sfoldr1'
 o_foldl1' :: Linear l e => (e -> e -> e) -> l -> e
 o_foldl1' =  sfoldl1'
 
-{-# DEPRECATED dropWhile "in favour 'trimL"  #-}
-{-# DEPRECATED dropSide  "in favour 'trim'"  #-}
-{-# DEPRECATED dropEnd   "in favour 'trimR'" #-}
-
--- | Same as 'trimL'.
-dropWhile :: Linear l e => (e -> Bool) -> l -> l
-dropWhile =  trimL
-
--- | Same as 'trimR'.
-dropEnd :: Linear l e => (e -> Bool) -> l -> l
-dropEnd =  trimR
-
--- | Same as 'trim'.
-dropSide :: Linear l e => (e -> Bool) -> l -> l
-dropSide =  trim
-
 --------------------------------------------------------------------------------
 
 unreachEx :: String -> a
@@ -1221,5 +1204,7 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
+
+
 
 
