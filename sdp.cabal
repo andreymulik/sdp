@@ -96,7 +96,6 @@ Library
     -- Classes
     SDP.Forceable
     SDP.NullableM
-    SDP.BorderedM
     SDP.Bordered
     SDP.Copyable
     SDP.IndexedM
@@ -160,6 +159,7 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
+
 
 
 

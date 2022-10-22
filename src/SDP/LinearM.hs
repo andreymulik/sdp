@@ -22,9 +22,6 @@ module SDP.LinearM
   module SDP.Copyable,
   module SDP.Linear,
   
-  -- * BorderedM class
-  module SDP.BorderedM,
-  
   -- * LinearM class
   LinearM (..), LinearM1, LinearM2,
   
@@ -46,7 +43,6 @@ where
 
 import Prelude ()
 import SDP.SafePrelude
-import SDP.BorderedM
 import SDP.NullableM
 import SDP.Copyable
 import SDP.Linear
@@ -68,13 +64,8 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class
-  (
-    Monad m,
-    Copyable m l,
-    NullableM m l,
-    EstimateM m l
-  ) => LinearM m l e | l -> m, l -> e
+class (Monad m, Copyable m l, NullableM m l, EstimateM m l)
+    => LinearM m l e | l -> m, l -> e
   where
     {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
         (getLeft|getRight), (!#>), writeM, copyTo #-}
@@ -425,12 +416,16 @@ class
   Note that @fmr-0.3@ support starts with @sdp-0.2.1.2@ patch - previous
   versions only work with @fmr-0.2@.
   
-  @fmr-0.3@ introduces new field extensions, so the patterns @(:+=)@, @(:=+)@
-  and @(:~=)@ will be deprecated in @sdp-0.3@ and will be removed in @sdp-0.4@.
-  @sdp-0.3@ will provide new combinators to do the same.
+  Note that @fmr-0.3@ provides new field extension mechanism, therefore @(:+=)@,
+  @(:=+)@ and @(:~=)@ patterns in @sdp-0.3@ implemented differently and have
+  different types. @fmr-0.2@ and old style patterns support will be dropped
+  in @sdp-0.4@.
 -}
 
 #if !MIN_VERSION_fmr(0,3,0)
+
+{-# WARNING FieldLinearM "deprecated, fmr-0.2 support will be dropped in sdp-0.4" #-}
+
 -- | 'FieldLinearM' is a service type used to prepend, append or remove element.
 data FieldLinearM l e m field record
   where
@@ -455,6 +450,8 @@ instance IsProp (FieldLinearM l e)
     performProp record (Prepend e field) = setRecord field record
                          =<< prepend e =<< getRecord field record
 
+{-# WARNING (:+=) "different for fmr-0.2 and fmr-0.3" #-}
+
 {- |
   @since 0.2.1
   
@@ -467,6 +464,8 @@ pattern (:+=) ::
   ) => e -> field m record l -> Prop m record
 pattern e :+= field <- (cast' -> Just (Prepend e field)) where (:+=) = Prop ... Prepend
 
+{-# WARNING (:=+) "different for fmr-0.2 and fmr-0.3" #-}
+
 {- |
   @since 0.2.1
   
@@ -478,6 +477,8 @@ pattern (:=+) ::
     LinearM m l e, FieldGet field, FieldSet field
   ) => field m record l -> e -> Prop m record
 pattern field :=+ e <- (cast' -> Just (Append field e)) where (:=+) = Prop ... Append
+
+{-# WARNING (:~=) "different for fmr-0.2 and fmr-0.3" #-}
 
 {- |
   @since 0.2.1
@@ -550,6 +551,7 @@ pattern (:~=) :: (Typeable m, Typeable record, Monad m)
               => Int -> field -> Prop m record
 pattern n :~= field = Prop (Delete n field)
 
+-- | Same as @(':=+')@ but doesn't require 'Typeable'.
 (=+:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
@@ -557,6 +559,7 @@ pattern n :~= field = Prop (Delete n field)
   ) => field -> e -> Prop m record
 field =+: e = Prop (Append field e)
 
+-- | Same as @(':=+')@ but doesn't require 'Typeable'.
 (+=:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
@@ -564,6 +567,7 @@ field =+: e = Prop (Append field e)
   ) => e -> field -> Prop m record
 field +=: e = Prop (Prepend field e)
 
+-- | Same as @(':=+')@ but doesn't require 'Typeable'.
 (~=:) ::
   (
     LinearM m l e, FieldModifyM field m record l,
@@ -592,4 +596,5 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
+
 
