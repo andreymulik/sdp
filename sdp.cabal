@@ -79,7 +79,6 @@ Library
     -- Commons
     SDP.SafePrelude
     SDP.Comparing
-    SDP.EstimateM
     SDP.Estimate
     SDP.Nullable
     SDP.Unboxed
@@ -161,5 +160,6 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
+
 
 

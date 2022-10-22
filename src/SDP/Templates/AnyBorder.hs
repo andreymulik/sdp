@@ -177,11 +177,11 @@ instance (Monad m, Index i) => EstimateM m (AnyBorder rep i e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 

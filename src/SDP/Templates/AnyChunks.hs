@@ -276,17 +276,17 @@ instance EstimateM1 m rep e => EstimateM m (AnyChunks rep e)
     estimateM = go 0
       where
         go o (AnyChunks [])   (AnyChunks []) = return (o <=> 0)
-        go o (AnyChunks [])               ys = lestimateM' ys o
-        go o xs               (AnyChunks []) = lestimateM' xs (-o)
+        go o (AnyChunks [])               ys = lestimateM ys o
+        go o xs               (AnyChunks []) = lestimateM xs (-o)
         go o (AnyChunks (x : xs)) (AnyChunks (y : ys)) = do
           sx <- getSizeOf x
           sy <- getSizeOf y
           go (o + sx - sy) (AnyChunks xs) (AnyChunks ys)
     
-    lestimateM' (AnyChunks       []) n = return (0 <=> n)
-    lestimateM' (AnyChunks (x : xs)) n = do
+    lestimateM (AnyChunks       []) n = return (0 <=> n)
+    lestimateM (AnyChunks (x : xs)) n = do
       c <- getSizeOf x
-      c > n ? return GT $ lestimateM' (AnyChunks xs) (n - c)
+      c > n ? return GT $ lestimateM (AnyChunks xs) (n - c)
 
 --------------------------------------------------------------------------------
 

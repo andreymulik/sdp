@@ -37,7 +37,6 @@ module SDP.SafePrelude
   module Data.Foldable,
   
   module SDP.Comparing,
-  module SDP.EstimateM,
   module SDP.Estimate,
   
   module Prelude,
@@ -74,7 +73,6 @@ import Prelude hiding
 
 import SDP.Internal.Utils
 import SDP.Comparing
-import SDP.EstimateM
 import SDP.Estimate
 
 #if !MIN_VERSION_base(4,11,0)
@@ -121,23 +119,29 @@ liftM6 g as bs cs ds es fs = do
 
 --------------------------------------------------------------------------------
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM1 :: Monad m => m (a -> m b) -> a -> m b
 joinM1 go a = do h <- go; h a
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM2 :: Monad m => m (a -> b -> m c) -> a -> b -> m c
 joinM2 go a b = do h <- go; h a b
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM3 :: Monad m => m (a -> b -> c -> m d) -> a -> b -> c -> m d
 joinM3 go a b c = do h <- go; h a b c
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM4 :: Monad m => m (a -> b -> c -> d -> m e)
        -> a -> b -> c -> d -> m e
 joinM4 go a b c d = do h <- go; h a b c d
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM5 :: Monad m => m (a -> b -> c -> d -> e -> m f)
        -> a -> b -> c -> d -> e -> m f
 joinM5 go a b c d e = do h <- go; h a b c d e
 
+-- | Lift 'Applicative' to 'Monad'.
 joinM6 :: Monad m => m (a -> b -> c -> d -> e -> f -> m g)
        -> a -> b -> c -> d -> e -> f -> m g
 joinM6 go a b c d e f = do h <- go; h a b c d e f
@@ -150,6 +154,7 @@ whenJust =  maybe (return ())
 -- | 'stToMIO' is just @'liftIO' . 'stToIO'@.
 stToMIO :: MonadIO io => ST RealWorld e -> io e
 stToMIO =  liftIO . stToIO
+
 
 
 

@@ -99,11 +99,11 @@ instance Monad m => EstimateM m (MArray# m e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 

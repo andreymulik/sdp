@@ -179,11 +179,11 @@ instance Monad m => EstimateM m (SBytes# e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -656,11 +656,11 @@ instance EstimateM (ST s) (STBytes# s e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -939,11 +939,11 @@ instance MonadIO io => EstimateM io (MIOBytes# io e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 

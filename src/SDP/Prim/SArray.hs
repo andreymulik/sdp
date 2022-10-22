@@ -195,11 +195,11 @@ instance Monad m => EstimateM m (SArray# e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -816,11 +816,11 @@ instance EstimateM (ST s) (STArray# s e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -1105,11 +1105,11 @@ instance MonadIO io => EstimateM io (MIOArray# io e)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
     
-    lestimateMLT' = return ... (.<)
-    lestimateMGT' = return ... (.>)
-    lestimateMLE' = return ... (.<=)
-    lestimateMGE' = return ... (.>=)
-    lestimateM'   = return ... (<.=>)
+    lestimateMLT = return ... (.<)
+    lestimateMGT = return ... (.>)
+    lestimateMLE = return ... (.<=)
+    lestimateMGE = return ... (.>=)
+    lestimateM   = return ... (<.=>)
 
 --------------------------------------------------------------------------------
 

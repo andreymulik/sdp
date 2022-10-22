@@ -68,7 +68,7 @@ instance (MonadVar m, NullableM1 m rep e) => NullableM m (AnyVar m rep e)
 
 instance (MonadVar m, EstimateM1 m rep e) => EstimateM m (AnyVar m rep e)
   where
-    lestimateM' xs n = do xs' <- get this (fromAnyVar xs); lestimateM' xs' n
+    lestimateM xs n = do xs' <- get this (fromAnyVar xs); lestimateM xs' n
     
     estimateM = on (join ... liftA2 estimateM) (get this.fromAnyVar)
     
