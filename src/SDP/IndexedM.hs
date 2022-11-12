@@ -113,6 +113,8 @@ class Monad m => Thaw m v v' | v' -> m
     unsafeThaw :: v -> m v'
     unsafeThaw =  thaw
 
+--------------------------------------------------------------------------------
+
 -- | 'IndexedM' contraint for @(Type -> Type)@-kind types.
 type IndexedM1 m v i e = IndexedM m (v e) i e
 
@@ -125,8 +127,9 @@ type Thaw1 m v v' e = Thaw m (v e) (v' e)
 -- | 'Thaw' contraint for @(Type -> Type -> Type)@-kind types.
 type Thaw2 m v v' i e = Thaw m (v i e) (v' i e)
 
-#ifdef SDP_QUALIFIED_CONSTRAINTS
+--------------------------------------------------------------------------------
 
+#ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'IndexedM' contraint for @(Type -> Type)@-kind types.
 type IndexedM' m v i = forall e . IndexedM m (v e) i e
 
@@ -138,8 +141,5 @@ type Thaw' m v v' = forall e . Thaw m (v e) (v' e)
 
 -- | 'Thaw' contraint for @(Type -> Type -> Type)@-kind types.
 type Thaw'' m v v' = forall i e . Thaw m (v i e) (v' i e)
-
 #endif
-
-
 

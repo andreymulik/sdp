@@ -432,9 +432,9 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance (Monad m, LinearM1 m rep e) => Copyable m (AnyChunks rep e)
+instance (Monad m, LinearM1 m rep e) => ForceableM m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 

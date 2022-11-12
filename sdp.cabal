@@ -79,7 +79,9 @@ Library
     -- Commons
     SDP.SafePrelude
     SDP.Comparing
+    SDP.Forceable
     SDP.Estimate
+    SDP.Bordered
     SDP.Nullable
     SDP.Unboxed
     SDP.Finite
@@ -94,10 +96,6 @@ Library
     SDP.SortM
     
     -- Classes
-    SDP.Forceable
-    SDP.NullableM
-    SDP.Bordered
-    SDP.Copyable
     SDP.IndexedM
     SDP.LinearM
     SDP.Indexed
@@ -159,7 +157,4 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
-
-
-
 

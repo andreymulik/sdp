@@ -856,9 +856,9 @@ instance BorderedM (ST s) (STArray# s e) Int
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance Copyable (ST s) (STArray# s e)
+instance ForceableM (ST s) (STArray# s e)
   where
     copied (STArray# n@(I# n#) (I# o#) marr#) = ST $
       \ s1# -> case cloneMutableArray# marr# o# n# s1# of
@@ -1139,9 +1139,9 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance MonadIO io => Copyable io (MIOArray# io e)
+instance MonadIO io => ForceableM io (MIOArray# io e)
   where
     copied = pack . copied . unpack
 

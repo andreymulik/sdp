@@ -352,9 +352,9 @@ instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance Copyable1 m rep e => Copyable m (AnyBorder rep i e)
+instance ForceableM1 m rep e => ForceableM m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 

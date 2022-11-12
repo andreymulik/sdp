@@ -131,7 +131,6 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     unslice = toMap . kfoldr (\ i -> (++) . (first (`joinDim` i) <$>) . assocs) []
     
 #ifndef SDP_DISABLE_SHAPED
-    
     {- |
       @since 0.3
       
@@ -207,6 +206,8 @@ type Freeze1 m v' v e = Freeze m (v' e) (v e)
 -- | 'Freeze' contraint for @(Type -> Type -> Type)@-kind types.
 type Freeze2 m v' v i e = Freeze m (v' i e) (v i e)
 
+--------------------------------------------------------------------------------
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Indexed' contraint for @(Type -> Type)@-kind types.
 type Indexed' v i = forall e . Indexed (v e) i e
@@ -251,8 +252,6 @@ unpick (I# n#) f es = runST $ ST $ \ s1# -> case newArray# n# [] s1# of
                     in  go (c# -# 1#) ((i, reverse xs) : xss)
               in  (# s6#, go (n# -# 1#) [] #)
 
---------------------------------------------------------------------------------
-
 {-# DEPRECATED binaryContain "deprecated in favour 'SDP.Indexed.memberSorted' \
       \will be removed in sdp-0.4" #-}
 
@@ -277,4 +276,5 @@ memberSorted =  binaryContain
 
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Indexed."
+
 

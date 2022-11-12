@@ -689,9 +689,9 @@ instance Unboxed e => BorderedM (ST s) (STBytes# s e) Int
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance Unboxed e => Copyable (ST s) (STBytes# s e)
+instance Unboxed e => ForceableM (ST s) (STBytes# s e)
   where
     copied es@(STBytes# n@(I# n#) (I# o#) marr#) = ST $
       \ s1# -> case pcloneUnboxedM es marr# o# n# s1# of
@@ -974,9 +974,9 @@ instance (MonadIO io, Unboxed e) => BorderedM io (MIOBytes# io e) Int
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance (MonadIO io, Unboxed e) => Copyable io (MIOBytes# io e)
+instance (MonadIO io, Unboxed e) => ForceableM io (MIOBytes# io e)
   where
     copied = pack . copied . unpack
 

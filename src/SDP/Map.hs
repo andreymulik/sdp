@@ -274,6 +274,8 @@ type Map1 map key e = Map (map e) key e
 -- | 'Map' contraint for @(Type -> Type -> Type)@-kind types.
 type Map2 map key e = Map (map key e) key e
 
+--------------------------------------------------------------------------------
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Map' contraint for @(Type -> Type)@-kind types.
 type Map' map key = forall e . Map (map e) key e
@@ -347,4 +349,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Map."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Map."
+
+
+
 

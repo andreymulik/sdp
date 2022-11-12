@@ -283,6 +283,8 @@ type Set2 s i o = Set (s i o) o
 -- | 'SetWith' contraint for @(Type -> Type -> Type)@-kind types.
 type SetWith2 s i o = SetWith (s i o) o
 
+--------------------------------------------------------------------------------
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 -- | 'Set' quantified contraint for @(Type -> Type)@-kind types.
 type Set' s = forall o . Set (s o) o
@@ -375,6 +377,4 @@ instance SetWith [o] o
     lookupGEWith _ _ _ = Nothing
     
     groupSetWith cmp f = map (foldr1 f) . groupBy ((== EQ) ... cmp) . sortBy cmp
-
-
 

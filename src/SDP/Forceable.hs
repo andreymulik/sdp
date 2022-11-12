@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE Safe, CPP, ConstraintKinds #-}
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
@@ -21,7 +22,18 @@ module SDP.Forceable
   Forceable (..), Forceable1, Forceable2,
   
 #ifdef SDP_QUALIFIED_CONSTRAINTS
+  -- ** Rank 2 quantified constraints
+  -- | GHC 8.6.1+ only
   Forceable', Forceable'',
+#endif
+  
+  -- * ForceableM
+  ForceableM (..), ForceableM1, ForceableM2,
+  
+#ifdef SDP_QUALIFIED_CONSTRAINTS
+  -- ** Rank 2 quantified constraints
+  -- | GHC 8.6.1+ only
+  ForceableM', ForceableM'',
 #endif
 )
 where
@@ -53,6 +65,21 @@ class Forceable f
     force :: f -> f
     force =  id
 
+--------------------------------------------------------------------------------
+
+{- |
+  @since 0.3
+  
+  'Forceable' version for mutable strutures.
+-}
+class Monad m => ForceableM m f
+  where
+    -- | Create copy of given structure.
+    copied :: f -> m f
+    copied =  return
+
+--------------------------------------------------------------------------------
+
 {- |
   @since 0.3
   
@@ -66,6 +93,22 @@ type Forceable1 f e = Forceable (f e)
   'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
 -}
 type Forceable2 f i e = Forceable (f i e)
+
+{- |
+  @since 0.3
+  
+  'ForceableM' contraint for @(Type -> Type)@-kind types.
+-}
+type ForceableM1 m c e = ForceableM m (c e)
+
+{- |
+  @since 0.3
+  
+  'ForceableM' contraint for @(Type -> Type -> Type)@-kind types.
+-}
+type ForceableM2 m c i e = ForceableM m (c i e)
+
+--------------------------------------------------------------------------------
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |
@@ -81,6 +124,20 @@ type Forceable' f = forall e . Forceable (f e)
   'Forceable' contraint for @(Type -> Type -> Type)@-kind types.
 -}
 type Forceable'' f = forall i e . Forceable (f i e)
+
+{- |
+  @since 0.3
+  
+  'ForceableM' contraint for @(Type -> Type)@-kind types.
+-}
+type ForceableM' m c = forall e . ForceableM m (c e)
+
+{- |
+  @since 0.3
+  
+  'ForceableM' contraint for @(Type -> Type -> Type)@-kind types.
+-}
+type ForceableM'' m c = forall i e . ForceableM m (c i e)
 #endif
 
 --------------------------------------------------------------------------------
@@ -90,6 +147,9 @@ type Forceable'' f = forall i e . Forceable (f i e)
   memory, so 'force' is just 'id'.
 -}
 instance Forceable [a]
+
+instance Monad m => ForceableM m [a]
+
 
 
 

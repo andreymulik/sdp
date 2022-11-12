@@ -79,7 +79,7 @@ instance Nullable E where lzero = E; isNull = const True
 -}
 data tail :& head = !tail :& !head deriving ( Eq, Ord, Typeable, Data, Generic )
 
-instance (Enum i) => Enum (E :& i)
+instance Enum i => Enum (E :& i)
   where
     fromEnum (E :& e) = fromEnum  e
     succ     (E :& e) = E :& succ e

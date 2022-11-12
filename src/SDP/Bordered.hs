@@ -118,7 +118,11 @@ class (Index i, Estimate b) => Bordered b i | b -> i
 
 --------------------------------------------------------------------------------
 
--- | 'BorderedM' is 'Bordered' version for mutable data structures.
+{- |
+  @since 0.3
+  
+  'BorderedM' is 'Bordered' version for mutable data structures.
+-}
 class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
   where
     {-# MINIMAL (getBounds|getLower, getUpper), rebounded' #-}
@@ -190,21 +194,21 @@ type Bordered1 l i e = Bordered (l e) i
 -- | 'Bordered' contraint for @(Type -> Type -> Type)@-kind types.
 type Bordered2 l i e = Bordered (l i e) i
 
-#ifdef SDP_QUALIFIED_CONSTRAINTS
--- | 'Bordered' contraint for @(Type -> Type)@-kind types.
-type Bordered' l i = forall e . Bordered (l e) i
-
--- | 'Bordered' contraint for @(Type -> Type -> Type)@-kind types.
-type Bordered'' l = forall i e . Bordered (l i e) i
-#endif
-
 -- | 'BorderedM' contraint for @(Type -> Type)@-kind types.
 type BorderedM1 m l i e = BorderedM m (l e) i
 
 -- | 'BorderedM' contraint for @(Type -> Type -> Type)@-kind types.
 type BorderedM2 m l i e = BorderedM m (l i e) i
 
+--------------------------------------------------------------------------------
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
+-- | 'Bordered' contraint for @(Type -> Type)@-kind types.
+type Bordered' l i = forall e . Bordered (l e) i
+
+-- | 'Bordered' contraint for @(Type -> Type -> Type)@-kind types.
+type Bordered'' l = forall i e . Bordered (l i e) i
+
 -- | 'BorderedM' contraint for @(Type -> Type)@-kind types.
 type BorderedM' m l i = forall e . BorderedM m (l e) i
 
@@ -251,5 +255,6 @@ instance Monad m => BorderedM m [e] Int
     getLower  _ = return 0
     getUpper es = return (length es - 1)
     rebounded'  = return ... L.take . size
+
 
 

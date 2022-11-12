@@ -18,8 +18,6 @@
 module SDP.LinearM
 (
   -- * Exports
-  module SDP.NullableM,
-  module SDP.Copyable,
   module SDP.Linear,
   
   -- * LinearM class
@@ -43,8 +41,6 @@ where
 
 import Prelude ()
 import SDP.SafePrelude
-import SDP.NullableM
-import SDP.Copyable
 import SDP.Linear
 import SDP.Map
 
@@ -64,7 +60,7 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m, Copyable m l, NullableM m l, EstimateM m l)
+class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
     => LinearM m l e | l -> m, l -> e
   where
     {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
@@ -596,5 +592,4 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
-
 

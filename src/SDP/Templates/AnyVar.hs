@@ -86,9 +86,9 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e)
 
 --------------------------------------------------------------------------------
 
-{- Copyable and LinearM instances. -}
+{- ForceableM and LinearM instances. -}
 
-instance (MonadVar m, Copyable1 m rep e) => Copyable m (AnyVar m rep e)
+instance (MonadVar m, ForceableM1 m rep e) => ForceableM m (AnyVar m rep e)
   where
     copied = pack <=< copied <=< get this.fromAnyVar
 

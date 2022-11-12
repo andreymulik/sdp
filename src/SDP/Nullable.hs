@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, MagicHash, PatternSynonyms, ViewPatterns, DefaultSignatures #-}
-{-# LANGUAGE Trustworthy, ConstraintKinds #-}
+{-# LANGUAGE Trustworthy, MultiParamTypeClasses, ConstraintKinds #-}
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.Nullable
-    Copyright   :  (c) Andrey Mulik 2020-2021
+    Copyright   :  (c) Andrey Mulik 2020-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -23,6 +23,15 @@ module SDP.Nullable
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
   Nullable', Nullable'',
+#endif
+  
+  -- * Monadic Nullable
+  NullableM (..), NullableM1, NullableM2,
+  
+#ifdef SDP_QUALIFIED_CONSTRAINTS
+  -- ** Rank 2 quantified constraints
+  -- | GHC 8.6.1+ only
+  NullableM', NullableM'',
 #endif
   
   -- ** Patterns
@@ -71,19 +80,37 @@ default ()
 class Nullable e
   where
     -- | Empty value.
-    lzero  :: e
-    lzero  =  mempty
-    default lzero :: (Monoid e) => e
+    default lzero :: Monoid e => e
+    lzero :: e
+    lzero =  mempty
     
     -- | Is value empty?
+    default isNull :: Eq e => e -> Bool
     isNull :: e -> Bool
     isNull =  (== lzero)
-    default isNull :: (Eq e) => e -> Bool
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+  
+  'NullableM' is class of types which value may be empty.
+-}
+class Monad m => NullableM m e
+  where
+    -- | Monadic 'SDP.Nullable.lzero'.
+    newNull :: m e
+    
+    -- | Monadic 'SDP.Nullable.isNull'.
+    nowNull :: e -> m Bool
+
+--------------------------------------------------------------------------------
+
+{-# COMPLETE NULL, Just #-}
+{-# COMPLETE Z,    Just #-}
+
 -- | Originally defined in @sdp-ctypes@ (now @sdp-foreign@), same as @Z@ now.
-pattern NULL :: (Nullable e) => e
+pattern NULL :: Nullable e => e
 pattern NULL <- (isNull -> True) where NULL = lzero
 
 {- |
@@ -91,7 +118,7 @@ pattern NULL <- (isNull -> True) where NULL = lzero
   
   Defined in "SDP.Nullable" since @sdp-0.2.1@, earlier - in "SDP.Linear".
 -}
-pattern Z :: (Nullable e) => e
+pattern Z :: Nullable e => e
 pattern Z =  NULL
 
 --------------------------------------------------------------------------------
@@ -108,6 +135,22 @@ type Nullable1 rep e = Nullable (rep e)
 -}
 type Nullable2 rep i e = Nullable (rep i e)
 
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type)@-kind types.
+-}
+type NullableM1 m rep e = NullableM m (rep e)
+
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
+-}
+type NullableM2 m rep i e = NullableM m (rep i e)
+
+--------------------------------------------------------------------------------
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |
   @since 0.2.1
@@ -120,12 +163,25 @@ type Nullable' rep = forall e . Nullable (rep e)
   'Nullable' contraint for @(Type -> Type -> Type)@-kind types.
 -}
 type Nullable'' rep = forall i e . Nullable (rep i e)
+
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type)@-kind types.
+  Only for GHC >= 8.6.1
+-}
+type NullableM' m rep = forall e . NullableM m (rep e)
+
+{- |
+  @since 0.3
+  
+  'NullableM' contraint for @(Type -> Type -> Type)@-kind types.
+  Only for GHC >= 8.6.1
+-}
+type NullableM'' m rep = forall i e . NullableM m (rep i e)
 #endif
 
 --------------------------------------------------------------------------------
-
-{-# COMPLETE Z,    Just #-}
-{-# COMPLETE NULL, Just #-}
 
 instance Nullable (Maybe e)
   where
@@ -156,5 +212,4 @@ instance Nullable (StablePtr e) where lzero = StablePtr (unsafeCoerce# 0#)
 
 -- | @since 0.2.1
 instance Nullable (FunPtr e) where lzero = nullFunPtr
-
 
