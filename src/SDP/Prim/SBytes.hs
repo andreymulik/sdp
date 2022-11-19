@@ -205,15 +205,15 @@ instance Monad m => NullableM m (SBytes# e)
 
 instance Bordered (SBytes# e) Int
   where
-    lower = const 0
-    
-    rebound bnds es@(SBytes# c o bytes#)
-        | n < 0 = Z
+    -- same as take, but Linear requires Unboxed
+    viewOf bnds es@(SBytes# c o arr#)
+        | n <= 0 = Z
         | n >= c = es
-        | True = SBytes# n o bytes#
+        | True = SBytes# n o arr#
       where
         n = size bnds
     
+    lower                  _ = 0
     upper    (SBytes# c _ _) = c - 1
     bounds   (SBytes# c _ _) = (0, c - 1)
     indices  (SBytes# c _ _) = [0 .. c - 1]
@@ -227,9 +227,9 @@ instance Monad m => BorderedM m (SBytes# e) Int
     getIndices (SBytes# c _ _) = return [0 .. c - 1]
     getBounds  (SBytes# c _ _) = return (0, c - 1)
     getUpper   (SBytes# c _ _) = return (c - 1)
+    getLower                 _ = return 0
     
-    getLower _ = return 0
-    rebounded' = return ... rebound
+    getViewOf = return ... viewOf
 
 --------------------------------------------------------------------------------
 
@@ -670,7 +670,7 @@ instance Bordered (STBytes# s e) Int
   where
     bounds (STBytes# c _ _) = (0, c - 1)
     
-    rebound bnds es@(STBytes# c o bytes#)
+    viewOf bnds es@(STBytes# c o bytes#)
         | n < 0 = STBytes# 0 0 bytes#
         | n < c = STBytes# n o bytes#
         | True  = es
@@ -679,9 +679,9 @@ instance Bordered (STBytes# s e) Int
 
 instance Unboxed e => BorderedM (ST s) (STBytes# s e) Int
   where
-    getLower _ = return 0
-    rebounded' = takeM . size
+    getViewOf = takeM . size
     
+    getLower                  _ = return 0
     nowIndexIn (STBytes# c _ _) = return . inRange (0, c - 1)
     getIndices (STBytes# c _ _) = return [0 .. c - 1]
     getBounds  (STBytes# c _ _) = return (0, c - 1)
@@ -951,10 +951,9 @@ instance MonadIO io => EstimateM io (MIOBytes# io e)
 
 instance Bordered (MIOBytes# io e) Int
   where
-    lower = const 0
+    viewOf bnds (MIOBytes# es) = MIOBytes# (viewOf bnds es)
     
-    rebound bnds (MIOBytes# es) = MIOBytes# (rebound bnds es)
-    
+    lower                               _ = 0
     upper    (MIOBytes# (STBytes# c _ _)) = c - 1
     bounds   (MIOBytes# (STBytes# c _ _)) = (0, c - 1)
     indices  (MIOBytes# (STBytes# c _ _)) = [0 .. c - 1]
@@ -968,9 +967,9 @@ instance (MonadIO io, Unboxed e) => BorderedM io (MIOBytes# io e) Int
     getIndices = return . indices . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
-    
-    rebounded' = takeM . size
     getLower _ = return 0
+    
+    getViewOf = takeM . size
 
 --------------------------------------------------------------------------------
 
@@ -1257,4 +1256,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
 

@@ -82,7 +82,7 @@ instance (Index i, MonadVar m, BorderedM1 m rep i e)
     getLower   = getLower   <=< get this.fromAnyVar
     getUpper   = getUpper   <=< get this.fromAnyVar
     
-    rebounded' bnds es = es <$ modifyRecordM this' (fromAnyVar es) (rebounded' bnds)
+    getViewOf bnds es = es <$ modifyRecordM this' (fromAnyVar es) (getViewOf bnds)
 
 --------------------------------------------------------------------------------
 

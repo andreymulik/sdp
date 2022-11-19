@@ -120,7 +120,7 @@ instance Bordered (MArray# m e) Int
     indexOf  (MArray# es) = index (0, upper es)
     offsetOf (MArray# es) = offset (0, upper es)
     
-    rebound bnds (MArray# es) = MArray# (rebound bnds es)
+    viewOf bnds (MArray# es) = MArray# (viewOf bnds es)
 
 instance MonadVar m => BorderedM m (MArray# m e) Int
   where
@@ -128,9 +128,9 @@ instance MonadVar m => BorderedM m (MArray# m e) Int
     getIndices = return . indices
     getBounds  = return . bounds
     getUpper   = return . upper
-    
-    rebounded' = takeM . size
     getLower _ = return 0
+    
+    getViewOf = takeM . size
 
 --------------------------------------------------------------------------------
 

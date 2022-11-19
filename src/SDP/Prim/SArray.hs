@@ -207,9 +207,9 @@ instance Monad m => EstimateM m (SArray# e)
 
 instance Bordered (SArray# e) Int
   where
-    lower _ = 0
-    rebound = take . size
+    viewOf = take . size
     
+    lower                  _ = 0
     upper    (SArray# c _ _) = c - 1
     bounds   (SArray# c _ _) = (0, c - 1)
     indices  (SArray# c _ _) = [0 .. c - 1]
@@ -223,9 +223,9 @@ instance Monad m => BorderedM m (SArray# e) Int
     getIndices (SArray# c _ _) = return [0 .. c - 1]
     getBounds  (SArray# c _ _) = return (0, c - 1)
     getUpper   (SArray# c _ _) = return (c - 1)
+    getLower                 _ = return 0
     
-    getLower _ = return 0
-    rebounded' = return ... rebound
+    getViewOf  = return ... viewOf
 
 --------------------------------------------------------------------------------
 
@@ -828,8 +828,7 @@ instance EstimateM (ST s) (STArray# s e)
 
 instance Bordered (STArray# s e) Int
   where
-    lower _ = 0
-    
+    lower                   _ = 0
     upper    (STArray# c _ _) = c - 1
     bounds   (STArray# c _ _) = (0, c - 1)
     indices  (STArray# c _ _) = [0 .. c - 1]
@@ -837,10 +836,10 @@ instance Bordered (STArray# s e) Int
     offsetOf (STArray# c _ _) = offset (0, c - 1)
     indexIn  (STArray# c _ _) = \ i -> i >= 0 && i < c
     
-    rebound bnds es@(STArray# c o arr#)
-        | n < 0 = STArray# 0 0 arr#
-        | n < c = STArray# n o arr#
-        | True  = es
+    viewOf bnds es@(STArray# c o arr#)
+        | n <= 0 = STArray# 0 0 arr#
+        | n >= c = es
+        |  True  = STArray# n o arr#
       where
         n = size bnds
 
@@ -850,9 +849,9 @@ instance BorderedM (ST s) (STArray# s e) Int
     getIndices (STArray# c _ _) = return [0 .. c - 1]
     getBounds  (STArray# c _ _) = return (0, c - 1)
     getUpper   (STArray# c _ _) = return (c - 1)
+    getLower                  _ = return 0
     
-    getLower _ = return 0
-    rebounded' = takeM . size
+    getViewOf = takeM . size
 
 --------------------------------------------------------------------------------
 
@@ -1117,9 +1116,9 @@ instance MonadIO io => EstimateM io (MIOArray# io e)
 
 instance Bordered (MIOArray# io e) Int
   where
-    lower _ = 0
-    rebound bnds (MIOArray# es) = MIOArray# (rebound bnds es)
+    viewOf bnds (MIOArray# es) = MIOArray# (viewOf bnds es)
     
+    lower                               _ = 0
     upper    (MIOArray# (STArray# c _ _)) = c - 1
     bounds   (MIOArray# (STArray# c _ _)) = (0, c - 1)
     indices  (MIOArray# (STArray# c _ _)) = [0 .. c - 1]
@@ -1133,9 +1132,9 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
     getIndices = return . indices . unpack
     getBounds  = return . bounds . unpack
     getUpper   = return . upper . unpack
-    
-    rebounded' = takeM . size
     getLower _ = return 0
+    
+    getViewOf = takeM . size
 
 --------------------------------------------------------------------------------
 
@@ -1353,8 +1352,6 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
 (<?=>) :: Bordered b i => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min
 
---------------------------------------------------------------------------------
-
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SArray."
 
@@ -1369,7 +1366,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
-
 
 

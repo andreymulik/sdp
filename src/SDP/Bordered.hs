@@ -20,6 +20,7 @@
 module SDP.Bordered
 (
   -- * Bordered
+  -- $terminology
   Bordered (..), Bordered1, Bordered2,
   
 #ifdef SDP_QUALIFIED_CONSTRAINTS
@@ -49,10 +50,59 @@ default ()
 
 --------------------------------------------------------------------------------
 
--- | Class of bordered data structures.
+{- $terminology
+  Here and below, the following terms are used.
+  
+  /Real size/ - the number of actually stored elements in the structure
+  
+  /Virtual size/ or just /size/ - the declared number of elements in a
+  particular data structure. Depending on the implementation of the structure
+  can be:
+  
+  * strictly equal to real size (e.g., list);
+  * be less than or equal to the actual size (e.g., Vector, ByteString, all
+  standard SDP structures);
+  * be larger than real size (e.g., sparse matrixes).
+  
+  All SDP-provided classes use only the /virtual size/.
+  
+  /Bounds/ - the 'lower' and 'upper' 'bounds' of the structure, stored or
+  computed. 'size' of /bounds/ must be equal to 'sizeOf' structure.
+  
+  /Range/ - the area between the lower and upper /bounds/ of the structure.
+  
+  /View/ - an ordered set of elements, stored or calculated, each of which
+  corresponds to a unique index from the specified range. 'sizeOf' view must be
+  equal to 'size' of its /bounds/. In general, any structure is a view of itself.
+  
+  /Slice/ is a structure represented by a reference to a part of another
+  structure contents. The /virtual size/ of /slice/ is different from the
+  /virtual size/ of the original. For example, a sparse matrix is ​​usually not
+  considered a slice of a real structure.
+-}
+
+--------------------------------------------------------------------------------
+
+{- |
+  'Bordered' is a class of structures that have a constant size and borders
+  (represented by the smallest and largest indices).
+  
+  Note that the 'Bordered' class isn't designed for structures with unordered or
+  missing keys. Its main purpose is to determine the geometry ('sizesOf'), the
+  order of the keys ('indexOf', 'offsetOf') and ensure that the keys are
+  correctly mapped to the content.
+  
+  'Bordered' doesn't affect the contents of the structure, but implies that each
+  index within the specified bounds /uniquely/ corresponds to some stored or
+  computed element. Boundary operations don't affect the order of the elements,
+  but may make some of them unreachable (if the size of the structure is
+  reduced) or change the corresponding indices.
+  
+  All 'Bordered' operations is safe. Only 'viewOf' can 'throw' exceptions.
+-}
 class (Index i, Estimate b) => Bordered b i | b -> i
   where
-    {-# MINIMAL (bounds|(lower, upper)), rebound #-}
+    {-# MINIMAL (bounds|(lower, upper)), viewOf #-}
     
     {-# INLINE bounds #-}
     {- |
@@ -73,48 +123,39 @@ class (Index i, Estimate b) => Bordered b i | b -> i
     upper :: b -> i
     upper =  snd . bounds
     
-    -- | Returns actual sizes of structure.
+    -- | Returns the virtual geometry of givel structure.
     sizesOf :: b -> [Int]
     sizesOf =  sizes . bounds
     
     {-# INLINE indexIn #-}
-    -- | Checks if an index falls within the boundaries of the structure.
+    -- | Checks if an index within the boundaries of the structure.
     indexIn :: b -> i -> Bool
     indexIn =  inRange . bounds
     
     {-# INLINE indices #-}
-    -- | Returns index range list.
+    -- | Returns list of indices, also see 'range'.
     indices :: b -> [i]
     indices =  range . bounds
     
     {-# INLINE indexOf #-}
-    -- | Returns index by offset in structure.
+    -- | Returns 'index' by 'offset'.
     indexOf :: b -> Int -> i
     indexOf =  index . bounds
     
     {-# INLINE offsetOf #-}
-    -- | Returns index offset in structure bounds.
+    -- | Returns 'offset' by 'index'.
     offsetOf :: b -> i -> Int
     offsetOf =  offset . bounds
     
     {- |
       @since 0.3
       
-      @'rebound' es bnds@ changes structure bounds, if possible - in place.
+      @'viewOf' bnds es@ returns a /view/ of the @es@ with @bnds@ bounds.
       
-      * If given bounds is empty, returns an empty structure (with *any* empty
-      bounds, e.g. @defaultBounds 0@).
-      * If the new range is lesser than the current size of the structure,
-      bounds of a suitable size must be set
-      * If the new range is larger than the current size of the structure, an
-      'UnacceptableExpansion' exception occurs
-      * If the transferred boundaries cannot be set for other reasons,
-      boundaries of the same size should be set.
-      
-      You can calculate new boundaries if given cannot be set in any way. Unless
-      otherwise stated, @'defaultBounds' ('size' bnds)@ is implied.
+      If the size of the expected view is larger than the size of the original
+      structure, the behavior of the function is undefined.
     -}
-    rebound :: (i, i) -> b -> b
+    viewOf :: (i, i) -> b -> b
 
 --------------------------------------------------------------------------------
 
@@ -125,7 +166,7 @@ class (Index i, Estimate b) => Bordered b i | b -> i
 -}
 class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
   where
-    {-# MINIMAL (getBounds|getLower, getUpper), rebounded' #-}
+    {-# MINIMAL (getBounds|getLower, getUpper), getViewOf #-}
     
     -- | 'getBounds' returns 'bounds' of mutable data structure.
     getBounds :: b -> m (i, i)
@@ -162,29 +203,10 @@ class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
     {- |
       @since 0.3
       
-      @'rebounded' es bnds@ changes structure bounds, if possible - in place.
-      
-      * If given bounds is empty, returns an empty structure (with *any* empty
-      bounds, e.g. @defaultBounds 0@).
-      * If the new range is lesser than the current size of the structure,
-      bounds of a suitable size must be set
-      * If the new range is larger than the current size of the structure, an
-      'UnacceptableExpansion' exception occurs
-      * If the transferred boundaries cannot be set for other reasons,
-      boundaries of the same size should be set.
-      
-      You can calculate new boundaries if given cannot be set in any way. Unless
-      otherwise stated, @'defaultBounds' ('size' bnds)@ is implied.
+      @'getViewOf' bnds es@ returns a /view/ of the @es@ with @bnds@ bounds.
+      Also see 'viewOf'.
     -}
-    rebounded :: (i, i) -> b -> m b
-    rebounded =  rebounded'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'rebounded', but always create new structure.
-    -}
-    rebounded' :: (i, i) -> b -> m b
+    getViewOf :: (i, i) -> b -> m b
 
 --------------------------------------------------------------------------------
 
@@ -226,16 +248,15 @@ instance Index i => Bordered (i, i) i
     
     indices = range
     indexIn = inRange
-    rebound = const
     
+    viewOf   = const
     indexOf  = index
     offsetOf = offset
 
 instance Bordered [e] Int
   where
-    lower   = const 0
-    rebound = L.take . size
-    
+    lower  _ = 0
+    viewOf   = L.take . size
     upper es = length es - 1
 
 instance (Monad m, Index i) => BorderedM m (i, i) i
@@ -244,7 +265,7 @@ instance (Monad m, Index i) => BorderedM m (i, i) i
     getLower   = return . fst
     getUpper   = return . snd
     getIndices = return . range
-    rebounded' = return ... const
+    getViewOf  = return ... const
     
     getIndexOf  = return ... index
     nowIndexIn  = return ... inRange
@@ -253,8 +274,7 @@ instance (Monad m, Index i) => BorderedM m (i, i) i
 instance Monad m => BorderedM m [e] Int
   where
     getLower  _ = return 0
+    getViewOf   = return ... viewOf
     getUpper es = return (length es - 1)
-    rebounded'  = return ... L.take . size
-
 
 

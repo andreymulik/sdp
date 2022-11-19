@@ -197,7 +197,7 @@ instance Index i => Bordered (AnyBorder rep i e) i
     indexIn  (AnyBorder l u _) = inRange (l, u)
     offsetOf (AnyBorder l u _) = offset  (l, u)
     
-    rebound bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
+    viewOf bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
 
 instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
   where
@@ -207,9 +207,9 @@ instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
     getLower   (AnyBorder l _ _) = return l
     getUpper   (AnyBorder _ u _) = return u
     
-    rebounded' bnds es =
+    getViewOf bnds es =
       let bnds' = defaultBounds (size bnds)
-      in  uncurry AnyBorder bnds <$> rebounded' bnds' (unpack es)
+      in  uncurry AnyBorder bnds <$> getViewOf bnds' (unpack es)
 
 --------------------------------------------------------------------------------
 

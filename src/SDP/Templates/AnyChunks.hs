@@ -306,10 +306,10 @@ instance Bordered1 rep Int e => Bordered (AnyChunks rep e) Int
     upper  es = sizeOf es - 1
     bounds es = (0, sizeOf es - 1)
     
-    rebound bnds es = AnyChunks (size bnds `go` toChunks es)
+    viewOf bnds es = AnyChunks (size bnds `go` toChunks es)
       where
         go c (x : xs) = let s = sizeOf x in case c <=> s of
-          LT -> [defaultBounds c `rebound` x]
+          LT -> [defaultBounds c `viewOf` x]
           GT -> x : go (c - s) xs
           EQ -> [x]
         go _    []    = []
@@ -322,7 +322,7 @@ instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
     getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
     nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
     
-    rebounded' bnds (AnyChunks es) = AnyChunks <$> go (size bnds) es
+    getViewOf bnds (AnyChunks es) = AnyChunks <$> go (size bnds) es
       where
         go _    []    = return []
         go n (x : xs) = do
