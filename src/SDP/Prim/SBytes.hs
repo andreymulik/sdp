@@ -21,6 +21,9 @@ module SDP.Prim.SBytes
   -- * Preudo-primitive types
   MIOBytes# (..), IOBytes#, STBytes#, SBytes#,
   
+  -- ** Proto-Functor
+  fmapSBytes#,
+  
   -- ** Unpack unboxed arrays
   fromSBytes#,  packSBytes#,  unpackSBytes#,  offsetSBytes#,
   fromSTBytes#, packSTBytes#, unpackSTBytes#, offsetSTBytes#,
@@ -148,6 +151,44 @@ instance Unboxed e => Semigroup (SBytes# e)
       runST $ ST $ \ s1# -> case pconcat xs arr1# n1# o1# arr2# n2# o2# s1# of
         (# s2#, n#, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
           (# s3#, arr# #) -> (# s3#, SBytes# (I# n#) 0 arr# #)
+
+--------------------------------------------------------------------------------
+
+{- Num instance. -}
+
+instance (Num e, Unboxed e) => Num (SBytes# e)
+  where
+    fromInteger = single . fromInteger
+    
+    negate = fmapSBytes# negate
+    signum = fmapSBytes# signum
+    abs    = fmapSBytes# abs
+    
+    xs@(SBytes# nx@(I# nx#) (I# ox#) xs#) + SBytes# ny (I# oy#) ys# =
+      nx /= ny ? undEx "(+)" $ runST $ ST $ \ s1# -> case pnewUnboxed xs nx# s1# of
+        (# s2#, marr# #) ->
+          let
+              go# _  _  _  0# = \ s# -> s#
+              go# i# j# k# n# =
+                let e = ((xs# !# i#) + (ys# !# j#)) `asTypeOf` fromProxy xs
+                in  \ s# -> case writeUnboxed# marr# k# e s# of
+                      s'# -> go# (i# +# 1#) (j# +# 1#) (k# +# 1#) (n# -# 1#) s'#
+          in  case go# ox# oy# 0# nx# s2# of
+                s3# -> case unsafeFreezeByteArray# marr# s3# of
+                  (# s4#, arr# #) -> (# s4#, SBytes# nx 0 arr# #)
+    
+    xs@(SBytes# nx@(I# nx#) (I# ox#) xs#) * SBytes# ny (I# oy#) ys# =
+      nx /= ny ? undEx "(*)" $ runST $ ST $ \ s1# -> case pnewUnboxed xs nx# s1# of
+        (# s2#, marr# #) ->
+          let
+              go# _  _  _  0# = \ s# -> s#
+              go# i# j# k# n# =
+                let e = ((xs# !# i#) * (ys# !# j#)) `asTypeOf` fromProxy xs
+                in  \ s# -> case writeUnboxed# marr# k# e s# of
+                      s'# -> go# (i# +# 1#) (j# +# 1#) (k# +# 1#) (n# -# 1#) s'#
+          in  case go# ox# oy# 0# nx# s2# of
+                s3# -> case unsafeFreezeByteArray# marr# s3# of
+                  (# s4#, arr# #) -> (# s4#, SBytes# nx 0 arr# #)
 
 --------------------------------------------------------------------------------
 
@@ -1227,6 +1268,20 @@ hashSBytesWith# :: Unboxed e => Int -> SBytes# e -> Int
 hashSBytesWith# (I# salt#) es@(SBytes# (I# c#) (I# o#) bytes#) =
   I# (hashUnboxedWith (fromProxy es) c# o# bytes# salt#)
 
+fmapSBytes# :: (Unboxed e, Unboxed e') => (e -> e') -> SBytes# e -> SBytes# e'
+fmapSBytes# f (SBytes# n@(I# nx#) (I# o#) xs#) = res
+  where
+    res = runST $ ST $ \ s1# -> case pnewUnboxed res nx# s1# of
+            (# s2#, marr# #) ->
+              let
+                  go# _  0# = \ s# -> s#
+                  go# i# n# =
+                    \ s# -> case writeUnboxed# marr# i# (f (xs# !# i#)) s# of
+                      s'# -> go# (i# +# 1#) (n# -# 1#) s'#
+              in  case go# o# nx# s2# of
+                    s3# -> case unsafeFreezeByteArray# marr# s3# of
+                      (# s4#, arr# #) -> (# s4#, SBytes# n 0 arr# #)
+
 --------------------------------------------------------------------------------
 
 {-# INLINE done #-}
@@ -1258,6 +1313,9 @@ nubSorted f es =
 
 --------------------------------------------------------------------------------
 
+undEx :: String -> a
+undEx =  throw . UndefinedValue . showString "in SDP.Prim.SBytes."
+
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 
@@ -1266,5 +1324,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
+
 
 

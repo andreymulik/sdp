@@ -153,6 +153,46 @@ instance Semigroup (SArray# e)
 
 --------------------------------------------------------------------------------
 
+{- Num instance. -}
+
+instance Num e => Num (SArray# e)
+  where
+    fromInteger = single . fromInteger
+    
+    negate = fmap negate
+    signum = fmap signum
+    abs    = fmap abs
+    
+    SArray# nx@(I# nx#) (I# ox#) xs# + SArray# ny (I# oy#) ys# =
+      nx /= ny ? undEx "(+)" $ runST $ ST $ \ s1# -> case newArray# nx# 0 s1# of
+        (# s2#, marr# #) ->
+          let
+              go# _  _  _  0# = \ s# -> s#
+              go# i# j# k# n# = \ s# ->
+                let (# x #) = indexArray# xs# i#
+                    (# y #) = indexArray# ys# j#
+                in  case writeArray# marr# k# (x + y) s# of
+                      s'# -> go# (i# +# 1#) (j# +# 1#) (k# +# 1#) (n# -# 1#) s'#
+          in  case go# ox# oy# 0# nx# s2# of
+                s3# -> case unsafeFreezeArray# marr# s3# of
+                  (# s4#, arr# #) -> (# s4#, SArray# nx 0 arr# #)
+    
+    SArray# nx@(I# nx#) (I# ox#) xs# * SArray# ny (I# oy#) ys# =
+      nx /= ny ? undEx "(*)" $ runST $ ST $ \ s1# -> case newArray# nx# 0 s1# of
+        (# s2#, marr# #) ->
+          let
+              go# _  _  _  0# = \ s# -> s#
+              go# i# j# k# n# = \ s# ->
+                let (# x #) = indexArray# xs# i#
+                    (# y #) = indexArray# ys# j#
+                in  case writeArray# marr# k# (x * y) s# of
+                      s'# -> go# (i# +# 1#) (j# +# 1#) (k# +# 1#) (n# -# 1#) s'#
+          in  case go# ox# oy# 0# nx# s2# of
+                s3# -> case unsafeFreezeArray# marr# s3# of
+                  (# s4#, arr# #) -> (# s4#, SArray# nx 0 arr# #)
+
+--------------------------------------------------------------------------------
+
 {- Nullable and NullableM instances. -}
 
 instance Nullable (SArray# e)

@@ -42,6 +42,8 @@ import Text.Show.SDP
 import qualified GHC.Exts as E
 import GHC.Generics
 
+import Control.Exception.SDP
+
 default ()
 
 --------------------------------------------------------------------------------
@@ -132,6 +134,39 @@ instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e)
   where
     mappend = (<>)
     mempty  = Z
+
+--------------------------------------------------------------------------------
+
+instance (Num e, Num (rep e), Indexed1 rep Int e, Index ii, GIndex ii ~ I2 Int)
+      => Num (AnyBorder rep ii e)
+  where
+    fromInteger = single . fromInteger
+    
+    negate (AnyBorder l u rep) = AnyBorder l u (negate rep)
+    signum (AnyBorder l u rep) = AnyBorder l u (signum rep)
+    abs    (AnyBorder l u rep) = AnyBorder l u (abs    rep)
+    
+    AnyBorder l u xs + AnyBorder _ _ ys = AnyBorder l u (xs + ys)
+    AnyBorder l u xs - AnyBorder _ _ ys = AnyBorder l u (xs - ys)
+    
+    xs * ys = mx /= ny ? err $ assoc bnds
+        [
+          (
+            fromGIndex (ind2 i j),
+            sum
+            [
+              xs .! fromGIndex (ind2 i k) * ys .! fromGIndex (ind2 k j)
+            | k <- [1 .. mx]
+            ]
+          )
+        | i <- [1 .. nx], j <- [1 .. my]
+        ]
+      where
+        bnds = fromGBounds (ind2 1 1, ind2 nx my)
+        err  = undEx "(*)"
+        
+        [nx, mx] = sizesOf xs
+        [ny, my] = sizesOf ys
 
 --------------------------------------------------------------------------------
 
@@ -638,6 +673,9 @@ instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e)
 
 --------------------------------------------------------------------------------
 
+undEx :: String -> a
+undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
+
 {-# INLINE unpack #-}
 unpack :: AnyBorder rep i e -> rep e
 unpack =  \ (AnyBorder _ _ es) -> es
@@ -649,7 +687,4 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
-
-
-
 
