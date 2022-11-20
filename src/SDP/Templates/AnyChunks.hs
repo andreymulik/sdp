@@ -28,6 +28,7 @@ where
 
 import Prelude ()
 import SDP.SafePrelude
+import SDP.SortM.Tim
 import SDP.IndexedM
 import SDP.SortM
 import SDP.Scan
@@ -43,8 +44,6 @@ import Data.Data
 
 import Text.Read.SDP
 import Text.Show.SDP
-
-import SDP.SortM.Tim
 
 import Control.Exception.SDP
 
@@ -661,14 +660,22 @@ instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e)
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
     
+    insertM' = writeM'
+    
+    deleteM' (AnyChunks es) = go es
+      where
+        go    []    _ = overEx "(>!)"
+        go (x : xs) i = do
+          n <- getSizeOf x
+          i < n ? deleteM' x i $ go xs (i - n)
+    
     {-# INLINE writeM' #-}
     writeM' es i e = (i < 0) `unless` writeM es i e
     
     {-# INLINE (>!) #-}
     es >! i = i < 0 ? overEx "(>!)" $ es !#> i
     
-    overwrite es'@(AnyChunks []) ascs = isNull ascs ? return es' $ newMap ascs
-    overwrite es'@(AnyChunks es) ascs = es' <$ go 0 es ((< 0) . fst `except` ascs)
+    overwrite es ascs = go 0 (toChunks es) ((< 0) . fst `except` ascs)
       where
         go o (x : xs) ie = unless (null ie) $ do
           n <- getSizeOf x
@@ -775,6 +782,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
-
 

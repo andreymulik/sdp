@@ -223,9 +223,7 @@ instance MonadVar m => MapM m (MArray# m e) Int e
     
     (>!) = (!#>)
     
-    overwrite es ascs = do
-      mapM_ (uncurry $ writeM es) (filter (indexIn es . fst) ascs)
-      return es
+    overwrite es ascs = uncurry (writeM es) `mapM_` (filter (indexIn es . fst) ascs)
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
@@ -236,7 +234,10 @@ instance MonadVar m => MapM m (MArray# m e) Int e
 
 instance MonadVar m => IndexedM m (MArray# m e) Int e
   where
-    fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
+    fromAssocs' bnds defvalue ascs = do
+      es <- filled (size bnds) defvalue
+      overwrite es ascs
+      return es
     
     fromIndexed' es = do
       copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
@@ -271,5 +272,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
-
 

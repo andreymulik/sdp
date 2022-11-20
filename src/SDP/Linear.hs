@@ -1193,7 +1193,7 @@ o_foldl1  =  sfoldl1
 o_foldr1' :: Linear l e => (e -> e -> e) -> l -> e
 o_foldr1' =  sfoldr1'
 
--- | Same as ''.
+-- | Same as 'sfoldl1''.
 o_foldl1' :: Linear l e => (e -> e -> e) -> l -> e
 o_foldl1' =  sfoldl1'
 

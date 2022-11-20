@@ -148,13 +148,13 @@ joinM6 go a b c d e f = do h <- go; h a b c d e f
 
 --------------------------------------------------------------------------------
 
+-- | Perform action if 'Just', do nothing if 'Nothing'.
 whenJust :: Monad m => (a -> m ()) -> Maybe a -> m ()
 whenJust =  maybe (return ())
 
 -- | 'stToMIO' is just @'liftIO' . 'stToIO'@.
 stToMIO :: MonadIO io => ST RealWorld e -> io e
 stToMIO =  liftIO . stToIO
-
 
 
 

@@ -558,10 +558,10 @@ instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e)
     {-# INLINE (>!) #-}
     (>!) (AnyBorder l u es) = (es !#>) . offset (l, u)
     
-    overwrite es [] = return es
-    overwrite (AnyBorder l u es) ascs =
-      let ies = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
-      in  isEmpty (l, u) ? newMap ascs $ AnyBorder l u <$> overwrite es ies
+    overwrite (AnyBorder l u es) ascs = overwrite es
+      [
+        (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i
+      ]
     
     kfoldrM f base (AnyBorder l u es) = ofoldrM (f . index (l, u)) base es
     kfoldlM f base (AnyBorder l u es) = ofoldlM (f . index (l, u)) base es

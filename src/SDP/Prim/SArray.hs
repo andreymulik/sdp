@@ -715,7 +715,10 @@ instance Map (SArray# e) Int e
       in  isNull ascs ? Z $ assoc' bnds e ascs
     
     Z  // ascs = toMap ascs
-    es // ascs = runST $ fromFoldableM es >>= (`overwrite` ascs) >>= done
+    es // ascs = runST $ do
+      es' <- fromFoldableM es
+      overwrite es' ascs
+      done es'
     
     (*$) p = ofoldr (\ i e is -> p e ? (i : is) $ is) []
     (.!)   = (!^)
@@ -730,7 +733,8 @@ instance Indexed (SArray# e) Int e
     fromIndexed es = runST $ do
       let n = sizeOf es
       copy <- filled n (unreachEx "fromIndexed")
-      updateM copy (\ i _ -> es!^i) >>= done
+      updateM copy (\ i _ -> es!^i)
+      done copy
 
 --------------------------------------------------------------------------------
 
@@ -1025,16 +1029,18 @@ instance MapM (ST s) (STArray# s e) Int e
     
     (>!) = (!#>)
     
-    overwrite es@(STArray# c _ _) ascs =
-      let ies = filter (inRange (0, c - 1) . fst) ascs
-      in  mapM_ (uncurry $ writeM es) ies >> return es
+    overwrite es@(STArray# c _ _) ascs = uncurry (writeM es) `mapM_`
+      filter (inRange (0, c - 1) . fst) ascs
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
 instance IndexedM (ST s) (STArray# s e) Int e
   where
-    fromAssocs' bnds e ascs = size bnds `filled` e >>= (`overwrite` ascs)
+    fromAssocs' bnds e ascs = do
+      es <- filled (size bnds) e
+      overwrite es ascs
+      return es
     
     fromIndexed' es = do
       copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
@@ -1218,7 +1224,7 @@ instance MonadIO io => MapM io (MIOArray# io e) Int e
     
     (>!) = (!#>)
     
-    overwrite = pack ... overwrite . unpack
+    overwrite = stToMIO ... overwrite . unpack
     kfoldrM   = ofoldrM
     kfoldlM   = ofoldlM
 
@@ -1277,7 +1283,8 @@ instance Storable e => Freeze IO (Int, Ptr e) (SArray# e)
         filled' =  const $ filled (max 0 c)
       
       es <- filled' ptr err
-      freeze =<< mupdate es (\ i _ -> peekElemOff ptr i)
+      mupdate es (\ i _ -> peekElemOff ptr i)
+      freeze es
 
 --------------------------------------------------------------------------------
 
@@ -1352,6 +1359,8 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
 (<?=>) :: Bordered b i => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min
 
+--------------------------------------------------------------------------------
+
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SArray."
 
@@ -1366,5 +1375,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
 
 

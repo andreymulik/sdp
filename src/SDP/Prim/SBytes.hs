@@ -564,7 +564,10 @@ instance Unboxed e => Map (SBytes# e) Int e
       in  isNull ascs ? Z $ assoc' bnds defvalue ascs
     
     Z  // ascs = toMap ascs
-    es // ascs = runST $ thaw es >>= flip overwrite ascs >>= done
+    es // ascs = runST $ do
+      es' <- thaw es
+      overwrite es' ascs
+      done es'
     
     (*$) p = ofoldr (\ i e is -> p e ? (i : is) $ is) []
     (.!)   = (!^)
@@ -852,17 +855,23 @@ instance Unboxed e => MapM (ST s) (STBytes# s e) Int e
     
     (>!) = (!#>)
     
-    overwrite es@(STBytes# c _ _) ascs =
-      let ies = filter (inRange (0, c - 1) . fst) ascs
-      in  mapM_ (uncurry $ writeM es) ies >> return es
+    overwrite es@(STBytes# c _ _) ascs = uncurry (writeM es) `mapM_`
+      filter (inRange (0, c - 1) . fst) ascs
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
 instance Unboxed e => IndexedM (ST s) (STBytes# s e) Int e
   where
-    fromAssocs  bnds ascs = alloc (size bnds) >>= flip overwrite ascs
-    fromAssocs' bnds defvalue ascs = size bnds `filled` defvalue >>= (`overwrite` ascs)
+    fromAssocs  bnds ascs = do
+      es <- alloc (size bnds)
+      overwrite es ascs
+      return es
+    
+    fromAssocs' bnds defvalue ascs = do
+      es <- filled (size bnds) defvalue
+      overwrite es ascs
+      return es
     
     fromIndexed' es = do
       copy <- alloc (sizeOf es)
@@ -1051,7 +1060,7 @@ instance (MonadIO io, Unboxed e) => MapM io (MIOBytes# io e) Int e
     (>!) = (!#>)
     
     writeM' es = stToMIO ... writeM' (unpack es)
-    overwrite  = pack ... overwrite . unpack
+    overwrite  = stToMIO ... overwrite . unpack
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
@@ -1099,7 +1108,8 @@ instance (Storable e, Unboxed e) => Freeze IO (Int, Ptr e) (SBytes# e)
         filled' =  const $ filled (max 0 c)
       
       es <- filled' ptr err
-      freeze =<< mupdate es (\ i _ -> peekElemOff ptr i)
+      mupdate es (\ i _ -> peekElemOff ptr i)
+      freeze es
 
 instance (Storable e, Unboxed e) => Thaw IO (SBytes# e) (Int, Ptr e)
   where

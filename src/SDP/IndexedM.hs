@@ -80,9 +80,11 @@ class (LinearM m v e, BorderedM m v i, MapM m v i e) => IndexedM m v i e
     -- | fromIndexed converts one mutable structure to other.
     fromIndexedM :: IndexedM m v' j e => v' -> m v
     
-    -- | reshaped creates new indexed structure from old with reshaping function.
+    -- | reshaped creates new view of given stricture with reshaping function.
     reshaped :: IndexedM m v' j e => (i, i) -> v' -> (i -> j) -> m v
-    reshaped bnds es f = flip mupdate (\ i _ -> es !> f i) =<< fromAssocs bnds []
+    reshaped bnds es f = do
+      es' <- fromAssocs bnds []
+      es' <$ mupdate es' (\ i _ -> es !> f i)
     
     {- |
       @'fromAccum' f es ies@ create a new structure from @es@ elements
@@ -142,4 +144,7 @@ type Thaw' m v v' = forall e . Thaw m (v e) (v' e)
 -- | 'Thaw' contraint for @(Type -> Type -> Type)@-kind types.
 type Thaw'' m v v' = forall i e . Thaw m (v i e) (v' i e)
 #endif
+
+
+
 

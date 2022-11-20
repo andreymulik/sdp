@@ -153,11 +153,14 @@ instance (MonadVar m, BorderedM1 m rep key e, LinearM1 m rep e, MapM1 m rep key 
     newMap' = pack <=<< newMap'
     newMap  = pack <=<  newMap
     
+    insertM' es key e = do es' <- get this (fromAnyVar es); insertM' es' key e
+    deleteM' es key   = do es' <- get this (fromAnyVar es); deleteM' es' key
+    
     writeM' (AnyVar es) i e = do es' <- get this es; writeM' es' i e
     
     AnyVar es >! i = do es' <- get this es; es' >! i
     
-    overwrite xs@(AnyVar es) ascs = xs <$ (flip overwrite ascs =<< get this es)
+    overwrite (AnyVar es) ascs = flip overwrite ascs =<< get this es
     
     kfoldrM f base = kfoldrM f base <=< get this.fromAnyVar
     kfoldlM f base = kfoldlM f base <=< get this.fromAnyVar
@@ -204,7 +207,9 @@ pack :: MonadVar m => rep e -> m (AnyVar m rep e)
 pack =  fmap AnyVar . var
 
 {-# INLINE withAnyVar #-}
+-- | Perform @(rep e)@ action on 'AnyVar' and update it.
 withAnyVar :: (MonadVar m, Typeable m, Typeable rep, Typeable (Var m), Typeable e)
            => (rep e -> m (rep e)) -> AnyVar m rep e -> m ()
 withAnyVar f ps = () <$ modifyRecordM this' (fromAnyVar ps) f
+
 

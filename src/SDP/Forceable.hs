@@ -45,27 +45,14 @@ default ()
 {- |
   @since 0.3
   
-  Many data structures allow you to represent almost equivalent values in many
-  ways. For example, an array with an optional @offset@ field allows you to
-  slice subarray quickly and with minimal memory overhead. But original array
-  with all of its contents remains in memory and there is no easy way to
-  determine which part of the memory in use now (or potentially), and which part
-  can be freed. In this case, 'force' allows you to use fast split and slice
-  operations, but you can slow down these functions if necessary to improve the
-  efficiency of your code.
-  
-  Note that there is no universal set of rules that a 'force' implementation
-  must follow, for example, it can always create a new structure, or sometimes
-  refer to an old one (part of it), so you cannot use @unsafeThaw@ and other
-  similar operations after 'force' if you are working with generic types.
+  'Forceable' is a class of types whose values can be defined as references to
+  parts of other values of the same type (e.g. slice of array).
 -}
 class Forceable f
   where
     -- | Force the value, default: @force = id@.
     force :: f -> f
     force =  id
-
---------------------------------------------------------------------------------
 
 {- |
   @since 0.3
@@ -107,8 +94,6 @@ type ForceableM1 m c e = ForceableM m (c e)
   'ForceableM' contraint for @(Type -> Type -> Type)@-kind types.
 -}
 type ForceableM2 m c i e = ForceableM m (c i e)
-
---------------------------------------------------------------------------------
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 {- |

@@ -188,17 +188,17 @@ class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
     nowIndexIn :: b -> i -> m Bool
     nowIndexIn es i = flip inRange i <$> getBounds es
     
-    -- | 'getOffsetOf' is 'offsetOf' version for mutable structures.
-    getOffsetOf :: b -> i -> m Int
-    getOffsetOf es i = flip offset i <$> getBounds es
+    -- | 'getIndices' returns 'indices' of mutable data structure.
+    getIndices :: b -> m [i]
+    getIndices =  fmap range . getBounds
     
     -- | 'getIndexOf' is 'indexOf' version for mutable structures.
     getIndexOf :: b -> Int -> m i
     getIndexOf es i = flip index i <$> getBounds es
     
-    -- | 'getIndices' returns 'indices' of mutable data structure.
-    getIndices :: b -> m [i]
-    getIndices =  fmap range . getBounds
+    -- | 'getOffsetOf' is 'offsetOf' version for mutable structures.
+    getOffsetOf :: b -> i -> m Int
+    getOffsetOf es i = flip offset i <$> getBounds es
     
     {- |
       @since 0.3

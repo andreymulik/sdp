@@ -2,13 +2,13 @@
 
 {- |
     Module      :  SDP.ZipM
-    Copyright   :  (c) Andrey Mulik 2021
+    Copyright   :  (c) Andrey Mulik 2021-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
     
     @since 0.2.1
-    "SDP.ZipM" provides 'ZipM' - class of 'Control.Applicative.ZipList"-like
+    "SDP.ZipM" provides 'ZipM' - class of "Control.Applicative.ZipList"-like
     structures.
 -}
 module SDP.ZipM

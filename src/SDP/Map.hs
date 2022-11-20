@@ -20,7 +20,7 @@ module SDP.Map
   module SDP.Set,
   
   -- * Map
-  Map (..), Map1, Map2,
+  Map (..), Map1, Map2, union', difference', intersection',
   
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
@@ -54,9 +54,11 @@ infixl 9 .!, !, !?
   to 'Linear' data structures and aren't limited by the 'Bordered' context
   (doesn't restrict key type).
 -}
-class Nullable map => Map map key e | map -> key, map -> e
+class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
   where
     {-# MINIMAL toMap', ((.!) | (!?)) #-}
+    
+    {- Create, view and update Map. -}
     
     -- | Returns list of associations @(index, element)@.
     default assocs :: (Bordered map key, Linear map e) => map -> [(key, e)]
@@ -64,7 +66,7 @@ class Nullable map => Map map key e | map -> key, map -> e
     assocs es = indices es `zip` listL es
     
     {- |
-      A less specific version of "SDP.Indexed.Indexed.assoc" that creates a new
+      A less specific version of 'SDP.Indexed.Indexed.assoc' that creates a new
       associative array. For 'Linear' structures without gaps, it may be less
       effective.
       
@@ -83,6 +85,102 @@ class Nullable map => Map map key e | map -> key, map -> e
     -}
     toMap' :: e -> [(key, e)] -> map
     
+    -- | Filter with key.
+    filter' :: (key -> e -> Bool) -> map -> map
+    filter' f = toMap . kfoldr (\ k x xs -> f k x ? (k, x) : xs $ xs) []
+    
+    -- | Update elements of immutable structure (by copying).
+    (//) :: map -> [(key, e)] -> map
+    (//) =  toMap ... (++) . assocs
+    
+    -- | Update each element using the given function.
+    update :: map -> (key -> e -> e) -> map
+    update es f = es // [ (i, f i e) | (i, e) <- assocs es ]
+    
+    {- Keys. -}
+    
+    -- | Returns list of map keys.
+    keys :: map -> [key]
+    keys =  fsts . assocs
+    
+    -- | @'member'' key map@ checks if @key@ in @map@.
+    default member' :: Bordered map key => key -> map -> Bool
+    member' :: key -> map -> Bool
+    member' =  flip indexIn
+    
+    {- Map operations. -}
+    
+    {- |
+      @union'' f xs ys@ returns the union of the @xs@ and @ys@ map by keys. If
+      the maps @xs@ and @ys@ contain value with the same key, the conflict is
+      resolved by the @f@ function, which choices, joins or replaces the value.
+    -}
+    default union'' :: Index key => (key -> e -> e -> e) -> map -> map -> map
+    union'' :: (key -> e -> e -> e) -> map -> map -> map
+    union'' f = toMap ... on go assocs
+      where
+        go xs'@(x'@(i, x) : xs) ys'@(y'@(j, y) : ys) = case i <=> j of
+          LT -> x' : go xs ys'
+          EQ -> (i, f i x y) : go xs ys
+          GT -> y' : go xs' ys
+        go xs'   Z = xs'
+        go Z   ys' = ys'
+    
+    {- |
+      @difference'' f xs ys@ returns the difference of the @xs@ and @ys@ map by
+      keys. If the maps @xs@ and @ys@ contain value with the same key, the
+      conflict is resolved by the @f@ function, which choices, joins, replaces
+      or discards the value.
+      
+      If you need the difference of maps with different element types, use the
+      @containers@ library or equivalents. @sdp@ doesn't provide such
+      capabilities.
+    -}
+    default difference'' :: Index key => (key -> e -> e -> Maybe e) -> map -> map -> map
+    difference'' :: (key -> e -> e -> Maybe e) -> map -> map -> map
+    difference'' f = toMap ... on go assocs
+      where
+        go xs'@(x'@(i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
+          GT -> go xs' ys
+          LT -> x' : go xs ys'
+          EQ -> case f i x y of {Just e -> (i, e) : go xs ys; _ -> go xs ys}
+        go xs' _ = xs'
+    
+    {- |
+      @intersection'' f xs ys@ returns the intersection of the @xs@ and @ys@ map
+      by keys. Function @f@ choices, joins or replaces elements of @xs@ and @ys@
+      with same key.
+    -}
+    default intersection'' :: Index key => (key -> e -> e -> e) -> map -> map -> map
+    intersection'' :: (key -> e -> e -> e) -> map -> map -> map
+    intersection'' f = toMap ... on go assocs
+      where
+        go xs'@((i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
+          LT -> go xs ys'
+          GT -> go xs' ys
+          EQ -> (i, f i x y) : go xs ys
+        go _ _ = []
+    
+    {- Folds with key. -}
+    
+    -- | 'kfoldr' is 'foldr' with key.
+    kfoldr :: (key -> e -> b -> b) -> b -> map -> b
+    kfoldr f base = foldr (uncurry f) base . assocs
+    
+    -- | 'kfoldl' is 'foldl' with key.
+    kfoldl :: (key -> b -> e -> b) -> b -> map -> b
+    kfoldl f base = foldl (\ acc (i, e) -> f i acc e) base . assocs
+    
+    -- | 'kfoldr'' is strict version of 'kfoldr'.
+    kfoldr' :: (key -> e -> b -> b) -> b -> map -> b
+    kfoldr' f = kfoldr (\ !i e !b -> f i e b)
+    
+    -- | 'kfoldl'' is strict version of 'kfoldl'.
+    kfoldl' :: (key -> b -> e -> b) -> b -> map -> b
+    kfoldl' f = kfoldl (\ !i !b e -> f i b e)
+    
+    {- Insert, rewrite, update and delete element. -}
+    
     {- |
       @'insert'' key e map@ inserts @e@ with @key@ to @map@. If @map@ already
       contains an element with @key@, the element will be overwritten.
@@ -94,35 +192,14 @@ class Nullable map => Map map key e | map -> key, map -> e
     insert' k e es = toMap $ assocs es :< (k, e)
     
     {- |
-      'delete'' removes element with given key.
-      
-      If the structure has boundaries, when removed from the beginning (end),
-      they should change accordingly. If the structure doesn't allow gaps, then
-      when removed from the middle, the actual value should be replaced with the
-      default value.
-    -}
-    delete' :: key -> map -> map
-    default delete' :: Eq key => key -> map -> map
-    delete' k = toMap . except ((== k) . fst) . assocs
-    
-    -- | @'member'' key map@ checks if @key@ in @map@.
-    default member' :: Bordered map key => key -> map -> Bool
-    member' :: key -> map -> Bool
-    member' =  flip indexIn
-    
-    -- | Update elements of immutable structure (by copying).
-    (//) :: map -> [(key, e)] -> map
-    (//) =  toMap ... (++) . assocs
-    
-    {- |
       @since 0.3
       
       Safe index-based immutable writer. Earlier defined in "SDP.Indexed".
     -}
     {-# INLINE write' #-}
+    default write' :: (Bordered map key, Linear map e) => map -> key -> e -> map
     write' :: map -> key -> e -> map
     write' es = write es . offsetOf es
-    default write' :: (Bordered map key, Linear map e) => map -> key -> e -> map
     
     {- |
       @since 0.3
@@ -132,14 +209,28 @@ class Nullable map => Map map key e | map -> key, map -> e
     update' :: map -> (e -> e) -> key -> map
     update' es f i = write' es i . f $ es!i
     
+    {- |
+      'delete'' removes element with given key.
+      
+      If the structure has boundaries, when removed from the beginning (end),
+      they should change accordingly. If the structure doesn't allow gaps, then
+      when removed from the middle, the actual value should be replaced with the
+      default value.
+    -}
+    default delete' :: Eq key => key -> map -> map
+    delete' :: key -> map -> map
+    delete' k = toMap . except ((== k) . fst) . assocs
+    
+    {- Read element. -}
+    
     -- | @('.!')@ is unsafe reader, can be faster @('!')@ by skipping checks.
     {-# INLINE (.!) #-}
     (.!) :: map -> key -> e
     (.!) =  (undEx "(.!)" +?) ... (!?)
     
     -- | @('!')@ is well-safe reader, may 'throw' 'IndexException'.
-    (!) :: map -> key -> e
     default (!) :: Bordered map key => map -> key -> e
+    (!) :: map -> key -> e
     (!) es i = case inBounds (bounds es) i of
         IN -> es .! i
         ER -> empEx   msg
@@ -152,59 +243,7 @@ class Nullable map => Map map key e | map -> key, map -> e
     (!?) :: map -> key -> Maybe e
     (!?) es = flip member' es ?+ (es .!)
     
-    -- | Filter with key.
-    filter' :: (key -> e -> Bool) -> map -> map
-    filter' f = toMap . filter (uncurry f) . assocs
-    
-    {- |
-      'union'' is 'groupSetWith' for maps but works with real groups of
-      elements, not with consequentive equal elements.
-      
-      'union'' merges/chooses elements with equal keys from two maps.
-    -}
-    union' :: Ord key => (e -> e -> e) -> map -> map -> map
-    union' f = toMap ... on go assocs
-      where
-        go xs'@(x'@(i, x) : xs) ys'@(y'@(j, y) : ys) = case i <=> j of
-          LT -> x' : go xs ys'
-          EQ -> (i, f x y) : go xs ys
-          GT -> y' : go xs' ys
-        go xs'   Z = xs'
-        go Z   ys' = ys'
-    
-    {- |
-      @'difference'' f mx my@ applies @comb@ to values with equal keys.
-      If @f x y@ (where @(k1, x) <- mx@, @(k2, y) <- my@, @k1 == k2@) is
-      'Nothing', element isn't included to result map.
-      
-      Note that 'difference'' is poorer than a similar functions in containers.
-    -}
-    difference' :: Ord key => (e -> e -> Maybe e) -> map -> map -> map
-    difference' f = toMap ... on go assocs
-      where
-        go xs'@(x'@(i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
-          GT -> go xs' ys
-          LT -> x' : go xs ys'
-          EQ -> case f x y of {(Just e) -> (i, e) : go xs ys; _ -> go xs ys}
-        go xs' _ = xs'
-    
-    {- |
-      @'intersection'' f mx my@ combines elements of 'intersection'' by @f@:
-      if @isJust (f x y)@ (where @(k1, x) <- mx, (k2, y) <- my, k1 == k2@),
-      then element is added to result map.
-    -}
-    intersection' :: Ord key => (e -> e -> e) -> map -> map -> map
-    intersection' f = toMap ... on go assocs
-      where
-        go xs'@((i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
-          LT -> go xs ys'
-          GT -> go xs' ys
-          EQ -> (i, f x y) : go xs ys
-        go _ _ = []
-    
-    -- | Update function, by default uses ('//').
-    update :: map -> (key -> e -> e) -> map
-    update es f = es // [ (i, f i e) | (i, e) <- assocs es ]
+    {- Lookup by key. -}
     
     {- |
       @lookupLT' k map@ finds pair @(key, value)@ with smallest @key@, where
@@ -236,10 +275,6 @@ class Nullable map => Map map key e | map -> key, map -> e
     lookupGE' k me = (,) k <$> (me !? k) <|> lookupGEWith cmpfst
       (k, unreachEx "lookupGE'") (assocs me)
     
-    -- | Returns list of map keys.
-    keys :: map -> [key]
-    keys =  fsts . assocs
-    
     -- | Searches the key of first matching element.
     (.$) :: (e -> Bool) -> map -> Maybe key
     (.$) =  null ?- head ... (*$)
@@ -247,24 +282,20 @@ class Nullable map => Map map key e | map -> key, map -> e
     -- | Searches the keys of all matching elements.
     (*$) :: (e -> Bool) -> map -> [key]
     (*$) f = select (f . snd ?+ fst) . assocs
-    
-    {- Folds with key. -}
-    
-    -- | 'kfoldr' is 'foldr' with key.
-    kfoldr :: (key -> e -> b -> b) -> b -> map -> b
-    kfoldr f base = foldr (uncurry f) base . assocs
-    
-    -- | 'kfoldl' is 'foldl' with key.
-    kfoldl :: (key -> b -> e -> b) -> b -> map -> b
-    kfoldl f base = foldl (\ acc (i, e) -> f i acc e) base . assocs
-    
-    -- | 'kfoldr'' is strict version of 'kfoldr'.
-    kfoldr' :: (key -> e -> b -> b) -> b -> map -> b
-    kfoldr' f = kfoldr (\ !i e !b -> f i e b)
-    
-    -- | 'kfoldl'' is strict version of 'kfoldl'.
-    kfoldl' :: (key -> b -> e -> b) -> b -> map -> b
-    kfoldl' f = kfoldl (\ !i !b e -> f i b e)
+
+--------------------------------------------------------------------------------
+
+-- | 'union''' without key argument.
+union' :: Map map key e => (e -> e -> e) -> map -> map -> map
+union' =  union'' . const
+
+-- | 'intersection''' without key argument.
+intersection' :: Map map key e => (e -> e -> e) -> map -> map -> map
+intersection' =  intersection'' . const
+
+-- | 'difference''' without key argument.
+difference' :: Map map key e => (e -> e -> Maybe e) -> map -> map -> map
+difference' =  difference'' . const
 
 --------------------------------------------------------------------------------
 
@@ -349,7 +380,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Map."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Map."
-
 
 
 
