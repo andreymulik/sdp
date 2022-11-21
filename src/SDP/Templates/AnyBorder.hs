@@ -137,7 +137,7 @@ instance (Index i, Semigroup (AnyBorder rep i e), Nullable1 rep e)
 
 --------------------------------------------------------------------------------
 
-instance (Num e, Num (rep e), Indexed1 rep Int e, Index ii, GIndex ii ~ I2 Int)
+instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~ I2 i)
       => Num (AnyBorder rep ii e)
   where
     fromInteger = single . fromInteger
@@ -149,24 +149,18 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index ii, GIndex ii ~ I2 Int)
     AnyBorder l u xs + AnyBorder _ _ ys = AnyBorder l u (xs + ys)
     AnyBorder l u xs - AnyBorder _ _ ys = AnyBorder l u (xs - ys)
     
-    xs * ys = mx /= ny ? err $ assoc bnds
+    xs' * ys' = mx /= ny ? undEx "(*)" $ viewOf (l, u) $ fromListN (nx * my)
         [
-          (
-            fromGIndex (ind2 i j),
-            sum
-            [
-              xs .! fromGIndex (ind2 i k) * ys .! fromGIndex (ind2 k j)
-            | k <- [1 .. mx]
-            ]
-          )
-        | i <- [1 .. nx], j <- [1 .. my]
+          sum [ xs !^ (i * mx + k) * ys !^ (k * my + j) | k <- [0 .. mx - 1] ]
+        |
+          i <- [0 .. nx - 1], j <- [0 .. my - 1]
         ]
       where
-        bnds = fromGBounds (ind2 1 1, ind2 nx my)
-        err  = undEx "(*)"
+        l = fromGIndex (E :& unsafeIndex  1 :& unsafeIndex  1)
+        u = fromGIndex (E :& unsafeIndex nx :& unsafeIndex my)
         
-        [nx, mx] = sizesOf xs
-        [ny, my] = sizesOf ys
+        [nx, mx] = sizesOf xs'; xs = unpack xs'
+        [ny, my] = sizesOf ys'; ys = unpack ys'
 
 --------------------------------------------------------------------------------
 
@@ -687,4 +681,5 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
 
