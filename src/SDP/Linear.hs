@@ -65,7 +65,6 @@ import SDP.Sort
 import SDP.Zip
 
 import qualified Data.List as L
-import Data.Maybe ( catMaybes )
 
 #ifdef SDP_LINEAR_EXTRAS
 import qualified GHC.Exts as L
@@ -161,8 +160,8 @@ class
     Estimate l
   ) => Linear l e | l -> e
   where
-    {-# MINIMAL (toHead|single), (uncons|(head,last)|uncons'), (take|sans),
-                                 (unsnoc|(init,last)|unsnoc'), (drop|keep) #-}
+    {-# MINIMAL (uncons|(head,last)|uncons'), (take|sans), (toHead|single),
+                (unsnoc|(init,last)|unsnoc'), (drop|keep) #-}
     
     {- Item-level operations. -}
     
@@ -210,7 +209,7 @@ class
     
     -- | Just singleton.
     single :: e -> l
-    single =  (`toHead` Z)
+    single =  flip toHead Z
     
     -- | @replicate n e@ returns a line of @n@ repetitions of the element @e@.
     replicate :: Int -> e -> l
@@ -268,27 +267,27 @@ class
     
     -- | 'sfoldr1' is just 'Data.Foldable.foldr1' in 'Linear' context.
     sfoldr1 :: (e -> e -> e) -> l -> e
-    sfoldr1 f = \ es' -> case es' of
-      (es :< e) -> sfoldr f e es
-      _         -> pfailEx "sfoldr1"
+    sfoldr1 f = \ es' -> case unsnoc' es' of
+      Just (es, e) -> sfoldr f e es
+      _            -> pfailEx "sfoldr1"
     
     -- | 'sfoldl1' is just 'Data.Foldable.foldl1' in 'Linear' context.
     sfoldl1 :: (e -> e -> e) -> l -> e
-    sfoldl1 f = \ es' -> case es' of
-      (e :> es) -> sfoldl f e es
-      _         -> pfailEx "sfoldl1"
+    sfoldl1 f = \ es' -> case uncons' es' of
+      Just (e, es) -> sfoldl f e es
+      _            -> pfailEx "sfoldl1"
     
     -- | 'sfoldr1'' is just strict 'Data.Foldable.foldr1' in 'Linear' context.
     sfoldr1' :: (e -> e -> e) -> l -> e
-    sfoldr1' f = \ es' -> case es' of
-      (es :< e) -> sfoldr' f e es
-      _         -> pfailEx "sfoldr1'"
+    sfoldr1' f = \ es' -> case unsnoc' es' of
+      Just (es, e) -> sfoldr' f e es
+      _            -> pfailEx "sfoldr1'"
     
     -- | 'sfoldl1'' is just 'Data.Foldable.foldl1'' in 'Linear' context.
     sfoldl1' :: (e -> e -> e) -> l -> e
-    sfoldl1' f = \ es' -> case es' of
-      (e :> es) -> sfoldl' f e es
-      _         -> pfailEx "sfoldl1'"
+    sfoldl1' f = \ es' -> case uncons' es' of
+      Just (e, es) -> sfoldl' f e es
+      _            -> pfailEx "sfoldl1'"
     
     {- |
       @since 0.3
@@ -569,15 +568,15 @@ class
       
       Monadic version of 'select'.
     -}
-    mselect :: Monad m => (e -> m (Maybe a)) -> l -> m [a]
-    mselect go = msfoldr (\ e xs -> maybe xs (: xs) <$> go e) []
+    mselect :: Applicative t => (e -> t (Maybe a)) -> l -> t [a]
+    mselect go = sfoldr (liftA2 (\ x xs -> maybe xs (: xs) x) . go) (pure [])
     
     {- |
       @since 0.3
       
       Monadic version of 'select''.
     -}
-    mselect' :: Monad m => (e -> m (Maybe e)) -> l -> m l
+    mselect' :: Applicative t => (e -> t (Maybe e)) -> l -> t l
     mselect' =  fmap fromList ... mselect
     
     {- |
@@ -585,76 +584,28 @@ class
       
       Monadic version of 'extract'.
     -}
-    mextract :: Monad m => (e -> m (Maybe a)) -> l -> m ([a], [e])
-    mextract go =
-      let f e (xs, es) = maybe (xs, e : es) (\ x -> (x : xs, es)) <$> go e
-      in  msfoldr f ([], [])
+    mextract :: Applicative t => (e -> t (Maybe a)) -> l -> t ([a], [e])
+    mextract go = sfoldr (\ e -> liftA2 (\ x (xs, es) ->
+        maybe (xs, e : es) (\ x' -> (x' : xs, es)) x) (go e)
+      ) (pure ([], []))
     
     {- |
       @since 0.3
       
       Monadic version of 'extract''.
     -}
-    mextract' :: Monad m => (e -> m (Maybe e)) -> l -> m (l, l)
+    mextract' :: Applicative t => (e -> t (Maybe e)) -> l -> t (l, l)
     mextract' =  fmap (both fromList) ... mextract
     
-    {- Traversable. -}
-    
     {- |
       @since 0.3
       
-      Same as 'runMLinear'', but actions can be performed in any order (may be
-      parallel). Default: 'runMLinear''.
+      'traverse' for 'Linear'.
     -}
-    runMLinear :: Monad m => (Int -> e -> m r) -> l -> m [r]
-    runMLinear =  runMLinear'
-    
-    {- |
-      @since 0.3
-      
-      @'runMLinear'' go es@ executes an action @go@ for each offset and element
-      of @es@ from left to right.
-      
-      @
-      runMLinear' go es === runMLinear' go (listL es) === mapMLinear' go (listL es)
-      @
-    -}
-    runMLinear' :: Monad m => (Int -> e -> m r) -> l -> m [r]
-    runMLinear' f = ofoldr (\ o e xs -> liftA2 (:) (f o e) xs) (return [])
-    
-    {- |
-      @since 0.3
-      
-      Same as 'mapMLinear'', but actions can be performed in any order (may be
-      parallel). Default: 'mapMLinear''.
-    -}
-    mapMLinear :: Monad m => (Int -> e -> m e) -> l -> m l
-    mapMLinear =  fmap fromList ... runMLinear
-    
-    {- |
-      @since 0.3
-      
-      Same as 'runMLinear'', but keeps argument stucture like 'fmap'.
-    -}
-    mapMLinear' :: Monad m => (Int -> e -> m e) -> l -> m l
-    mapMLinear' =  fmap fromList ... runMLinear'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'selectMLinear'', but actions can be performed in any order (may be
-      parallel). Default: 'selectMLinear''.
-    -}
-    selectMLinear :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
-    selectMLinear =  selectMLinear'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'runMLinear'', but drops 'Nothing' elements.
-    -}
-    selectMLinear' :: Monad m => (Int -> e -> m (Maybe a)) -> l -> m [a]
-    selectMLinear' =  fmap catMaybes ... runMLinear'
+    otraverse :: Applicative t => (Int -> e -> t e) -> l -> t l
+    otraverse f = fmap fromList . ofoldr (\ o e xs ->
+        liftA2 (:) (f o e) xs
+      ) (pure [])
     
     {- Operations with elements. -}
     
@@ -759,7 +710,7 @@ csfoldl' f base = sfoldl' (\ (!n, e') e -> (n + 1, f e' e)) (0, base)
   Monadic version of 'sfoldr'.
 -}
 msfoldr :: (Monad m, Linear l e) => (e -> a -> m a) -> a -> l -> m a
-msfoldr go = sfoldr ((=<<) . go) . return
+msfoldr go = sfoldr (\ e xs -> go e =<< xs) . pure
 
 {- |
   @since 0.3
@@ -767,7 +718,7 @@ msfoldr go = sfoldr ((=<<) . go) . return
   Monadic version of 'sfoldl'.
 -}
 msfoldl :: (Monad m, Linear l e) => (a -> e -> m a) -> a -> l -> m a
-msfoldl go = sfoldl (flip $ (=<<) . flip go) . return
+msfoldl go = sfoldl (\ e xs -> flip go xs =<< e) . pure
 
 --------------------------------------------------------------------------------
 
@@ -1204,7 +1155,6 @@ unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
 
 
 
