@@ -307,6 +307,58 @@ class Eq e => Unboxed e
     -}
     toOrdered# :: e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
     toOrdered# _ _ _ _ = \ s# -> s#
+    
+    {- |
+      @since 0.3
+      
+      Fast 'sum'.
+    -}
+    sumUnboxed# :: Num e => ByteArray# -> Int# -> Int# -> e
+    sumUnboxed# arr# =
+      let
+          go# !s 0#  _ = s
+          go# !s n# o# = go# (s + (arr# !# o#)) (n# -# 1#) (o# +# 1#)
+      in  \ n# o# -> case n# ># 0# of {1# -> go# 0 n# o#; _ -> 0}
+    
+    {- |
+      @since 0.3
+      
+      Fast 'product'.
+    -}
+    productUnboxed# :: Num e => ByteArray# -> Int# -> Int# -> e
+    productUnboxed# arr# =
+      let
+          go# !s 0#  _ = s
+          go# !s n# o# = go# (s * (arr# !# o#)) (n# -# 1#) (o# +# 1#)
+      in  \ n# o# -> case n# ># 0# of {1# -> go# 1 n# o#; _ -> 1}
+    
+    {- |
+      @since 0.3
+      
+      Fast 'maximum'.
+    -}
+    maximumUnboxed# :: Ord e => ByteArray# -> Int# -> Int# -> e
+    maximumUnboxed# arr# =
+      let
+          go# !s 0#  _ = s
+          go# !s n# o# = go# (max s (arr# !# o#)) (n# -# 1#) (o# +# 1#)
+      in  \ n# o# -> case n# ># 0# of
+            1# -> go# (arr# !# 1#) n# o#
+            _  -> error "TODO"
+    
+    {- |
+      @since 0.3
+      
+      Fast 'minimum'.
+    -}
+    minimumUnboxed# :: Ord e => ByteArray# -> Int# -> Int# -> e
+    minimumUnboxed# arr# =
+      let
+          go# !s 0#  _ = s
+          go# !s n# o# = go# (max s (arr# !# o#)) (n# -# 1#) (o# +# 1#)
+      in  \ n# o# -> case n# ># 0# of
+            1# -> go# (arr# !# 1#) n# o#
+            _  -> error "TODO"
 
 --------------------------------------------------------------------------------
 
@@ -2565,6 +2617,4 @@ gcd# a# b# = gcd# b# (remInt# a# b#)
 
 consSizeof :: (a -> b) -> b -> a
 consSizeof =  \ _ _ -> undefined
-
-
 
