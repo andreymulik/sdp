@@ -18,6 +18,8 @@ module SDP.Unboxed
   bytewiseEqUnboxed#, radixSortUnboxed#, asProxy#, toProxy#, fromProxy#,
   sizeof, offsetof, chunkof,
   
+  copyUnboxed#, copyUnboxedM#,
+  
   -- ** Kind @(Type -> Type)@ proxies
   fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
   pnewUnboxed, pcopyUnboxed, pcopyUnboxedM, pcloneUnboxed, pcloneUnboxedM,
@@ -264,15 +266,6 @@ class Eq e => Unboxed e
         s3# -> (# s3#, mbytes# #)
     
     {- |
-      @'copyUnboxed#' e bytes\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
-      from @bytes\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
-      count), @n\#@ - count of elements to copy.
-    -}
-    copyUnboxed# :: e -> ByteArray# -> Int# -> MutableByteArray# s
-                 -> Int# -> Int# -> State# s -> State# s
-    copyUnboxed# e = copyUnboxed## (toProxy# e)
-    
-    {- |
       @'copyUnboxed##' e bytes\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
       from @bytes\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
       count), @n\#@ - count of elements to copy.
@@ -281,16 +274,6 @@ class Eq e => Unboxed e
                   -> Int# -> Int# -> State# s -> State# s
     copyUnboxed## e bytes# o1# mbytes# o2# n# = copyByteArray# bytes#
       (sizeof## e o1#) mbytes# (sizeof## e o2#) (sizeof## e n#)
-    
-    {- |
-      @'copyUnboxedM#' e msrc\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
-      from @msrc\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
-      count), @n\#@ - count of elements to copy.
-    -}
-    copyUnboxedM# :: e -> MutableByteArray# s -> Int#
-                  -> MutableByteArray# s -> Int# -> Int#
-                  -> State# s -> State# s
-    copyUnboxedM# e = copyUnboxedM## (toProxy# e)
     
     {- |
       @'copyUnboxedM##' e msrc\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
@@ -417,6 +400,25 @@ chunkof :: Unboxed e => e -> (Int, Int)
 chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
 
 --------------------------------------------------------------------------------
+
+{- |
+  @'copyUnboxed#' e bytes\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
+  from @bytes\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
+  count), @n\#@ - count of elements to copy.
+-}
+copyUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> MutableByteArray# s
+             -> Int# -> Int# -> State# s -> State# s
+copyUnboxed# e = copyUnboxed## (toProxy# e)
+
+{- |
+  @'copyUnboxedM#' e msrc\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
+  from @msrc\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
+  count), @n\#@ - count of elements to copy.
+-}
+copyUnboxedM# :: Unboxed e => e -> MutableByteArray# s -> Int#
+              -> MutableByteArray# s -> Int# -> Int#
+              -> State# s -> State# s
+copyUnboxedM# e = copyUnboxedM## (toProxy# e)
 
 {- Unboxed helpers. -}
 
@@ -1374,10 +1376,10 @@ instance Unboxed Bool
       \ s1# -> case writeUnboxed# mbytes# o2# (asProxy# e (bytes# !# o1#)) s1# of
         s2# -> copyUnboxed## e bytes# (o1# +# 1#) mbytes# (o2# +# 1#) (c# -# 1#) s2#
     
-    copyUnboxedM# e src# o1# mbytes# o2# n# = if isTrue# (n# <# 1#) then \ s1# -> s1# else
+    copyUnboxedM## e src# o1# mbytes# o2# n# = if isTrue# (n# <# 1#) then \ s1# -> s1# else
       \ s1# -> case readUnboxed# src# o1# s1# of
-        (# s2#, x #) -> case writeUnboxed# mbytes# o2# (x `asTypeOf` e) s2# of
-          s3# -> copyUnboxedM# e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
+        (# s2#, x #) -> case writeUnboxed# mbytes# o2# (asProxy# e x) s2# of
+          s3# -> copyUnboxedM## e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
     sortUnboxed# _ bs# n# o# = case n# <# 2# of
       1# -> \ s1# -> s1#
