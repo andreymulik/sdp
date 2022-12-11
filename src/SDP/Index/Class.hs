@@ -3,7 +3,7 @@
 {-# LANGUAGE Trustworthy, ConstraintKinds, TypeOperators, MagicHash #-}
 
 {- |
-    Module      :  SDP.Internal.Index
+    Module      :  SDP.Index.Class
     Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
@@ -12,7 +12,7 @@
     The 'Index' class is an alternative to 'Data.Ix.Ix' with a richer interface,
     generalized indexes and more convenient function names.
 -}
-module SDP.Internal.Index
+module SDP.Index.Class
 (
   -- * Exports
   module SDP.Shape,

@@ -156,7 +156,7 @@ Library
     SDP.Internal.Utils
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
-    SDP.Internal.Index
+    SDP.Index.Class
     
     -- Зrimitive operations that do not require the Unboxed class, but used in
     -- it and its instances

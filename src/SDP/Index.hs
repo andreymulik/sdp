@@ -27,9 +27,9 @@ module SDP.Index
 )
 where
 
-import SDP.Internal.Index
-import SDP.Nullable
+import SDP.Index.Class
 import SDP.Shape
 
+import SDP.Nullable
 
 
