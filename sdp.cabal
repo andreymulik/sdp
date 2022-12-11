@@ -79,15 +79,8 @@ Library
     -- Commons
     SDP.SafePrelude
     SDP.Comparing
-    SDP.Forceable
-    SDP.Estimate
-    SDP.Bordered
-    SDP.Nullable
-    SDP.Unboxed
     SDP.Finite
     SDP.Tuple
-    SDP.Shape
-    SDP.Index
     SDP.Ratio
     
     -- Sorting
@@ -96,10 +89,17 @@ Library
     SDP.SortM
     
     -- Classes
+    SDP.Forceable
+    SDP.Estimate
+    SDP.Bordered
+    SDP.Nullable
     SDP.IndexedM
     SDP.LinearM
+    SDP.Unboxed
     SDP.Indexed
     SDP.Linear
+    SDP.Index
+    SDP.Shape
     SDP.MapM
     SDP.ZipM
     SDP.Scan
@@ -157,4 +157,14 @@ Library
     
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Internal.Index
+    
+    -- Зrimitive operations that do not require the Unboxed class, but used in
+    -- it and its instances
+    SDP.Unboxed.Utils
+    
+    -- Unboxed class with instances
+    SDP.Unboxed.Class
+
+
+
 
