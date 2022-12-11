@@ -234,7 +234,7 @@ instance Indexed [e] Int e
 -- | Split the list and return the good producer of the resulting chunks.
 unpick :: Int -> (i -> Int) -> [(i, e)] -> [(i, [e])]
 unpick (I# n#) f es = runST $ ST $ \ s1# -> case newArray# n# [] s1# of
-  (# s2#, marr# #) -> case newArray# n# undefined s2# of
+  (# s2#, marr# #) -> case newArray# n# (undEx "unpick") s2# of
     (# s3#, midx# #) -> case foldr (\ (i, e) go s# -> case f i of
       I# i# -> case readArray# marr# i# s# of
         (# s', xs #) -> case writeArray# marr# i# (e : xs) s' of

@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies, UndecidableInstances, DefaultSignatures, CPP #-}
-{-# LANGUAGE Trustworthy, ConstraintKinds, TypeOperators #-}
+{-# LANGUAGE Trustworthy, ConstraintKinds, TypeOperators, MagicHash #-}
 
 {- |
     Module      :  SDP.Internal.Index
@@ -35,6 +35,7 @@ import Data.Maybe
 import Data.Char ( ord )
 
 import GHC.Types
+import GHC.Exts
 
 import Foreign.C.Types
 
@@ -422,9 +423,12 @@ instance Index CUIntMax   where offset = offsetIntegral; defaultBounds = default
 
 {- N-dimensional index instances. -}
 
-instance Index i => Index (E :& i)
+instance (Index i, Rank1 i) => Index (E :& i)
   where
-    defLimit = (const . defLimit :: Index i => i -> (E :& i) -> Maybe Integer) undefined
+    defLimit = go proxy#
+      where
+        go :: Index i => Proxy# i -> (E :& i) -> Maybe Integer
+        go e _ = defLimit (fromProxy# e)
     
     size  (E:&l, E:&u) =  size (l, u)
     sizes (E:&l, E:&u) = [size (l, u)]
@@ -451,7 +455,7 @@ instance Index i => Index (E :& i)
     extendBounds (E:&i) (E:&l, E:&u) = both (E:&) $ extendBounds i (l, u)
 
 -- [internal]: undecidable
-instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
+instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank1 i)
       => Index (i' :& i :& i)
   where
     defLimit is = lim err (rank is) is
@@ -516,10 +520,10 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
         (d, m) = n <= l ? (0, n) $ l `divMod` n
         res    = unsafeIndex' d :& unsafeIndex' m
         
-        l = lim res undefined
+        l = lim res proxy#
         
-        lim :: Index i => (i' :& i :& i) -> i -> Integer
-        lim =  const (fromMaybe n . defLimit)
+        lim :: Index i => (i' :& i :& i) -> Proxy# i -> Integer
+        lim _ i = fromMaybe n (defLimit (fromProxy# i))
     
     extendBounds i'@(i :& is) bnds@(l :& ls, u :& us) =
         isEmpty bnds ? (i', i') $ (l' :& ls', u' :& us')
@@ -532,7 +536,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i))
 {- Tuple instances. -}
 
 #define INDEX_INSTANCE(Type)\
-instance (Ord i, Index i, Enum i, Bounded i)\
+instance (Ord i, Index i, Enum i, Bounded i, Rank1 i)\
       => Index (Type i) where\
 {\
 size         = size . toGBounds;\
@@ -600,6 +604,7 @@ emptyEx =  throw . EmptyRange . showString "in SDP.Index."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Index."
+
 
 
 

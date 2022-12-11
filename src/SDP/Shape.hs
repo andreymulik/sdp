@@ -1,6 +1,6 @@
-{-# LANGUAGE TypeFamilies, TypeOperators, DefaultSignatures, ConstraintKinds #-}
-{-# LANGUAGE CPP, FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Trustworthy, CPP, MagicHash, ConstraintKinds, DefaultSignatures #-}
+{-# LANGUAGE FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, DataKinds #-}
 
 {- |
     Module      :  SDP.Shape
@@ -21,11 +21,12 @@ module SDP.Shape
   module Data.Int,
   
   -- * Shapes
-  Shape (..), GIndex, toGBounds, fromGBounds,
+  Shape (..), GIndex, toGBounds, fromGBounds, rank, rank#,
+  asProxy#, toProxy#, fromProxy#,
   
   -- ** Rank constraints
-  RANK0, RANK1, RANK2,  RANK3,  RANK4,  RANK5,  RANK6,  RANK7,
-  RANK8, RANK9, RANK10, RANK11, RANK12, RANK13, RANK14, RANK15
+  Rank0, Rank1, Rank2,  Rank3,  Rank4,  Rank5,  Rank6,  Rank7,
+  Rank8, Rank9, Rank10, Rank11, Rank12, Rank13, Rank14, Rank15
 )
 where
 
@@ -35,9 +36,13 @@ import SDP.Tuple
 import Data.Word
 import Data.Int
 
+import GHC.TypeLits
 import GHC.Types
+import GHC.Exts
 
 import Foreign.C.Types
+
+import Control.Exception.SDP
 
 default ()
 
@@ -68,11 +73,46 @@ type family GIndex i
   > fromGIndex . toGIndex = id
   > toGIndex . fromGIndex = id
 -}
-class Shape i
+class Rank i ~ Rank (GIndex i) => Shape i
   where
+    -- | Create index from generalized index.
+    {-# INLINE fromGIndex #-}
+    default fromGIndex :: GIndex i ~ (E :& i) => GIndex i -> i
+    fromGIndex :: GIndex i -> i
+    fromGIndex =  \ (E :& i) -> i
+    
+    -- | Create generalized index from index.
+    {-# INLINE toGIndex #-}
+    default toGIndex :: GIndex i ~ (E :& i) => i -> GIndex i
+    toGIndex :: i -> GIndex i
+    toGIndex =  (E :&)
+    
+    -- 'Rank' is shape dimension (number of components in shape).
+    type Rank i :: Nat
+    
+    {- |
+      Count of dimensions in represented space (must be finite and constant).
+      Returns @'Rank' i@ as an unboxed 'Int#' value.
+    -}
+    default rank## :: KnownNat (Rank i) => Proxy# i -> Int#
+    rank## :: Proxy# i -> Int#
+    rank## =  go proxy#
+      where
+        go :: KnownNat (Rank i) => Proxy# (Rank i) -> Proxy# i -> Int#
+        go =  \ p# _ -> case fromEnum (natVal' p#) of I# i# -> i#
+    
+    {- Subshape index. -}
+    
     -- | Type of index top dimension.
     type DimLast i :: Type
     type DimLast i =  i
+    
+    {-# INLINE lastDim #-}
+    default lastDim :: DimLast i ~ i => i -> DimLast i
+    lastDim :: i -> DimLast i
+    lastDim =  id
+    
+    {- Subshape. -}
     
     {- |
       The type of subspace of 'rank' @n - 1@, where @n@ is the 'rank' of the
@@ -81,38 +121,18 @@ class Shape i
     type DimInit i :: Type
     type DimInit i =  E
     
-    -- | Create index from generalized index.
-    {-# INLINE fromGIndex #-}
-    default fromGIndex :: RANK1 i => GIndex i -> i
-    fromGIndex :: GIndex i -> i
-    fromGIndex =  \ (E :& i) -> i
-    
-    -- | Create generalized index from index.
-    {-# INLINE toGIndex #-}
-    default toGIndex :: RANK1 i => i -> GIndex i
-    toGIndex :: i -> GIndex i
-    toGIndex =  (E :&)
-    
-    -- | Count of dimensions in represented space (must be finite and constant).
-    {-# INLINE rank #-}
-    rank :: i -> Int
-    rank =  const 1
-    
-    -- | Add new dimension.
-    {-# INLINE consDim #-}
-    default consDim :: DimLast i ~~ i => DimInit i -> DimLast i -> i
-    consDim :: DimInit i -> DimLast i -> i
-    consDim =  const id
-    
     {-# INLINE initDim #-}
-    default initDim :: DimInit i ~~ E => i -> DimInit i
+    default initDim :: DimInit i ~ E => i -> DimInit i
     initDim :: i -> DimInit i
     initDim =  const E
     
-    {-# INLINE lastDim #-}
-    default lastDim :: DimLast i ~~ i => i -> DimLast i
-    lastDim :: i -> DimLast i
-    lastDim =  id
+    {- Construct/destruct shape. -}
+    
+    -- | Add new dimension.
+    {-# INLINE consDim #-}
+    default consDim :: DimLast i ~ i => DimInit i -> DimLast i -> i
+    consDim :: DimInit i -> DimLast i -> i
+    consDim =  const id
     
     {-# INLINE unconsDim #-}
     unconsDim :: i -> (DimInit i, DimLast i)
@@ -122,101 +142,129 @@ class Shape i
 
 {- Rank constraints. -}
 
--- | A constraint corresponding to rank 0 indices ('E').
-type RANK0  i = i ~~ E
--- | The restriction corresponding to rank indices 1 (сhecks 'GIndex').
-type RANK1  i = GIndex i ~~ (E :& i)
--- | The restriction corresponding to rank indices 2 (сhecks 'GIndex').
-type RANK2  i = GIndex i ~~ I2  i
--- | The restriction corresponding to rank indices 3 (сhecks 'GIndex').
-type RANK3  i = GIndex i ~~ I3  i
--- | The restriction corresponding to rank indices 4 (сhecks 'GIndex').
-type RANK4  i = GIndex i ~~ I4  i
--- | The restriction corresponding to rank indices 5 (сhecks 'GIndex').
-type RANK5  i = GIndex i ~~ I5  i
--- | The restriction corresponding to rank indices 6 (сhecks 'GIndex').
-type RANK6  i = GIndex i ~~ I6  i
--- | The restriction corresponding to rank indices 7 (сhecks 'GIndex').
-type RANK7  i = GIndex i ~~ I7  i
--- | The restriction corresponding to rank indices 8 (сhecks 'GIndex').
-type RANK8  i = GIndex i ~~ I8  i
--- | The restriction corresponding to rank indices 9 (сhecks 'GIndex').
-type RANK9  i = GIndex i ~~ I9  i
--- | The restriction corresponding to rank indices 10 (сhecks 'GIndex').
-type RANK10 i = GIndex i ~~ I10 i
--- | The restriction corresponding to rank indices 11 (сhecks 'GIndex').
-type RANK11 i = GIndex i ~~ I11 i
--- | The restriction corresponding to rank indices 12 (сhecks 'GIndex').
-type RANK12 i = GIndex i ~~ I12 i
--- | The restriction corresponding to rank indices 13 (сhecks 'GIndex').
-type RANK13 i = GIndex i ~~ I13 i
--- | The restriction corresponding to rank indices 14 (сhecks 'GIndex').
-type RANK14 i = GIndex i ~~ I14 i
--- | The restriction corresponding to rank indices 15 (сhecks 'GIndex').
-type RANK15 i = GIndex i ~~ I15 i
+-- | A constraint corresponding to @rank === 0@.
+type Rank0  i = Rank i ~ 0
+
+-- | A constraint corresponding to @rank === 1@.
+type Rank1  i = Rank i ~ 1
+
+-- | A constraint corresponding to @rank === 2@.
+type Rank2  i = Rank i ~ 2
+
+-- | A constraint corresponding to @rank === 3@.
+type Rank3  i = Rank i ~ 3
+
+-- | A constraint corresponding to @rank === 4@.
+type Rank4  i = Rank i ~ 4
+
+-- | A constraint corresponding to @rank === 5@.
+type Rank5  i = Rank i ~ 5
+
+-- | A constraint corresponding to @rank === 6@.
+type Rank6  i = Rank i ~ 6
+
+-- | A constraint corresponding to @rank === 7@.
+type Rank7  i = Rank i ~ 7
+
+-- | A constraint corresponding to @rank === 8@.
+type Rank8  i = Rank i ~ 8
+
+-- | A constraint corresponding to @rank === 9@.
+type Rank9  i = Rank i ~ 9
+
+-- | A constraint corresponding to @rank === 10@.
+type Rank10 i = Rank i ~ 10
+
+-- | A constraint corresponding to @rank === 11@.
+type Rank11 i = Rank i ~ 11
+
+-- | A constraint corresponding to @rank === 12@.
+type Rank12 i = Rank i ~ 12
+
+-- | A constraint corresponding to @rank === 13@.
+type Rank13 i = Rank i ~ 13
+
+-- | A constraint corresponding to @rank === 14@.
+type Rank14 i = Rank i ~ 14
+
+-- | A constraint corresponding to @rank === 15@.
+type Rank15 i = Rank i ~ 15
 
 --------------------------------------------------------------------------------
 
 {- Basic instances. -}
 
-instance Shape E where rank = const 0; toGIndex = id; fromGIndex = id
-instance Shape ()
-instance Shape Char
-instance Shape Integer
+instance Shape E
+  where
+    type Rank E = 0
+    
+    toGIndex   = id
+    fromGIndex = id
 
-instance Shape Int
-instance Shape Int8
-instance Shape Int16
-instance Shape Int32
-instance Shape Int64
+instance Shape Int   where type Rank Int   = 1
+instance Shape Int8  where type Rank Int8  = 1
+instance Shape Int16 where type Rank Int16 = 1
+instance Shape Int32 where type Rank Int32 = 1
+instance Shape Int64 where type Rank Int64 = 1
 
-instance Shape Word
-instance Shape Word8
-instance Shape Word16
-instance Shape Word32
-instance Shape Word64
+instance Shape Word   where type Rank Word   = 1
+instance Shape Word8  where type Rank Word8  = 1
+instance Shape Word16 where type Rank Word16 = 1
+instance Shape Word32 where type Rank Word32 = 1
+instance Shape Word64 where type Rank Word64 = 1
+
+instance Shape ()      where type Rank ()      = 1
+instance Shape Char    where type Rank Char    = 1
+instance Shape Integer where type Rank Integer = 1
 
 --------------------------------------------------------------------------------
 
 {- Foreign C instances. -}
 
-instance Shape CChar
-instance Shape CUChar
-instance Shape CSChar
-instance Shape CWchar
-instance Shape CShort
-instance Shape CUShort
+instance Shape CChar   where type Rank CChar   = 1
+instance Shape CUChar  where type Rank CUChar  = 1
+instance Shape CSChar  where type Rank CSChar  = 1
+instance Shape CWchar  where type Rank CWchar  = 1
+instance Shape CShort  where type Rank CShort  = 1
+instance Shape CUShort where type Rank CUShort = 1
 
-instance Shape CInt
-instance Shape CUInt
-instance Shape CLong
-instance Shape CLLong
-instance Shape CULong
-instance Shape CULLong
-instance Shape CIntPtr
-instance Shape CUIntPtr
+instance Shape CInt     where type Rank CInt     = 1
+instance Shape CUInt    where type Rank CUInt    = 1
+instance Shape CLong    where type Rank CLong    = 1
+instance Shape CLLong   where type Rank CLLong   = 1
+instance Shape CULong   where type Rank CULong   = 1
+instance Shape CULLong  where type Rank CULLong  = 1
+instance Shape CIntPtr  where type Rank CIntPtr  = 1
+instance Shape CUIntPtr where type Rank CUIntPtr = 1
 
-instance Shape CIntMax
-instance Shape CUIntMax
+instance Shape CIntMax  where type Rank CIntMax  = 1
+instance Shape CUIntMax where type Rank CUIntMax = 1
 
-instance Shape CSize
+instance Shape CSize where type Rank CSize = 1
 
 #if MIN_VERSION_base(4,10,0)
 -- | since @base-4.10.0.0@
-instance Shape CBool
+instance Shape CBool where type Rank CBool = 1
 #endif
 
-instance Shape CPtrdiff
-instance Shape CSigAtomic
+instance Shape CPtrdiff   where type Rank CPtrdiff   = 1
+instance Shape CSigAtomic where type Rank CSigAtomic = 1
 
 --------------------------------------------------------------------------------
 
 {- N-dimensional instances. -}
 
-instance Shape i => Shape (E :& i)
+instance (Shape i, Rank1 i) => Shape (E :& i)
   where
+    type Rank (E :& i) = 1
+    
     type DimInit (E :& i) = E
     type DimLast (E :& i) = i
+    
+    rank## i = rank## (glast# i)
+      where
+        glast# :: Proxy# (E :& i) -> Proxy# i
+        glast# _ = proxy#
     
     fromGIndex = id
     toGIndex   = id
@@ -226,12 +274,18 @@ instance Shape i => Shape (E :& i)
     lastDim   = \ (_  :& i) -> i
     unconsDim = \ (is :& i) -> (is, i)
 
-instance (Shape i, Enum i, Bounded i, Shape (i' :& i)) => Shape (i' :& i :& i)
+instance (Shape i, Enum i, Bounded i, Shape (i' :& i), Rank1 i) => Shape (i' :& i :& i)
   where
+    type Rank (i' :& i :& i) = Rank (i' :& i) + 1
+    
     type DimInit (i' :& i :& i) = i' :& i
     type DimLast (i' :& i :& i) = i
     
-    rank = (const . succ . rank :: Shape (i' :& i) => i' :& i -> (i' :& i :& i) -> Int) undefined
+    rank## = go proxy# proxy#
+      where
+        go :: (Shape i, Shape (i' :& i)) => Proxy# (i' :& i) -> Proxy# i
+           -> Proxy# (i' :& i :& i) -> Int#
+        go init# last# _ = rank## init# +# rank## last#
     
     fromGIndex = id
     toGIndex   = id
@@ -257,9 +311,10 @@ fromGBounds =  both fromGIndex
 instance (Shape i, Enum i, Bounded i) => Shape (Type i)\
 where\
 {\
+type Rank (Type i) = RANK;\
 type DimLast (Type i) = i;\
 type DimInit (Type i) = Last i;\
-rank = const RANK;\
+rank## = \ _ -> RANK#;\
 initDim = fst . unconsDim;\
 lastDim = snd . unconsDim;
 
@@ -362,4 +417,49 @@ consDim    (a,b,c,d,e,f,g,h,i,j,k,l,m,n) o = (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o);
 }
 #undef SHAPE_INSTANCE
 
+--------------------------------------------------------------------------------
+
+-- | Boxed 'rank' of given 'Shape' type, see 'rank##'.
+rank :: Shape i => i -> Int
+rank i = I# (rank# i)
+
+{- |
+  @since 0.3
+  
+  Unboxed 'rank' of given 'Shape' type, see 'rank##'.
+-}
+rank# :: Shape i => i -> Int#
+rank# i = rank## (toProxy# i)
+
+--------------------------------------------------------------------------------
+
+{- |
+  @since 0.3
+  
+  Returns second argument.
+-}
+asProxy# :: Proxy# e -> e -> e
+asProxy# =  \ _ x -> x
+
+{- |
+  @since 0.3
+  
+  Returns 'proxy#'.
+-}
+toProxy# :: e -> Proxy# e
+toProxy# =  \ _ -> proxy#
+
+{- |
+  @since 0.3
+  
+  Returns 'UnreachableException' (with function name for debug) of suitable type.
+-}
+fromProxy# :: Proxy# e -> e
+fromProxy# =  \ _ -> unreachEx "fromProxy#: inappropriate use of the fromProxy#\
+                              \ function: the value should never be used."
+
+--------------------------------------------------------------------------------
+
+unreachEx :: String -> a
+unreachEx =  throw . UnreachableException . showString "SDP.Shape."
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, BangPatterns, TypeOperators #-}
-{-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE CPP, TypeFamilies #-}
 
 {- |
     Module      :  SDP.Unboxed.Class
@@ -58,6 +59,8 @@ import GHC.ByteOrder
 import Data.Complex
 
 import Foreign.C.Types
+
+import Control.Exception.SDP
 
 #include <ghcautoconf.h>
 #include "MachDeps.h"
@@ -128,17 +131,17 @@ class Eq e => Unboxed e
       
       @
         -- 16 bytes (8 bytes for each component) and one value
-        chunkof# (undefined :: Ratio Int64) === (# 16#, 1# #)
+        chunkof## (proxy# :: Proxy# Ratio Int64) === (# 16#, 1# #)
         
         -- 8 bytes, one value
-        chunkof# (undefined :: Int64) === (# 8#, 1# #)
+        chunkof## (proxy# :: Proxy# Int64) === (# 8#, 1# #)
         
         -- 4 bytes, one value
-        chunkof# (undefined :: Int32) === (# 4#, 1# #)
-        chunkof# (undefined ::  Char) === (# 4#, 1# #)
+        chunkof## (proxy# :: Proxy# Int32) === (# 4#, 1# #)
+        chunkof## (proxy# :: Proxy#  Char) === (# 4#, 1# #)
         
         -- 1 byte, 8 values
-        chunkof# (undefined ::  Bool) === (# 1#, 8# #)
+        chunkof## (proxy# :: Proxy# Bool) === (# 1#, 8# #)
       @
     -}
     chunkof# :: e -> (# Int#, Int# #)
@@ -189,10 +192,10 @@ class Eq e => Unboxed e
       indices not exceeding the number of elements in the given array.
     -}
     readUnboxed# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
-    readUnboxed# mbytes# i# = go undefined
+    readUnboxed# mbytes# i# = go proxy#
       where
-        go e = \ s1# -> case readUnboxedOff# mbytes# (sizeof# e i#) s1# of
-          (# s2#, res #) -> (# s2#, res `asTypeOf` e #)
+        go e = \ s1# -> case readUnboxedOff# mbytes# (sizeof## e i#) s1# of
+          (# s2#, res #) -> (# s2#, asProxy# e res #)
     
     {- |
       @sinze 0.3
@@ -201,10 +204,10 @@ class Eq e => Unboxed e
     -}
     {-# INLINE readUnboxedOff# #-}
     readUnboxedOff# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, e #)
-    readUnboxedOff# mbytes# o# = go undefined
+    readUnboxedOff# mbytes# o# = go proxy#
       where
-        go e = \ s1# -> case (!>#) mbytes# (offsetof# e o#) s1# of
-          (# s2#, res #) -> (# s2#, res `asTypeOf` e #)
+        go e = \ s1# -> case (!>#) mbytes# (offsetof## e o#) s1# of
+          (# s2#, res #) -> (# s2#, asProxy# e res #)
     
     {-# INLINE writeByteArray# #-}
     -- | Unsafe 'MutableByteArray#' writer (by index).
@@ -483,9 +486,13 @@ freezeUnboxed# e mbytes# n# = \ s1# -> case cloneUnboxedM# e mbytes# 0# n# s1# o
 
 {- Rank 1 Unboxed proxies. -}
 
--- | Returns 'undefined' of suitable type.
+{- |
+  Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
+  for debug, since @sdp-0.3@) of suitable type.
+-}
 fromProxy :: proxy e -> e
-fromProxy =  const undefined
+fromProxy =  \ _ -> unreachEx "fromProxy: inappropriate use of the @fromProxy@\
+                            \ function: the value should never be used."
 
 {- |
   @since 0.2.1
@@ -606,9 +613,13 @@ pfreezeUnboxed =  freezeUnboxed# . fromProxy
 
 {- (Type -> Type -> Type)-kind Unboxed proxies. -}
 
--- | Returns 'undefined' of suitable type.
+{- |
+  Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
+  for debug, since @sdp-0.3@) of suitable type.
+-}
 fromProxy1 :: m (proxy e) -> e
-fromProxy1 =  const undefined
+fromProxy1 =  \ _ -> unreachEx "fromProxy1: inappropriate use of the @fromProxy1@\
+                              \ function: the value should never be used."
 
 {- |
   @since 0.2
@@ -1470,7 +1481,7 @@ instance Unboxed E
     
     sortUnboxed# _ _ _ _ = \ s# -> s#
 
-instance Unboxed e => Unboxed (I1 e)
+instance (Unboxed e, Rank1 e) => Unboxed (I1 e)
   where
     filler = E :& filler
     
@@ -1494,7 +1505,7 @@ instance Unboxed e => Unboxed (I1 e)
     newUnboxed' = \ (E :& i) -> newUnboxed i
     newUnboxed  = pnewUnboxed
 
-instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e))
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e, Shape (e' :& e), Unboxed (e' :& e))
       => Unboxed (e' :& e :& e)
   where
     filler = filler :& filler
@@ -1504,18 +1515,18 @@ instance (Enum e, Shape e, Bounded e, Unboxed e, Shape (e' :& e), Unboxed (e' :&
     
     sizeof# e n# = psizeof# e (rank# e *# n#)
     
-    bytes# !# i# = go undefined
+    bytes# !# i# = go proxy#
       where
-        go t =
-          let r# = rank# t; o# = i#*#r# +# i#
-          in  ((bytes# !# o#) `asTypeOf` t) :& (bytes# !# (o# +# r#))
+        go p# =
+          let r# = rank## p#; o# = i#*#r# +# i#
+          in  (asProxy# p# (bytes# !# o#)) :& (bytes# !# (o# +# r#))
     
-    readUnboxed# bytes# i# = go undefined
+    readUnboxed# bytes# i# = go proxy#
       where
-        go t = let r# = rank# t; o# = i#*#r# +# i# in
+        go p# = let r# = rank## p#; o# = i#*#r# +# i# in
           \ s1# -> case readUnboxed# bytes# o# s1# of
             (# s2#, es #) -> case readUnboxed# bytes# (o# +# r#) s2# of
-              (# s3#, e #) -> (# s3#, (es `asTypeOf` t) :& e #)
+              (# s3#, e #) -> (# s3#, asProxy# p# es :& e #)
     
     writeUnboxed# bytes# i# (es :& e) = let r# = rank# es; o# = i#*#r# +# i# in
       \ s1# -> case writeUnboxed# bytes# o# es s1# of
@@ -1559,7 +1570,7 @@ instance Unboxed ()
     
     sortUnboxed# _ _ _ _ = \ s# -> s#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T2 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T2 e)
   where
     sizeof# e n# = psizeof# e (2# *# n#)
     
@@ -1587,7 +1598,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T2 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T3 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T3 e)
   where
     sizeof# e n# = psizeof# e (3# *# n#)
     
@@ -1619,7 +1630,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T3 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T4 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T4 e)
   where
     sizeof# e n# = psizeof# e (4# *# n#)
     
@@ -1653,7 +1664,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T4 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T5 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T5 e)
   where
     sizeof# e n# = psizeof# e (5# *# n#)
     
@@ -1693,7 +1704,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T5 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T6 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T6 e)
   where
     sizeof# e n# = psizeof# e (6# *# n#)
     
@@ -1735,7 +1746,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T6 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T7 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T7 e)
   where
     sizeof# e n# = psizeof# e (7# *# n#)
     
@@ -1780,7 +1791,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T7 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T8 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T8 e)
   where
     sizeof# e n# = psizeof# e (8# *# n#)
     
@@ -1827,7 +1838,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T8 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T9 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T9 e)
   where
     sizeof# e n# = psizeof# e (9# *# n#)
     
@@ -1876,7 +1887,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T9 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T10 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T10 e)
   where
     sizeof# e n# = psizeof# e (10# *# n#)
     
@@ -1928,7 +1939,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T10 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T11 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T11 e)
   where
     sizeof# e n# = psizeof# e (11# *# n#)
     
@@ -1982,7 +1993,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T11 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T12 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T12 e)
   where
     sizeof# e n# = psizeof# e (12# *# n#)
     
@@ -2038,7 +2049,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T12 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T13 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T13 e)
   where
     sizeof# e n# = psizeof# e (13# *# n#)
     
@@ -2097,7 +2108,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T13 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T14 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T14 e)
   where
     sizeof# e n# = psizeof# e (14# *# n#)
     
@@ -2158,7 +2169,7 @@ instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T14 e)
     
     fromOrdered# = toOrdered#
 
-instance (Enum e, Shape e, Bounded e, Unboxed e) => Unboxed (T15 e)
+instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T15 e)
   where
     sizeof# e n# = psizeof# e (15# *# n#)
     
@@ -2410,17 +2421,6 @@ defaultEqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1
 
 --------------------------------------------------------------------------------
 
-asProxy# :: Proxy# e -> e -> e
-asProxy# =  \ _ x -> x
-
-toProxy# :: e -> Proxy# e
-toProxy# =  \ _ -> proxy#
-
-fromProxy# :: Proxy# e -> e
-fromProxy# =  \ _ -> undefined
-
---------------------------------------------------------------------------------
-
 boolCountM# :: MutableByteArray# s -> Int# -> Int#
             -> State# s -> (# State# s, Int# #)
 boolCountM# bs# n# o#
@@ -2639,6 +2639,11 @@ writeInt8Array## =  writeInt8Array#
 
 --------------------------------------------------------------------------------
 
+offsetof## :: Unboxed e => Proxy# e -> Int# -> Int#
+offsetof## p# = offsetof# (fromProxy# p#)
+
+--------------------------------------------------------------------------------
+
 {- |
   @since 0.3
   
@@ -2697,19 +2702,14 @@ shift32WI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
 shift64WI# :: Word# -> Word#
 shift64WI# = xor# (int2Word# 0x01# `shiftL#` 63#)
 
---------------------------------------------------------------------------------
-
-{-# INLINE rank# #-}
-rank# :: Shape i => i -> Int#
-rank# i = case rank i of I# r# -> r#
-
-{-# INLINE rank## #-}
-rank## :: Shape i => Proxy# i -> Int#
-rank## i = case rank (fromProxy# i) of I# r# -> r#
-
 {-# INLINE gcd# #-}
 gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
+
+--------------------------------------------------------------------------------
+
+unreachEx :: String -> a
+unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
 
 
