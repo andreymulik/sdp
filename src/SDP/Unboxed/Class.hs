@@ -15,27 +15,11 @@
 module SDP.Unboxed.Class
 (
   -- * Unboxed
-  Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
-  bytewiseEqUnboxed#, radixSortUnboxed#, asProxy#, toProxy#, fromProxy#,
-  sizeof, offsetof, chunkof,
-  
-  copyUnboxed#, copyUnboxedM#,
+  Unboxed (..), cloneUnboxed##, calloc#, concat#, sizeof#, offsetof#,
+  asProxy#, toProxy#, fromProxy#, bytewiseEqUnboxed#, radixSortUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
-  fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
-  pnewUnboxed, pcopyUnboxed, pcopyUnboxedM, pcloneUnboxed, pcloneUnboxedM,
-  pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#, peqUnboxed,
-  
-  -- ** Kind @(Type -> Type -> Type)@ proxies
-  fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
-  pcloneUnboxedM1,
-  
-  -- * Wrap helpers
-  Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#, calloc#,
-  newLinear#, newLinearN#, fromFoldableM#, concat#, pconcat,
-  
-  -- * Byte order
-  ByteOrder (..), targetByteOrder
+  fromProxy, pnewUnboxed, peqUnboxed,
 )
 where
 
@@ -76,8 +60,8 @@ default ()
 -}
 class Eq e => Unboxed e
   where
-    {-# MINIMAL (sizeof##|sizeof#), (filler|newUnboxed), (!#), sortUnboxed#,
-      ((!>#)|readUnboxed#|readUnboxedOff#), (writeByteArray#|writeUnboxed#) #-}
+    {-# MINIMAL sizeof##, (filler|newUnboxed), (writeByteArray#|writeUnboxed#),
+                (!#), sortUnboxed#, ((!>#)|readUnboxed#|readUnboxedOff#) #-}
     
     {- |
       @since 0.3
@@ -97,58 +81,27 @@ class Eq e => Unboxed e
     {- |
       @since 0.3
       
-      @offsetof# e o#@ returns the index of the element in the unboxed array
+      @offsetof## e o#@ returns the index of the element in the unboxed array
       that the offset @o#@ corresponds to (in bytes).
       
       @
-        offsetof# e (sizeof# e (8# *# i#)) === 8# *# i#
+        offsetof## e (sizeof## e (8# *# i#)) === 8# *# i#
         
-        offsetof#       False   3# === 24#
-        offsetof# (0 :: Int32) 12# ===  3#
+        offsetof##       False   3# === 24#
+        offsetof## (0 :: Int32) 12# ===  3#
       @
     -}
-    {-# INLINE offsetof# #-}
-    offsetof# :: e -> Int# -> Int#
-    offsetof# e i# = case i# ># 0# of {1# -> (8# *# i#) `quotInt#` sizeof# e 8#; _ -> 0#}
-    
-    -- | 'sizeof#' is unboxed 'sizeof'.
-    {-# INLINE sizeof# #-}
-    sizeof# :: e -> Int# -> Int#
-    sizeof# e c# = sizeof## (toProxy# e) c#
+    {-# INLINE offsetof## #-}
+    offsetof## :: Unboxed e => Proxy# e -> Int# -> Int#
+    offsetof## e i# = case i# ># 0# of {1# -> (8# *# i#) `quotInt#` sizeof## e 8#; _ -> 0#}
     
     -- | 'sizeof##' is unboxed 'sizeof'.
-    {-# INLINE sizeof## #-}
     sizeof## :: Proxy# e -> Int# -> Int#
-    sizeof## e c# = sizeof# (fromProxy# e) c#
     
     {- |
       @since 0.3
       
-      The size of the minimal block of memory (in bytes) and the maximum number
-      of values in it for a given type.
-      
-      @
-        -- 16 bytes (8 bytes for each component) and one value
-        chunkof## (proxy# :: Proxy# Ratio Int64) === (# 16#, 1# #)
-        
-        -- 8 bytes, one value
-        chunkof## (proxy# :: Proxy# Int64) === (# 8#, 1# #)
-        
-        -- 4 bytes, one value
-        chunkof## (proxy# :: Proxy# Int32) === (# 4#, 1# #)
-        chunkof## (proxy# :: Proxy#  Char) === (# 4#, 1# #)
-        
-        -- 1 byte, 8 values
-        chunkof## (proxy# :: Proxy# Bool) === (# 1#, 8# #)
-      @
-    -}
-    chunkof# :: e -> (# Int#, Int# #)
-    chunkof# e = chunkof## (toProxy# e)
-    
-    {- |
-      @since 0.3
-      
-      See 'chunkof#'.
+      See 'chunkof##'.
     -}
     chunkof## :: Proxy# e -> (# Int#, Int# #)
     chunkof## e =
@@ -377,61 +330,6 @@ class Eq e => Unboxed e
 
 --------------------------------------------------------------------------------
 
--- | See 'sizeof#'.
-{-# INLINE sizeof #-}
-sizeof :: Unboxed e => e -> Int -> Int
-sizeof e (I# c#) = I# (sizeof# e c#)
-
-{- |
-  @since 0.3
-  
-  See 'offsetof#'.
--}
-{-# INLINE offsetof #-}
-offsetof :: Unboxed e => e -> Int -> Int
-offsetof e (I# i#) = I# (offsetof# e i#)
-
-{- |
-  @since 0.3
-  
-  See 'chunkof#'.
--}
-{-# INLINE chunkof #-}
-chunkof :: Unboxed e => e -> (Int, Int)
-chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
-
---------------------------------------------------------------------------------
-
-{- |
-  @'copyUnboxed#' e bytes\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
-  from @bytes\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
-  count), @n\#@ - count of elements to copy.
--}
-copyUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> MutableByteArray# s
-             -> Int# -> Int# -> State# s -> State# s
-copyUnboxed# e = copyUnboxed## (toProxy# e)
-
-{- |
-  @'copyUnboxedM#' e msrc\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
-  from @msrc\#@ to @mbytes\#@, where o1\# and o2\# - offsets (element
-  count), @n\#@ - count of elements to copy.
--}
-copyUnboxedM# :: Unboxed e => e -> MutableByteArray# s -> Int#
-              -> MutableByteArray# s -> Int# -> Int#
-              -> State# s -> State# s
-copyUnboxedM# e = copyUnboxedM## (toProxy# e)
-
-{- Unboxed helpers. -}
-
-{- |
-  @since 0.2
-  
-  @cloneUnboxed# e bytes# o# c#@ creates new @c#@-element length immutable slice
-  of @bytes#@ beginning from @o#@-th element.
--}
-cloneUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> Int# -> ByteArray#
-cloneUnboxed# e = cloneUnboxed## (toProxy# e)
-
 {- |
   @since 0.3
   
@@ -445,44 +343,7 @@ cloneUnboxed## e bytes# o# c# = unwrap $ runST $ ST $
       s3# -> case unsafeFreezeByteArray# mbytes# s3# of
         (# s4#, bytes'# #) -> (# s4#, (Wrap bytes'#) #)
 
-{- |
-  @since 0.2.1
-  
-  @cloneUnboxedM# e mbytes# o# c#@ creates new @c#@-element length mutable slice
-  of @bytes#@ beginning from @o#@-th element.
--}
-cloneUnboxedM# :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int#
-               -> State# s -> (# State# s, MutableByteArray# s #)
-cloneUnboxedM# e mbytes# o# n# = \ s1# -> case newByteArray# (sizeof# e n#) s1# of
-  (# s2#, copy# #) -> case copyUnboxedM# e mbytes# o# copy# 0# n# s2# of
-    s3# -> (# s3#, copy# #)
-
-{- |
-  @since 0.2.1
-  
-  @'thawUnboxed#' e bytes# c#@ creates new @sizeof# e c#@ bytes length
-  'MutableByteArray#' and copy @bytes#@ to it.
--}
-thawUnboxed# :: Unboxed e => e -> ByteArray# -> Int#
-             -> State# s -> (# State# s, MutableByteArray# s #)
-thawUnboxed# e bytes# c# = let n# = sizeof# e c# in \ s1# -> case newByteArray# n# s1# of
-  (# s2#, mbytes# #) -> case copyByteArray# bytes# 0# mbytes# 0# n# s2# of
-    s3# -> (# s3#, mbytes# #)
-
-{- |
-  @since 0.2.1
-  
-  @'freezeUnboxed#' e mbytes# c#@ creates new @sizeof# e c#@ bytes length
-  'ByteArray#' and copy @mbytes#@ to it.
--}
-freezeUnboxed# :: Unboxed e => e -> MutableByteArray# s -> Int#
-               -> State# s -> (# State# s, ByteArray# #)
-freezeUnboxed# e mbytes# n# = \ s1# -> case cloneUnboxedM# e mbytes# 0# n# s1# of
-  (# s2#, copy# #) -> unsafeFreezeByteArray# copy# s2#
-
 --------------------------------------------------------------------------------
-
-{- Rank 1 Unboxed proxies. -}
 
 {- |
   Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
@@ -491,44 +352,6 @@ freezeUnboxed# e mbytes# n# = \ s1# -> case cloneUnboxedM# e mbytes# 0# n# s1# o
 fromProxy :: proxy e -> e
 fromProxy =  \ _ -> unreachEx "fromProxy: inappropriate use of the @fromProxy@\
                             \ function: the value should never be used."
-
-{- |
-  @since 0.2.1
-  
-  'psizeof#' is proxy version of 'sizeof#'.
--}
-psizeof# :: Unboxed e => proxy e -> Int# -> Int#
-psizeof# =  sizeof# . fromProxy
-
-{- |
-  @since 0.2
-  
-  'psizeof' is proxy version of 'sizeof'.
--}
-psizeof :: Unboxed e => proxy e -> Int -> Int
-psizeof =  sizeof . fromProxy
-
-{- |
-  @since 0.3
-  
-  'pchunkof' is proxy version of 'chunkof'.
--}
-pchunkof :: Unboxed e => proxy e -> (Int, Int)
-pchunkof =  chunkof . fromProxy
-
-{- |
-  @since 0.3
-  
-  'pchunkof#' is proxy version of 'chunkof#'.
--}
-pchunkof# :: Unboxed e => proxy e -> (# Int#, Int# #)
-pchunkof# e = chunkof# (fromProxy e)
-
-poffsetof# :: Unboxed e => proxy e -> Int# -> Int#
-poffsetof# e = offsetof# (fromProxy e)
-
-poffsetof :: Unboxed e => proxy e -> Int -> Int
-poffsetof =  offsetof . fromProxy
 
 peqUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
            -> ByteArray# -> Int# -> Int# -> Bool
@@ -543,126 +366,13 @@ pnewUnboxed :: Unboxed e => proxy e -> Int# -> State# s
             -> (# State# s, MutableByteArray# s #)
 pnewUnboxed =  newUnboxed . fromProxy
 
-{- |
-  @since 0.2
-  
-  Kind @(Type -> Type)@ proxy version if 'copyUnboxed#'.
--}
-pcopyUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
-             -> MutableByteArray# s -> Int# -> Int#
-             -> State# s -> State# s
-pcopyUnboxed =  copyUnboxed# . fromProxy
-
-{- |
-  @since 0.2
-  
-  Kind @(Type -> Type)@ proxy version if 'copyUnboxedM#'.
--}
-pcopyUnboxedM :: Unboxed e => proxy e -> MutableByteArray# s -> Int#
-              -> MutableByteArray# s -> Int# -> Int#
-              -> State# s -> State# s
-pcopyUnboxedM =  copyUnboxedM# . fromProxy
-
-{- |
-  @since 0.2
-  
-  Kind @(Type -> Type)@ proxy version of 'cloneUnboxed#'.
--}
-cloneUnboxed1# :: Unboxed e => proxy e -> ByteArray# -> Int# -> Int# -> ByteArray#
-cloneUnboxed1# =  cloneUnboxed# . fromProxy
-
-{- |
-  @since 0.2.1
-  
-  Same as @sdp-0.2@ 'cloneUnboxed1#'. Use only if you don't need @sdp-0.2@
-  compatibility.
--}
-pcloneUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int# -> Int# -> ByteArray#
-pcloneUnboxed =  cloneUnboxed1#
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type)@ proxy version of 'cloneUnboxed#'.
--}
-pcloneUnboxedM :: Unboxed e => proxy e -> MutableByteArray# s -> Int# -> Int#
-               -> State# s -> (# State# s, MutableByteArray# s #)
-pcloneUnboxedM =  cloneUnboxedM# . fromProxy
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type)@ proxy version of 'thawUnboxed#'.
--}
-pthawUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
-             -> State# s -> (# State# s, MutableByteArray# s #)
-pthawUnboxed =  thawUnboxed# . fromProxy
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type)@ proxy version of 'pfreezeUnboxed'.
--}
-pfreezeUnboxed :: Unboxed e => proxy e -> MutableByteArray# s -> Int#
-               -> State# s -> (# State# s, ByteArray# #)
-pfreezeUnboxed =  freezeUnboxed# . fromProxy
-
 --------------------------------------------------------------------------------
 
-{- (Type -> Type -> Type)-kind Unboxed proxies. -}
+fromProxy## :: Proxy# (proxy e) -> Proxy# e
+fromProxy## =  \ _ -> proxy#
 
-{- |
-  Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
-  for debug, since @sdp-0.3@) of suitable type.
--}
-fromProxy1 :: m (proxy e) -> e
-fromProxy1 =  \ _ -> unreachEx "fromProxy1: inappropriate use of the @fromProxy1@\
-                              \ function: the value should never be used."
-
-{- |
-  @since 0.2
-  
-  Kind @(Type -> Type -> Type)@ proxy version of 'newUnboxed'.
--}
-pnewUnboxed1 :: Unboxed e => p (proxy e) -> Int# -> State# s
-             -> (# State# s, MutableByteArray# s #)
-pnewUnboxed1 =  newUnboxed . fromProxy1
-
-{- |
-  @since 0.2
-  
-  Kind @(Type -> Type -> Type)@ proxy version of 'copyUnboxed#'.
--}
-pcopyUnboxed1 :: Unboxed e => p (proxy e) -> ByteArray# -> Int#
-              -> MutableByteArray# s -> Int# -> Int#
-              -> State# s -> State# s
-pcopyUnboxed1 =  copyUnboxed# . fromProxy1
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type -> Type)@ proxy version of 'copyUnboxedM#'.
--}
-pcopyUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int#
-               -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-pcopyUnboxedM1 =  copyUnboxedM# . fromProxy1
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type -> Type)@ proxy version of 'cloneUnboxed#'.
--}
-pcloneUnboxed1 :: Unboxed e => p (proxy e) -> ByteArray# -> Int# -> Int# -> ByteArray#
-pcloneUnboxed1 =  cloneUnboxed# . fromProxy1
-
-{- |
-  @since 0.2.1
-  
-  Kind @(Type -> Type -> Type)@ proxy version of 'cloneUnboxed#'.
--}
-pcloneUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int# -> Int#
-                -> State# s -> (# State# s, MutableByteArray# s #)
-pcloneUnboxedM1 =  cloneUnboxedM# . fromProxy1
+psizeof## :: Unboxed e => Proxy# (proxy e) -> Int# -> Int#
+psizeof## p# c# = sizeof## (fromProxy## p#) c#
 
 --------------------------------------------------------------------------------
 
@@ -683,14 +393,14 @@ instance Unboxed Int
     {-# INLINE fromOrdered# #-}
     fromOrdered# = toOrdered#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSWORD#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I# (indexIntArray# bytes# i#)
@@ -724,14 +434,14 @@ instance Unboxed Int8
               ox01# = int2Word# 1#
           in  go# -0x80# 0# c# s3#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 1#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I8# (indexInt8Array# bytes# i#)
@@ -761,14 +471,14 @@ instance Unboxed Int16
     {-# INLINE fromOrdered# #-}
     fromOrdered# = toOrdered#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 2#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 2#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I16# (indexInt16Array# bytes# i#)
@@ -798,14 +508,14 @@ instance Unboxed Int32
     {-# INLINE fromOrdered# #-}
     fromOrdered# = toOrdered#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 4#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 4#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I32# (indexInt32Array# bytes# i#)
@@ -835,14 +545,14 @@ instance Unboxed Int64
     {-# INLINE fromOrdered# #-}
     fromOrdered# = toOrdered#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 8#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 8#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = I64# (indexInt64Array# bytes# i#)
@@ -864,14 +574,14 @@ instance Unboxed Word
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSWORD#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W# (indexWordArray# bytes# i#)
@@ -892,17 +602,17 @@ instance Unboxed Word8
     
     eqUnboxed# = bytewiseEqUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 1#, 1# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W8# (indexWord8Array# bytes# i#)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> i#; _ -> 0#}
     
     {-# INLINE readUnboxed# #-}
     readUnboxed# mbytes# i# = \ s1# -> case readWord8Array# mbytes# i# s1# of
@@ -934,17 +644,17 @@ instance Unboxed Word16
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 2#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 2#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 2#, 1# #)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W16# (indexWord16Array# bytes# i#)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 2#; _ -> 0#}
     
     {-# INLINE readUnboxed# #-}
     readUnboxed# mbytes# i# = \ s1# -> case readWord16Array# mbytes# i# s1# of
@@ -963,14 +673,14 @@ instance Unboxed Word32
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 4#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 4#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W32# (indexWord32Array# bytes# i#)
@@ -992,14 +702,14 @@ instance Unboxed Word64
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 8#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 8#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 8#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 8#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = W64# (indexWord64Array# bytes# i#)
@@ -1021,14 +731,14 @@ instance Unboxed Float
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSFLOAT#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSFLOAT#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSFLOAT#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSFLOAT#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSFLOAT#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSFLOAT#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = F# (indexFloatArray# bytes# i#)
@@ -1050,14 +760,14 @@ instance Unboxed Double
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSDOUBLE#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSDOUBLE#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSDOUBLE#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSDOUBLE#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSDOUBLE#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSDOUBLE#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = D# (indexDoubleArray# bytes# i#)
@@ -1089,8 +799,8 @@ instance (Unboxed e, Integral e) => Unboxed (Ratio e)
         fromGValue# :: Proxy# (Ratio e) -> Proxy# (Complex e)
         fromGValue# =  \ _ -> proxy#
     
-    {-# INLINE sizeof# #-}
-    sizeof# e n# = 2# *# psizeof# e n#
+    {-# INLINE sizeof## #-}
+    sizeof## e n# = 2# *# psizeof## e n#
     
     bytes# !# i# = bytes# !# i2# :% bytes# !# (i2# +# 1#) where i2# = 2# *# i#
     
@@ -1119,8 +829,8 @@ instance (Unboxed e, Num e) => Unboxed (Complex e)
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# e n# = 2# *# psizeof# e n#
+    {-# INLINE sizeof## #-}
+    sizeof## e n# = 2# *# psizeof## e n#
     
     bytes# !# i# = bytes# !# i2# :+ (bytes# !# (i2# +# 1#)) where i2# = 2# *# i#
     
@@ -1156,14 +866,14 @@ instance Unboxed (Ptr e)
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSWORD#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = Ptr (indexAddrArray# bytes# i#)
@@ -1185,14 +895,14 @@ instance Unboxed (FunPtr e)
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSWORD#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes#  !#  i# = FunPtr (indexAddrArray# bytes# i#)
@@ -1214,14 +924,14 @@ instance Unboxed (StablePtr e)
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# SIZEOF_HSWORD#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# SIZEOF_HSWORD#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# SIZEOF_HSWORD#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# SIZEOF_HSWORD#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = StablePtr (indexStablePtrArray# bytes# i#)
@@ -1303,16 +1013,16 @@ instance Unboxed Bool
   where
     filler = False
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of
       1# -> case n# `quotRemInt#` 8# of {(# q#, r# #) -> q# +# (r# /=# 0#)}
       _  -> 0#
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 1#, 8# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 1#, 8# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> 8# *# i#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> 8# *# i#; _ -> 0#}
     
     {-# INLINE newUnboxed #-}
     newUnboxed = calloc#
@@ -1431,14 +1141,14 @@ instance Unboxed Char
     eqUnboxed#   = bytewiseEqUnboxed#
     sortUnboxed# = radixSortUnboxed#
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
+    {-# INLINE sizeof## #-}
+    sizeof## _ n# = case n# ># 0# of {1# -> n# *# 4#; _ -> 0#}
     
-    {-# INLINE chunkof# #-}
-    chunkof# _ = (# 4#, 1# #)
+    {-# INLINE chunkof## #-}
+    chunkof## _ = (# 4#, 1# #)
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
+    {-# INLINE offsetof## #-}
+    offsetof## _ i# = case i# ># 0# of {1# -> quotInt# i# 4#; _ -> 0#}
     
     {-# INLINE (!#) #-}
     bytes# !# i# = C# (indexWideCharArray# bytes# i#)
@@ -1461,11 +1171,11 @@ instance Unboxed E
     
     eqUnboxed# _ _ _ _ _ _ = True
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ _ = 0#
+    {-# INLINE sizeof## #-}
+    sizeof## _ _ = 0#
     
-    {-# INLINE offsetof# #-}
-    offsetof# _ _ = 0#
+    {-# INLINE offsetof## #-}
+    offsetof## _ _ = 0#
     
     {-# INLINE (!#) #-}
     readUnboxed# = \ _ _ s# -> (# s#, E #)
@@ -1490,7 +1200,7 @@ instance (Unboxed e, Rank1 e) => Unboxed (I1 e)
         fromGValue# :: Proxy# e -> Proxy# (E :& e)
         fromGValue# =  \ _ -> proxy#
     
-    sizeof# = psizeof#
+    sizeof## = psizeof##
     
     bytes# !# i# = E :& (bytes# !# i#)
     
@@ -1511,7 +1221,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e, Shape (e' :& e), Unbox
     eqUnboxed# e xs# o1# ys# o2# n# = let r# = rank# e in peqUnboxed e xs#
       (o1# *# r#) ys# (o2# *# r#) (n# *# r#)
     
-    sizeof# e n# = psizeof# e (rank# e *# n#)
+    sizeof## e n# = psizeof## e (rank## e *# n#)
     
     bytes# !# i# = go proxy#
       where
@@ -1553,8 +1263,8 @@ instance Unboxed ()
     
     eqUnboxed# _ _ _ _ _ _ = True
     
-    {-# INLINE sizeof# #-}
-    sizeof# _ _ = 0#
+    {-# INLINE sizeof## #-}
+    sizeof## _ _ = 0#
     
     {-# INLINE (!#) #-}
     readUnboxed# = \ _ _ s# -> (# s#, () #)
@@ -1570,7 +1280,7 @@ instance Unboxed ()
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T2 e)
   where
-    sizeof# e n# = psizeof# e (2# *# n#)
+    sizeof## e n# = psizeof## e (2# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 2#) ys# (o2# *# 2#) (n# *# 2#)
     
@@ -1598,7 +1308,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T2 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T3 e)
   where
-    sizeof# e n# = psizeof# e (3# *# n#)
+    sizeof## e n# = psizeof## e (3# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 3#) ys# (o2# *# 3#) (n# *# 3#)
     
@@ -1630,7 +1340,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T3 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T4 e)
   where
-    sizeof# e n# = psizeof# e (4# *# n#)
+    sizeof## e n# = psizeof## e (4# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 4#) ys# (o2# *# 4#) (n# *# 4#)
     
@@ -1664,7 +1374,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T4 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T5 e)
   where
-    sizeof# e n# = psizeof# e (5# *# n#)
+    sizeof## e n# = psizeof## e (5# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 5#) ys# (o2# *# 5#) (n# *# 5#)
     
@@ -1704,7 +1414,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T5 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T6 e)
   where
-    sizeof# e n# = psizeof# e (6# *# n#)
+    sizeof## e n# = psizeof## e (6# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 6#) ys# (o2# *# 6#) (n# *# 6#)
     
@@ -1746,7 +1456,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T6 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T7 e)
   where
-    sizeof# e n# = psizeof# e (7# *# n#)
+    sizeof## e n# = psizeof## e (7# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 7#) ys# (o2# *# 7#) (n# *# 7#)
     
@@ -1791,7 +1501,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T7 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T8 e)
   where
-    sizeof# e n# = psizeof# e (8# *# n#)
+    sizeof## e n# = psizeof## e (8# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 8#) ys# (o2# *# 8#) (n# *# 8#)
     
@@ -1838,7 +1548,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T8 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T9 e)
   where
-    sizeof# e n# = psizeof# e (9# *# n#)
+    sizeof## e n# = psizeof## e (9# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 9#) ys# (o2# *# 9#) (n# *# 9#)
     
@@ -1887,7 +1597,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T9 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T10 e)
   where
-    sizeof# e n# = psizeof# e (10# *# n#)
+    sizeof## e n# = psizeof## e (10# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 10#) ys# (o2# *# 10#) (n# *# 10#)
     
@@ -1939,7 +1649,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T10 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T11 e)
   where
-    sizeof# e n# = psizeof# e (11# *# n#)
+    sizeof## e n# = psizeof## e (11# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 11#) ys# (o2# *# 11#) (n# *# 11#)
     
@@ -1993,7 +1703,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T11 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T12 e)
   where
-    sizeof# e n# = psizeof# e (12# *# n#)
+    sizeof## e n# = psizeof## e (12# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 12#) ys# (o2# *# 12#) (n# *# 12#)
     
@@ -2049,7 +1759,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T12 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T13 e)
   where
-    sizeof# e n# = psizeof# e (13# *# n#)
+    sizeof## e n# = psizeof## e (13# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 13#) ys# (o2# *# 13#) (n# *# 13#)
     
@@ -2108,7 +1818,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T13 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T14 e)
   where
-    sizeof# e n# = psizeof# e (14# *# n#)
+    sizeof## e n# = psizeof## e (14# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 14#) ys# (o2# *# 14#) (n# *# 14#)
     
@@ -2169,7 +1879,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T14 e)
 
 instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T15 e)
   where
-    sizeof# e n# = psizeof# e (15# *# n#)
+    sizeof## e n# = psizeof## e (15# *# n#)
     
     eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 15#) ys# (o2# *# 15#) (n# *# 15#)
     
@@ -2229,158 +1939,6 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T15 e)
         fromGValue# =  \ _ -> proxy#
     
     fromOrdered# = toOrdered#
-
---------------------------------------------------------------------------------
-
--- | 'ByteArray#' wrapper.
-data Wrap = Wrap {unwrap :: ByteArray#}
-
-{- |
-  @since 0.2.1
-  
-  Wrapped empty 'ByteArray#'.
--}
-lzero# :: Wrap
-lzero# =  runST $ ST $ \ s1# -> case newByteArray# 0# s1# of
-  (# s2#, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
-    (# s3#, arr# #) -> (# s3#, Wrap arr# #)
-
-{- |
-  @since 0.2.1
-  
-  'ByteArray#' singleton.
--}
-single# :: Unboxed e => e -> ByteArray#
-single# e = unwrap $ runST $ ST $ \ s1# -> case newUnboxed' e 1# s1# of
-  (# s2#, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
-    (# s3#, arr# #) -> (# s3#, Wrap arr# #)
-
-{- |
-  @since 0.2.1
-  
-  Create immutable 'Unboxed' array from given list.
--}
-fromList# :: Unboxed e => [e] -> ByteArray#
-fromList# es = let !(I# n#) = length es in fromListN# n# es
-
-{- |
-  @since 0.2.1
-  
-  Create immutable 'Unboxed' array from 'Foldable' stream.
--}
-fromFoldable# :: (Foldable f, Unboxed e) => f e -> (# Int, ByteArray# #)
-fromFoldable# es = unpack' $ runST $ ST $ \ s1# -> case fromFoldableM# es s1# of
-    (# s2#, n, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
-      (# s3#, arr# #) -> (# s3#, (n, Wrap arr#) #)
-  where
-    unpack' (i, Wrap arr#) = (# i, arr# #)
-
-{- |
-  @since 0.2.1
-  
-  Create immutable 'Unboxed' array from known size list.
--}
-fromListN# :: Unboxed e => Int# -> [e] -> ByteArray#
-fromListN# n# es = unwrap $ runST $ ST $ \ s1# -> case newLinearN# n# es s1# of
-  (# s2#, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
-    (# s3#, arr# #) -> (# s3#, Wrap arr# #)
-
-{- |
-  @since 0.2.1
-  
-  Create mutable 'Unboxed' array from given list.
--}
-newLinear# :: Unboxed e => [e] -> State# s
-           -> (# State# s, MutableByteArray# s #)
-newLinear# es = let !(I# n#) = length es in newLinearN# n# es
-
-{- |
-  @since 0.2.1
-  
-  Create mutable 'Unboxed' array from known size list.
--}
-newLinearN# :: Unboxed e => Int# -> [e] -> State# s
-            -> (# State# s, MutableByteArray# s #)
-newLinearN# c# es = \ s1# -> case pnewUnboxed es n# s1# of
-    (# s2#, marr# #) ->
-      let
-        go y r = \ i# s4# -> case writeUnboxed# marr# i# y s4# of
-          s5# -> if isTrue# (i# ==# n# -# 1#) then s5# else r (i# +# 1#) s5#
-      in case if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# of
-          s3# -> (# s3#, marr# #)
-  where
-    !n@(I# n#) = max 0 (I# c#)
-
-{- |
-  @since 0.2.1
-  
-  Create mutable 'Unboxed' array from 'Foldable' stream.
--}
-fromFoldableM# :: (Foldable f, Unboxed e) => f e -> State# s
-               -> (# State# s, Int, MutableByteArray# s #)
-fromFoldableM# es = \ s1# -> case pnewUnboxed es n# s1# of
-    (# s2#, marr# #) ->
-      let
-        go y r = \ i# s4# -> case writeUnboxed# marr# i# y s4# of
-          s5# -> if isTrue# (i# ==# n# -# 1#) then s5# else r (i# +# 1#) s5#
-      in case if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# of
-          s3# -> (# s3#, n, marr# #)
-  where
-    !n@(I# n#) = length es
-
-{- |
-  @since 0.2.1
-  
-  Concatenation of two 'Unboxed' arrays.
--}
-concat# :: Unboxed e => e -> ByteArray# -> Int# -> Int#
-        -> ByteArray# -> Int# -> Int# -> State# s
-        -> (# State# s, Int#, MutableByteArray# s #)
-concat# e = concat## (toProxy# e)
-
-{- |
-  @since 0.3
-  
-  Concatenation of two 'Unboxed' arrays.
--}
-concat## :: Unboxed e => Proxy# e -> ByteArray# -> Int# -> Int#
-         -> ByteArray# -> Int# -> Int# -> State# s
-         -> (# State# s, Int#, MutableByteArray# s #)
-concat## e arr1# n1# o1# arr2# n2# o2# = \ s1# -> case newUnboxed# e n# s1# of
-    (# s2#, marr# #) -> case copyUnboxed## e arr1# o1# marr# 0# n1# s2# of
-      s3# -> case copyUnboxed## e arr2# o2# marr# n1# n2# s3# of
-        s4# -> (# s4#, n#, marr# #)
-  where
-    n# = n1# +# n2#
-
--- | Proxy concatenation of two byte arrays representing 'Unboxed' structures.
-pconcat :: Unboxed e => proxy e -> ByteArray# -> Int# -> Int#
-        -> ByteArray# -> Int# -> Int# -> State# s
-        -> (# State# s, Int#, MutableByteArray# s #)
-pconcat = concat# . fromProxy
-
-{- |
-  @since 0.3
-  
-  Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
-  'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
--}
-calloc# :: Unboxed e => e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
-  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
-    s3# -> (# s3#, mbytes# #)
-
-{- |
-  @since 0.3
-  
-  Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
-  'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
--}
-calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
-         -> (# State# s, MutableByteArray# s #)
-calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
-  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
-    s3# -> (# s3#, mbytes# #)
 
 --------------------------------------------------------------------------------
 
@@ -2462,14 +2020,66 @@ writeRadixSort# e bs# tmp# idx# n# o# = h# bs# o# tmp# 0# s# 0#
 
 --------------------------------------------------------------------------------
 
-offsetof## :: Unboxed e => Proxy# e -> Int# -> Int#
-offsetof## p# = offsetof# (fromProxy# p#)
+-- | 'sizeof#' is unboxed 'sizeof'.
+{-# INLINE sizeof# #-}
+sizeof# :: Unboxed e => e -> Int# -> Int#
+sizeof# e c# = sizeof## (toProxy# e) c#
+
+{-# INLINE offsetof# #-}
+offsetof# :: Unboxed e => e -> Int# -> Int#
+offsetof# e i# = offsetof## (toProxy# e) i#
+
+{- |
+  @since 0.2.1
+  
+  Concatenation of two 'Unboxed' arrays.
+-}
+concat# :: Unboxed e => e -> ByteArray# -> Int# -> Int#
+        -> ByteArray# -> Int# -> Int# -> State# s
+        -> (# State# s, Int#, MutableByteArray# s #)
+concat# e = concat## (toProxy# e)
+
+{- |
+  @since 0.3
+  
+  Concatenation of two 'Unboxed' arrays.
+-}
+concat## :: Unboxed e => Proxy# e -> ByteArray# -> Int# -> Int#
+         -> ByteArray# -> Int# -> Int# -> State# s
+         -> (# State# s, Int#, MutableByteArray# s #)
+concat## e arr1# n1# o1# arr2# n2# o2# = \ s1# -> case newUnboxed# e n# s1# of
+    (# s2#, marr# #) -> case copyUnboxed## e arr1# o1# marr# 0# n1# s2# of
+      s3# -> case copyUnboxed## e arr2# o2# marr# n1# n2# s3# of
+        s4# -> (# s4#, n#, marr# #)
+  where
+    n# = n1# +# n2#
+
+{- |
+  @since 0.3
+  
+  Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
+  'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
+-}
+calloc# :: Unboxed e => e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
+calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
+  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
+    s3# -> (# s3#, mbytes# #)
+
+{- |
+  @since 0.3
+  
+  Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
+  'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
+-}
+calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
+         -> (# State# s, MutableByteArray# s #)
+calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
+  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
+    s3# -> (# s3#, mbytes# #)
 
 --------------------------------------------------------------------------------
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
-
-
 
 

@@ -25,7 +25,7 @@ module SDP.Unboxed.Utils
   radixSortIndexInt8#,
   
   -- * Commons
-  gcd#
+  Wrap (..), lzero#, gcd#
 )
 where
 
@@ -34,6 +34,7 @@ import GHC.ByteOrder
 #endif
 
 import GHC.Exts
+import GHC.ST
 
 #include <ghcautoconf.h>
 #include "MachDeps.h"
@@ -298,8 +299,27 @@ calloc# e# n# = let c# = e# *# n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
 
+--------------------------------------------------------------------------------
+
+-- | 'ByteArray#' wrapper.
+data Wrap = Wrap {unwrap :: ByteArray#}
+
+{- |
+  @since 0.2.1
+  
+  Wrapped empty 'ByteArray#'.
+-}
+lzero# :: Wrap
+lzero# =  runST $ ST $ \ s1# -> case newByteArray# 0# s1# of
+  (# s2#, marr# #) -> case unsafeFreezeByteArray# marr# s2# of
+    (# s3#, arr# #) -> (# s3#, Wrap arr# #)
+
+--------------------------------------------------------------------------------
+
 {-# INLINE gcd# #-}
 gcd# :: Int# -> Int# -> Int#
 gcd# a# 0# = a#
 gcd# a# b# = gcd# b# (remInt# a# b#)
+
+
 
