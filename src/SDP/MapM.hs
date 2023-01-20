@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.MapM
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -17,7 +17,7 @@
 module SDP.MapM
 (
   -- * Mutable maps
-  MapM (..), MapM1, MapM2, fromMap',
+  MapM (..), MapM1, MapM2, fromMap', unionM', differenceM', intersectionM',
   
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
@@ -257,14 +257,6 @@ class (Monad m, Eq key) => MapM m map key e | map -> m, map -> key, map -> e
     (!?>) :: map -> key -> m (Maybe e)
     es !?> i = do b <- memberM' es i; b ? Just <$> (es >! i) $ pure empty
     
-    -- | @('.?')@ is monadic version of @('.$')@.
-    (.?) :: (e -> Bool) -> map -> m (Maybe key)
-    (.?) =  fmap listToMaybe ... (*?)
-    
-    -- | @('*?')@ is monadic version of @('*$')@.
-    (*?) :: (e -> Bool) -> map -> m [key]
-    (*?) p = (select (p . snd ?+ fst) <$>) . getAssocs
-    
     -- | Create mutable map from immutable.
     fromMap :: Map map' key e => map' -> (e -> e) -> m map
     fromMap es f = newMap $ kfoldr (\ key e -> (:) (key, f e)) [] es
@@ -284,12 +276,44 @@ class (Monad m, Eq key) => MapM m map key e | map -> m, map -> key, map -> e
     fromKeyMapM es go = newMap =<< kfoldr (\ key ->
         liftA2 ((:) . (,) key) . go key
       ) (return []) es
+    
+    -- | @('.?')@ is monadic version of @('.$')@.
+    (.?) :: (e -> Bool) -> map -> m (Maybe key)
+    (.?) =  fmap listToMaybe ... (*?)
+    
+    -- | @('*?')@ is monadic version of @('*$')@.
+    (*?) :: (e -> Bool) -> map -> m [key]
+    (*?) p = (select (p . snd ?+ fst) <$>) . getAssocs
 
 --------------------------------------------------------------------------------
 
 -- | Create mutable map from another mutable.
 fromMap' :: (MapM m map' key e, MapM m map key e) => map' -> (e -> e) -> m map
 fromMap' es f = fromMapM es (return . f)
+
+{- |
+  @since 0.3
+  
+  'unionM''' without key argument.
+-}
+unionM' :: MapM m map key e => (e -> e -> e) -> map -> map -> m map
+unionM' =  unionM'' . const
+
+{- |
+  @since 0.3
+  
+  'differenceM''' without key argument.
+-}
+differenceM' :: MapM m map key e => (e -> e -> Maybe e) -> map -> map -> m map
+differenceM' =  differenceM'' . const
+
+{- |
+  @since 0.3
+  
+  'intersectionM''' without key argument.
+-}
+intersectionM' :: MapM m map key e => (e -> e -> e) -> map -> map -> m map
+intersectionM' =  intersectionM'' . const
 
 --------------------------------------------------------------------------------
 
@@ -320,6 +344,7 @@ overEx =  throw . IndexOverflow . showString "in SDP.MapM."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.MapM."
+
 
 
 
