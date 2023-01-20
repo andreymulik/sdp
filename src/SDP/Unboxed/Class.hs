@@ -15,7 +15,7 @@
 module SDP.Unboxed.Class
 (
   -- * Unboxed
-  Unboxed (..), cloneUnboxed##, calloc#, concat#, sizeof#, offsetof#,
+  Unboxed (..), cloneUnboxed##, concat#, sizeof#, offsetof#,
   asProxy#, toProxy#, fromProxy#, bytewiseEqUnboxed#, radixSortUnboxed#,
   
   -- ** Kind @(Type -> Type)@ proxies
@@ -413,7 +413,7 @@ instance Unboxed Int
     writeUnboxed# mbytes# n# (I# e#) = writeIntArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Int8
   where
@@ -454,7 +454,7 @@ instance Unboxed Int8
     writeUnboxed# mbytes# n# (I8# e#) = writeInt8Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Int16
   where
@@ -491,7 +491,7 @@ instance Unboxed Int16
     writeUnboxed# mbytes# n# (I16# e#) = writeInt16Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Int32
   where
@@ -528,7 +528,7 @@ instance Unboxed Int32
     writeUnboxed# mbytes# n# (I32# e#) = writeInt32Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Int64
   where
@@ -565,7 +565,7 @@ instance Unboxed Int64
     writeUnboxed# mbytes# n# (I64# e#) = writeInt64Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Word
   where
@@ -594,7 +594,7 @@ instance Unboxed Word
     writeUnboxed# mbytes# n# (W# e#) = writeWordArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Word8
   where
@@ -622,7 +622,7 @@ instance Unboxed Word8
     writeUnboxed# mbytes# n# (W8#  e#) = writeWord8Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
     
     sortUnboxed# _ bs# n# o# = \ s1# -> case radixSortIndex# bs# n# o# 1# s1# of
       (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
@@ -664,7 +664,7 @@ instance Unboxed Word16
     writeUnboxed# mbytes# n# (W16# e#) = writeWord16Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Word32
   where
@@ -693,7 +693,7 @@ instance Unboxed Word32
     writeUnboxed# mbytes# n# (W32# e#) = writeWord32Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Word64
   where
@@ -722,7 +722,7 @@ instance Unboxed Word64
     writeUnboxed# mbytes# n# (W64# e#) = writeWord64Array# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Float
   where
@@ -751,7 +751,7 @@ instance Unboxed Float
     writeUnboxed# mbytes# n# (F# e#) = writeFloatArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed Double
   where
@@ -780,7 +780,7 @@ instance Unboxed Double
     writeUnboxed# mbytes# n# (D# e#) = writeDoubleArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance (Unboxed e, Integral e) => Unboxed (Ratio e)
   where
@@ -886,7 +886,7 @@ instance Unboxed (Ptr e)
     writeUnboxed# mbytes# n# (Ptr e) = writeAddrArray# mbytes# n# e
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed (FunPtr e)
   where
@@ -915,7 +915,7 @@ instance Unboxed (FunPtr e)
     writeUnboxed# mbytes# n# (FunPtr e) = writeAddrArray# mbytes# n# e
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 instance Unboxed (StablePtr e)
   where
@@ -944,7 +944,7 @@ instance Unboxed (StablePtr e)
     writeUnboxed# mbytes# n# (StablePtr e) = writeStablePtrArray# mbytes# n# e
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 --------------------------------------------------------------------------------
 
@@ -1025,7 +1025,7 @@ instance Unboxed Bool
     offsetof## _ i# = case i# ># 0# of {1# -> 8# *# i#; _ -> 0#}
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
     
     {-# INLINE (!#) #-}
     bytes# !# i# = isTrue# (b# `neWord#` int2Word# 0#)
@@ -1161,7 +1161,7 @@ instance Unboxed Char
     writeUnboxed# mbytes# n# (C# e#) = writeWideCharArray# mbytes# n# e#
     
     {-# INLINE newUnboxed #-}
-    newUnboxed = calloc#
+    newUnboxed e = calloc## (toProxy# e)
 
 --------------------------------------------------------------------------------
 
@@ -2060,17 +2060,6 @@ concat## e arr1# n1# o1# arr2# n2# o2# = \ s1# -> case newUnboxed# e n# s1# of
   Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
   'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
 -}
-calloc# :: Unboxed e => e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-calloc# e n# = let c# = sizeof# e n# in \ s1# -> case newByteArray# c# s1# of
-  (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
-    s3# -> (# s3#, mbytes# #)
-
-{- |
-  @since 0.3
-  
-  Allocate new mutable byte array and fill it by zero. Note that 'calloc#' use
-  'setByteArray#', not 'fillByteArrayOff#' or 'fillByteArray#'.
--}
 calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
          -> (# State# s, MutableByteArray# s #)
 calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
@@ -2081,5 +2070,6 @@ calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
+
 
 

@@ -29,7 +29,7 @@ module SDP.Unboxed
   pcloneUnboxedM1,
   
   -- * Wrap helpers
-  Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#, calloc#,
+  Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#,
   newLinear#, newLinearN#, fromFoldableM#, concat#, pconcat,
   
   -- * Byte order
