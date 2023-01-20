@@ -191,6 +191,7 @@ class Eq e => Unboxed e
         go  c# = \ s2# -> go (c# -# 1#) (writeUnboxed# mbytes# c# e s2#)
     
     {-# INLINE fillByteArrayOff# #-}
+    -- | Fill unboxed array by 'filler'.
     fillByteArrayOff# :: MutableByteArray# s -> Int# -> Int# -> e -> State# s -> State# s
     fillByteArrayOff# =  defaultFillByteArrayOff#
     
@@ -257,6 +258,11 @@ class Eq e => Unboxed e
             elem# = indexWord8Array## bytes# o#
             hash# = prod# `xor#` elem#
     
+    {- |
+      @since 0.3
+      
+      Sort unboxed array.
+    -}
     sortUnboxed# :: Proxy# e -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
     
     {- |
@@ -2059,7 +2065,6 @@ calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
 calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
-
 
 
 
