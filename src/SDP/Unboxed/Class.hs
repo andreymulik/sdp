@@ -80,14 +80,14 @@ class Eq e => Unboxed e
     {- |
       @since 0.3
       
-      @offsetof## e o#@ returns the index of the element in the unboxed array
+      @'offsetof##' e o#@ returns the index of the element in the unboxed array
       that the offset @o#@ corresponds to (in bytes).
       
       @
-        offsetof## e (sizeof## e (8# *# i#)) === 8# *# i#
+        'offsetof##' e ('sizeof##' e (8# *# i#)) === 8# *# i#
         
-        offsetof##       False   3# === 24#
-        offsetof## (0 :: Int32) 12# ===  3#
+        'offsetof##'       'False'   3# === 24#
+        'offsetof##' (0 :: 'Int32') 12# ===  3#
       @
     -}
     {-# INLINE offsetof## #-}
