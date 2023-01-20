@@ -17,7 +17,7 @@ module SDP.Unboxed
   
   -- * Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
-  bytewiseEqUnboxed#, radixSortUnboxed#, copyUnboxed#, copyUnboxedM#,
+  bytewiseEqUnboxed##, radixSortUnboxed#, copyUnboxed#, copyUnboxedM#,
   sizeof, offsetof, chunkof,
   
   -- ** Kind @(Type -> Type)@ proxies

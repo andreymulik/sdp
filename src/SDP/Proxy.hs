@@ -19,8 +19,6 @@ module SDP.Proxy
 )
 where
 
-import Data.Proxy
-
 import GHC.Exts
 
 import Control.Exception.SDP
@@ -55,7 +53,7 @@ fromProxy =  \ _ -> unreachEx "fromProxy: inappropriate use, (fromProxy e)\
   
   Returns 'proxy#'.
 -}
-toProxy# :: Proxy e -> Proxy# e
+toProxy# :: proxy e -> Proxy# e
 toProxy# =  \ _ -> proxy#
 
 {- |
@@ -63,7 +61,7 @@ toProxy# =  \ _ -> proxy#
   
   Returns 'UnreachableException' (with function name for debug) of suitable type.
 -}
-fromProxy# :: Proxy# e -> Proxy e
+fromProxy# :: Proxy# e -> proxy e
 fromProxy# =  \ _ -> unreachEx "fromProxy#: inappropriate use, (fromProxy# e)\
                               \ should never be evaluated."
 
@@ -129,7 +127,4 @@ fromProxy1 =  \ _ -> unreachEx "fromProxy1: inappropriate use, (fromProxy1 e)\
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "SDP.Proxy."
-
-
-
 

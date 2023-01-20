@@ -19,7 +19,7 @@ module SDP.Unboxed.Class
   
   -- * Unboxed
   Unboxed (..), cloneUnboxed##, concat#, sizeof#, offsetof#,
-  bytewiseEqUnboxed#, radixSortUnboxed#, pnewUnboxed, peqUnboxed
+  bytewiseEqUnboxed##, radixSortUnboxed#, pnewUnboxed, peqUnboxed
 )
 where
 
@@ -110,12 +110,12 @@ class Eq e => Unboxed e
     {- |
       @since 0.3
       
-      @eqUnboxed# e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
+      @eqUnboxed## e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
       @xs#@ and @ys#@ beginning from @ox#@ and @oy#@ elements resp.
     -}
-    {-# INLINE eqUnboxed# #-}
-    eqUnboxed# :: e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
-    eqUnboxed# =  defaultEqUnboxed#
+    {-# INLINE eqUnboxed## #-}
+    eqUnboxed## :: Proxy# e -> ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Bool
+    eqUnboxed## =  defaulteqUnboxed##
     
     -- | Unsafe 'ByteArray#' reader (by index) with overloaded result type.
     (!#) :: ByteArray# -> Int# -> e
@@ -346,7 +346,7 @@ cloneUnboxed## e bytes# o# c# = unwrap $ runST $ ST $
 
 peqUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
            -> ByteArray# -> Int# -> Int# -> Bool
-peqUnboxed =  eqUnboxed# . fromProxy
+peqUnboxed e = eqUnboxed## (toProxy# e)
 
 {- |
   @since 0.2
@@ -362,6 +362,10 @@ pnewUnboxed =  newUnboxed . fromProxy
 psizeof## :: Unboxed e => Proxy# (proxy e) -> Int# -> Int#
 psizeof## p# c# = sizeof## (unliftProxy## p#) c#
 
+peqUnboxed# :: Unboxed e => Proxy# (proxy e) -> ByteArray# -> Int#
+            -> ByteArray# -> Int# -> Int# -> Bool
+peqUnboxed# e = eqUnboxed## (unliftProxy## e)
+
 --------------------------------------------------------------------------------
 
 {- Numeric instances. -}
@@ -370,7 +374,7 @@ instance Unboxed Int
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     toOrdered# _  _  0# _  = \ s1# -> s1#
@@ -407,7 +411,7 @@ instance Unboxed Int8
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed## = bytewiseEqUnboxed##
     
     sortUnboxed# _ bs# n# o# = \ s1# -> case radixSortIndexInt8# bs# n# o# s1# of
       (# s2#, idx# #) -> case readWordArray# idx# 0# s2# of
@@ -448,7 +452,7 @@ instance Unboxed Int16
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     toOrdered# _  _  0# _  = \ s1# -> s1#
@@ -485,7 +489,7 @@ instance Unboxed Int32
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     toOrdered# _  _  0# _  = \ s1# -> s1#
@@ -522,7 +526,7 @@ instance Unboxed Int64
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     toOrdered# _  _  0# _  = \ s1# -> s1#
@@ -559,7 +563,7 @@ instance Unboxed Word
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -588,7 +592,7 @@ instance Unboxed Word8
   where
     filler = 0
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed## = bytewiseEqUnboxed##
     
     {-# INLINE sizeof## #-}
     sizeof## _ n# = case n# ># 0# of {1# -> n#; _ -> 0#}
@@ -629,7 +633,7 @@ instance Unboxed Word16
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -658,7 +662,7 @@ instance Unboxed Word32
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -687,7 +691,7 @@ instance Unboxed Word64
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -716,7 +720,7 @@ instance Unboxed Float
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -745,7 +749,7 @@ instance Unboxed Double
   where
     filler = 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -774,7 +778,7 @@ instance (Unboxed e, Integral e) => Unboxed (Ratio e)
   where
     filler = 0 :% 1
     
-    eqUnboxed# = bytewiseEqUnboxed#
+    eqUnboxed## = bytewiseEqUnboxed##
     
     sortUnboxed# e = radixSortUnboxed# (fromGValue# e)
       where
@@ -814,7 +818,7 @@ instance (Unboxed e, Num e) => Unboxed (Complex e)
   where
     filler = 0 :+ 0
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -851,7 +855,7 @@ instance Unboxed (Ptr e)
   where
     filler = NULL
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -880,7 +884,7 @@ instance Unboxed (FunPtr e)
   where
     filler = NULL
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -909,7 +913,7 @@ instance Unboxed (StablePtr e)
   where
     filler = NULL
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -941,8 +945,8 @@ instance Unboxed (StablePtr e)
 #define deriving_instance_Unboxed(Type)\
 instance Unboxed Type where\
 {\
-  filler     = Type filler;\
-  eqUnboxed# = bytewiseEqUnboxed#;\
+  filler      = Type filler;\
+  eqUnboxed## = bytewiseEqUnboxed##;\
   arr# !# i# = Type ( arr# !# i# );\
   sizeof## _ = sizeof## (proxy# :: Proxy# Type);\
   \
@@ -1126,7 +1130,7 @@ instance Unboxed Char
   where
     filler = '\0'
     
-    eqUnboxed#   = bytewiseEqUnboxed#
+    eqUnboxed##  = bytewiseEqUnboxed##
     sortUnboxed# = radixSortUnboxed#
     
     {-# INLINE sizeof## #-}
@@ -1157,7 +1161,7 @@ instance Unboxed E
   where
     filler = E
     
-    eqUnboxed# _ _ _ _ _ _ = True
+    eqUnboxed## _ _ _ _ _ _ = True
     
     {-# INLINE sizeof## #-}
     sizeof## _ _ = 0#
@@ -1181,7 +1185,7 @@ instance (Unboxed e, Rank1 e) => Unboxed (I1 e)
   where
     filler = E :& filler
     
-    eqUnboxed# = peqUnboxed
+    eqUnboxed## = peqUnboxed#
     
     sortUnboxed# e = sortUnboxed# (fromGValue# e)
       where
@@ -1206,7 +1210,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e, Shape (e' :& e), Unbox
   where
     filler = filler :& filler
     
-    eqUnboxed# e xs# o1# ys# o2# n# = let r# = rank# e in peqUnboxed e xs#
+    eqUnboxed## e xs# o1# ys# o2# n# = let r# = rank## e in peqUnboxed# e xs#
       (o1# *# r#) ys# (o2# *# r#) (n# *# r#)
     
     sizeof## e n# = psizeof## e (rank## e *# n#)
@@ -1249,7 +1253,7 @@ instance Unboxed ()
   where
     filler = ()
     
-    eqUnboxed# _ _ _ _ _ _ = True
+    eqUnboxed## _ _ _ _ _ _ = True
     
     {-# INLINE sizeof## #-}
     sizeof## _ _ = 0#
@@ -1270,7 +1274,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T2 e)
   where
     sizeof## e n# = psizeof## e (2# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 2#) ys# (o2# *# 2#) (n# *# 2#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 2#) ys# (o2# *# 2#) (n# *# 2#)
     
     bytes# !# n# = let o# = 2# *# n# in (bytes# !# o#, bytes# !# (o#+#1#))
     
@@ -1298,7 +1302,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T3 e)
   where
     sizeof## e n# = psizeof## e (3# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 3#) ys# (o2# *# 3#) (n# *# 3#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 3#) ys# (o2# *# 3#) (n# *# 3#)
     
     bytes# !# n# =
       let o# = 3# *# n#
@@ -1330,7 +1334,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T4 e)
   where
     sizeof## e n# = psizeof## e (4# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 4#) ys# (o2# *# 4#) (n# *# 4#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 4#) ys# (o2# *# 4#) (n# *# 4#)
     
     bytes# !# n# =
       let o# = 4# *# n#
@@ -1364,7 +1368,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T5 e)
   where
     sizeof## e n# = psizeof## e (5# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 5#) ys# (o2# *# 5#) (n# *# 5#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 5#) ys# (o2# *# 5#) (n# *# 5#)
     
     bytes# !# n# =
       let o# = 5# *# n#
@@ -1404,7 +1408,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T6 e)
   where
     sizeof## e n# = psizeof## e (6# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 6#) ys# (o2# *# 6#) (n# *# 6#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 6#) ys# (o2# *# 6#) (n# *# 6#)
     
     bytes# !# n# =
       let o# = 6# *# n#
@@ -1446,7 +1450,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T7 e)
   where
     sizeof## e n# = psizeof## e (7# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 7#) ys# (o2# *# 7#) (n# *# 7#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 7#) ys# (o2# *# 7#) (n# *# 7#)
     
     bytes# !# n# =
       let o# = 7# *# n#
@@ -1491,7 +1495,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T8 e)
   where
     sizeof## e n# = psizeof## e (8# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 8#) ys# (o2# *# 8#) (n# *# 8#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 8#) ys# (o2# *# 8#) (n# *# 8#)
     
     bytes# !# n# =
       let o# = 8# *# n#
@@ -1538,7 +1542,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T9 e)
   where
     sizeof## e n# = psizeof## e (9# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 9#) ys# (o2# *# 9#) (n# *# 9#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 9#) ys# (o2# *# 9#) (n# *# 9#)
     
     bytes# !# n# =
       let o# = 9# *# n#
@@ -1587,7 +1591,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T10 e)
   where
     sizeof## e n# = psizeof## e (10# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 10#) ys# (o2# *# 10#) (n# *# 10#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 10#) ys# (o2# *# 10#) (n# *# 10#)
     
     bytes# !# n# =
       let o# = 10# *# n#
@@ -1639,7 +1643,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T11 e)
   where
     sizeof## e n# = psizeof## e (11# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 11#) ys# (o2# *# 11#) (n# *# 11#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 11#) ys# (o2# *# 11#) (n# *# 11#)
     
     bytes# !# n# =
       let o# = 11# *# n#
@@ -1693,7 +1697,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T12 e)
   where
     sizeof## e n# = psizeof## e (12# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 12#) ys# (o2# *# 12#) (n# *# 12#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 12#) ys# (o2# *# 12#) (n# *# 12#)
     
     bytes# !# n# =
       let o# = 12# *# n#
@@ -1749,7 +1753,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T13 e)
   where
     sizeof## e n# = psizeof## e (13# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 13#) ys# (o2# *# 13#) (n# *# 13#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 13#) ys# (o2# *# 13#) (n# *# 13#)
     
     bytes# !# n# =
       let o# = 13# *# n#
@@ -1808,7 +1812,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T14 e)
   where
     sizeof## e n# = psizeof## e (14# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 14#) ys# (o2# *# 14#) (n# *# 14#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 14#) ys# (o2# *# 14#) (n# *# 14#)
     
     bytes# !# n# =
       let o# = 14# *# n#
@@ -1869,7 +1873,7 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e) => Unboxed (T15 e)
   where
     sizeof## e n# = psizeof## e (15# *# n#)
     
-    eqUnboxed# e xs# o1# ys# o2# n# = peqUnboxed e xs# (o1# *# 15#) ys# (o2# *# 15#) (n# *# 15#)
+    eqUnboxed## e xs# o1# ys# o2# n# = peqUnboxed# e xs# (o1# *# 15#) ys# (o2# *# 15#) (n# *# 15#)
     
     bytes# !# n# =
       let o# = 15# *# n#
@@ -1948,28 +1952,28 @@ defaultFillByteArrayOff# bs# o# c# e = go# o#
 {- |
   @since 0.3
   
-  Recommended 'eqUnboxed#' implementation.
+  Recommended 'eqUnboxed##' implementation.
 -}
-bytewiseEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int#
-                   -> ByteArray# -> Int# -> Int# -> Bool
-bytewiseEqUnboxed# e xs# o1# ys# o2# c# = case c# <# 0# of
+bytewiseEqUnboxed## :: Unboxed e => Proxy# e -> ByteArray# -> Int#
+                    -> ByteArray# -> Int# -> Int# -> Bool
+bytewiseEqUnboxed## e xs# o1# ys# o2# c# = case c# <# 0# of
   1# -> True
-  _  -> let i1# = sizeof# e o1#; i2# = sizeof# e o2#; n# = sizeof# e c#
+  _  -> let i1# = sizeof## e o1#; i2# = sizeof## e o2#; n# = sizeof## e c#
         in  isTrue# (compareByteArrays# xs# i1# ys# i2# n# ==# 0#)
 
 {- |
   @since 0.3
   
-  Default 'eqUnboxed#' implemetation.
+  Default 'eqUnboxed##' implemetation.
 -}
-defaultEqUnboxed# :: Unboxed e => e -> ByteArray# -> Int#
-                  -> ByteArray# -> Int# -> Int# -> Bool
-defaultEqUnboxed# e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
+defaulteqUnboxed## :: Unboxed e => Proxy# e -> ByteArray# -> Int#
+                   -> ByteArray# -> Int# -> Int# -> Bool
+defaulteqUnboxed## e xs# xi# ys# yi# n# = case n# ># 0# of {1# -> go xi# yi# n# 1#; _ -> True}
   where
     go  _   _  _  0# = False
     go  _   _  0# b# = isTrue# b#
     go xo# yo# i# b# = go (xo# +# 1#) (yo# +# 1#) (i# -# 1#)
-      (case asTypeOf (xs# !# xo#) e == (ys# !# yo#) of {True -> b#; _ -> 0#})
+      (case asProxy## e (xs# !# xo#) == (ys# !# yo#) of {True -> b#; _ -> 0#})
 
 --------------------------------------------------------------------------------
 
@@ -2055,6 +2059,7 @@ calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
 calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
+
 
 
 
