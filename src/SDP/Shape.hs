@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Shape
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -16,13 +16,13 @@ module SDP.Shape
   -- * Exports
   module SDP.Finite,
   module SDP.Tuple,
+  module SDP.Proxy,
   
   module Data.Word,
   module Data.Int,
   
   -- * Shapes
   Shape (..), GIndex, toGBounds, fromGBounds, rank, rank#,
-  asProxy#, toProxy#, fromProxy#,
   
   -- ** Rank constraints
   Rank0, Rank1, Rank2,  Rank3,  Rank4,  Rank5,  Rank6,  Rank7,
@@ -32,6 +32,7 @@ where
 
 import SDP.Finite
 import SDP.Tuple
+import SDP.Proxy
 
 import Data.Word
 import Data.Int
@@ -41,8 +42,6 @@ import GHC.Types
 import GHC.Exts
 
 import Foreign.C.Types
-
-import Control.Exception.SDP
 
 default ()
 
@@ -431,35 +430,6 @@ rank i = I# (rank# i)
 rank# :: Shape i => i -> Int#
 rank# i = rank## (toProxy# i)
 
---------------------------------------------------------------------------------
 
-{- |
-  @since 0.3
-  
-  Returns second argument.
--}
-asProxy# :: Proxy# e -> e -> e
-asProxy# =  \ _ x -> x
 
-{- |
-  @since 0.3
-  
-  Returns 'proxy#'.
--}
-toProxy# :: e -> Proxy# e
-toProxy# =  \ _ -> proxy#
-
-{- |
-  @since 0.3
-  
-  Returns 'UnreachableException' (with function name for debug) of suitable type.
--}
-fromProxy# :: Proxy# e -> e
-fromProxy# =  \ _ -> unreachEx "fromProxy#: inappropriate use of the fromProxy#\
-                              \ function: the value should never be used."
-
---------------------------------------------------------------------------------
-
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "SDP.Shape."
 

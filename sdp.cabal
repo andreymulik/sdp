@@ -82,6 +82,7 @@ Library
     SDP.Finite
     SDP.Tuple
     SDP.Ratio
+    SDP.Proxy
     
     -- Sorting
     SDP.SortM.Insertion
@@ -164,7 +165,6 @@ Library
     
     -- Unboxed class with instances
     SDP.Unboxed.Class
-
 
 
 

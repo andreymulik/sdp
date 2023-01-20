@@ -12,15 +12,16 @@
 -}
 module SDP.Unboxed
 (
+  -- * Export
+  module SDP.Proxy,
+  
   -- * Unboxed
   Unboxed (..), cloneUnboxed#, cloneUnboxedM#, thawUnboxed#, freezeUnboxed#,
-  bytewiseEqUnboxed#, radixSortUnboxed#, asProxy#, toProxy#, fromProxy#,
+  bytewiseEqUnboxed#, radixSortUnboxed#, copyUnboxed#, copyUnboxedM#,
   sizeof, offsetof, chunkof,
   
-  copyUnboxed#, copyUnboxedM#,
-  
   -- ** Kind @(Type -> Type)@ proxies
-  fromProxy, psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
+  psizeof#, psizeof, pchunkof, pchunkof#, poffsetof#, poffsetof,
   pnewUnboxed, pcopyUnboxed, pcopyUnboxedM, pcloneUnboxed, pcloneUnboxedM,
   pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#, peqUnboxed,
   
@@ -39,6 +40,7 @@ where
 
 import SDP.Unboxed.Class
 import SDP.Unboxed.Utils
+import SDP.Proxy
 
 import GHC.Exts
 import GHC.ST
@@ -366,14 +368,6 @@ pconcat = concat# . fromProxy
 --------------------------------------------------------------------------------
 
 {- |
-  Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
-  for debug, since @sdp-0.3@) of suitable type.
--}
-fromProxy1 :: m (proxy e) -> e
-fromProxy1 =  \ _ -> unreachEx "fromProxy1: inappropriate use of the @fromProxy1@\
-                              \ function: the value should never be used."
-
-{- |
   @since 0.2
   
   Kind @(Type -> Type -> Type)@ proxy version of 'newUnboxed'.
@@ -422,4 +416,5 @@ pcloneUnboxedM1 =  cloneUnboxedM# . fromProxy1
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
+
 

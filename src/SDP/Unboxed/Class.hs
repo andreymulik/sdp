@@ -14,12 +14,12 @@
 -}
 module SDP.Unboxed.Class
 (
+  -- * Exports
+  module SDP.Proxy,
+  
   -- * Unboxed
   Unboxed (..), cloneUnboxed##, concat#, sizeof#, offsetof#,
-  asProxy#, toProxy#, fromProxy#, bytewiseEqUnboxed#, radixSortUnboxed#,
-  
-  -- ** Kind @(Type -> Type)@ proxies
-  fromProxy, pnewUnboxed, peqUnboxed,
+  bytewiseEqUnboxed#, radixSortUnboxed#, pnewUnboxed, peqUnboxed
 )
 where
 
@@ -29,6 +29,7 @@ import SDP.Nullable
 import SDP.Finite
 import SDP.Shape
 import SDP.Ratio
+import SDP.Proxy
 
 import SDP.Unboxed.Utils
 
@@ -41,8 +42,6 @@ import GHC.ST
 import Data.Complex
 
 import Foreign.C.Types
-
-import Control.Exception.SDP
 
 #include <ghcautoconf.h>
 #include "MachDeps.h"
@@ -345,14 +344,6 @@ cloneUnboxed## e bytes# o# c# = unwrap $ runST $ ST $
 
 --------------------------------------------------------------------------------
 
-{- |
-  Returns 'undefined' (sdp < 0.3) or 'UnreachableException' (with function name
-  for debug, since @sdp-0.3@) of suitable type.
--}
-fromProxy :: proxy e -> e
-fromProxy =  \ _ -> unreachEx "fromProxy: inappropriate use of the @fromProxy@\
-                            \ function: the value should never be used."
-
 peqUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
            -> ByteArray# -> Int# -> Int# -> Bool
 peqUnboxed =  eqUnboxed# . fromProxy
@@ -367,9 +358,6 @@ pnewUnboxed :: Unboxed e => proxy e -> Int# -> State# s
 pnewUnboxed =  newUnboxed . fromProxy
 
 --------------------------------------------------------------------------------
-
-fromProxy## :: Proxy# (proxy e) -> Proxy# e
-fromProxy## =  \ _ -> proxy#
 
 psizeof## :: Unboxed e => Proxy# (proxy e) -> Int# -> Int#
 psizeof## p# c# = sizeof## (fromProxy## p#) c#
@@ -2039,6 +2027,8 @@ concat# :: Unboxed e => e -> ByteArray# -> Int# -> Int#
         -> (# State# s, Int#, MutableByteArray# s #)
 concat# e = concat## (toProxy# e)
 
+--------------------------------------------------------------------------------
+
 {- |
   @since 0.3
   
@@ -2065,11 +2055,6 @@ calloc## :: Unboxed e => Proxy# e -> Int# -> State# s
 calloc## e n# = let c# = sizeof## e n# in \ s1# -> case newByteArray# c# s1# of
   (# s2#, mbytes# #) -> case setByteArray# mbytes# 0# c# 0# s2# of
     s3# -> (# s3#, mbytes# #)
-
---------------------------------------------------------------------------------
-
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
 
 
 
