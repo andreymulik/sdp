@@ -95,7 +95,7 @@ offsetof e (I# i#) = I# (offsetof# e i#)
   @
 -}
 chunkof# :: Unboxed e => e -> (# Int#, Int# #)
-chunkof# e = chunkof## (toProxy# e)
+chunkof# e = chunkof## (toProxy## e)
 
 --------------------------------------------------------------------------------
 
@@ -184,7 +184,7 @@ pcloneUnboxed =  cloneUnboxed1#
   of @bytes#@ beginning from @o#@-th element.
 -}
 cloneUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> Int# -> ByteArray#
-cloneUnboxed# e = cloneUnboxed## (toProxy# e)
+cloneUnboxed# e = cloneUnboxed## (toProxy## e)
 
 {- |
   @since 0.2.1
@@ -344,7 +344,7 @@ freezeUnboxed# e mbytes# n# = \ s1# -> case cloneUnboxedM# e mbytes# 0# n# s1# o
 -}
 copyUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> MutableByteArray# s
              -> Int# -> Int# -> State# s -> State# s
-copyUnboxed# e = copyUnboxed## (toProxy# e)
+copyUnboxed# e = copyUnboxed## (toProxy## e)
 
 {- |
   @'copyUnboxedM#' e msrc\# o1\# mbytes\# o2\# n\#@ unsafely writes elements
@@ -354,7 +354,7 @@ copyUnboxed# e = copyUnboxed## (toProxy# e)
 copyUnboxedM# :: Unboxed e => e -> MutableByteArray# s -> Int#
               -> MutableByteArray# s -> Int# -> Int#
               -> State# s -> State# s
-copyUnboxedM# e = copyUnboxedM## (toProxy# e)
+copyUnboxedM# e = copyUnboxedM## (toProxy## e)
 
 --------------------------------------------------------------------------------
 

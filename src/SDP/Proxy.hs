@@ -15,7 +15,7 @@ module SDP.Proxy
   fromProxy, toProxy, fromProxy1, toProxy1,
   
   -- * Proxy\#
-  toProxy#, fromProxy#, asProxy#, unliftProxy##
+  toProxy##, fromProxy#, asProxy#, unliftProxy##
 )
 where
 
@@ -53,8 +53,8 @@ toProxy =  \ _ -> unreachEx "toProxy: inappropriate use, (toProxy e)\
   
   Returns 'proxy#'.
 -}
-toProxy# :: e -> Proxy# e
-toProxy# =  \ _ -> proxy#
+toProxy## :: e -> Proxy# e
+toProxy## =  \ _ -> proxy#
 
 {- |
   @since 0.3

@@ -1322,7 +1322,7 @@ unsafePtrToSBytes# (c, ptr) = do
 -- | Calculate hash 'SBytes#' using 'hashUnboxedWith'.
 hashSBytesWith# :: Int -> SBytes# e -> Int
 hashSBytesWith# (I# salt#) es@(SBytes# (I# c#) (I# o#) bytes#) =
-  I# (hashUnboxedWith (toProxy# (fromProxy es)) c# o# bytes# salt#)
+  I# (hashUnboxedWith (toProxy## (fromProxy es)) c# o# bytes# salt#)
 
 {- |
   @since 0.3

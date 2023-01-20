@@ -428,7 +428,7 @@ rank i = I# (rank# i)
   Unboxed 'rank' of given 'Shape' type, see 'rank##'.
 -}
 rank# :: Shape i => i -> Int#
-rank# i = rank## (toProxy# i)
+rank# i = rank## (toProxy## i)
 
 
 
