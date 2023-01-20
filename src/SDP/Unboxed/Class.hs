@@ -110,7 +110,7 @@ class Eq e => Unboxed e
     {- |
       @since 0.3
       
-      @eqUnboxed## e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
+      @'eqUnboxed##' e xs# ox# ys# oy# n#@ compares two byte @n#@-element arrays
       @xs#@ and @ys#@ beginning from @ox#@ and @oy#@ elements resp.
     -}
     {-# INLINE eqUnboxed## #-}
@@ -148,7 +148,7 @@ class Eq e => Unboxed e
           (# s2#, res #) -> (# s2#, asProxy## e res #)
     
     {- |
-      @sinze 0.3
+      @since 0.3
       
       Unsafe reader for unboxed data (by offset).
     -}
@@ -338,8 +338,8 @@ class Eq e => Unboxed e
 {- |
   @since 0.3
   
-  @cloneUnboxed# e bytes# o# c#@ creates new @c#@-element length immutable slice
-  of @bytes#@ beginning from @o#@-th element.
+  @'cloneUnboxed#' e bytes# o# c#@ creates new @c#@-element length immutable
+  slice of @bytes#@ beginning from @o#@-th element.
 -}
 cloneUnboxed## :: Unboxed e => Proxy# e -> ByteArray# -> Int# -> Int# -> ByteArray#
 cloneUnboxed## e bytes# o# c# = unwrap $ runST $ ST $
@@ -2024,6 +2024,11 @@ sizeof# :: Unboxed e => e -> Int# -> Int#
 sizeof# e c# = sizeof## (toProxy## e) c#
 
 {-# INLINE offsetof# #-}
+{- |
+  @since 0.3
+  
+  See 'offsetof##'.
+-}
 offsetof# :: Unboxed e => e -> Int# -> Int#
 offsetof# e i# = offsetof## (toProxy## e) i#
 

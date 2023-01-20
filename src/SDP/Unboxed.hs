@@ -48,7 +48,7 @@ default ()
 
 --------------------------------------------------------------------------------
 
--- | See 'sizeof#'.
+-- | See 'sizeof##'.
 {-# INLINE sizeof #-}
 sizeof :: Unboxed e => e -> Int -> Int
 sizeof e (I# c#) = I# (sizeof# e c#)
@@ -56,7 +56,7 @@ sizeof e (I# c#) = I# (sizeof# e c#)
 {- |
   @since 0.3
   
-  See 'chunkof#'.
+  See 'chunkof##'.
 -}
 {-# INLINE chunkof #-}
 chunkof :: Unboxed e => e -> (Int, Int)
@@ -65,7 +65,7 @@ chunkof e = case chunkof# e of (# l#, c# #) -> (I# l#, I# c#)
 {- |
   @since 0.3
   
-  See 'offsetof#'.
+  See 'offsetof##'.
 -}
 {-# INLINE offsetof #-}
 offsetof :: Unboxed e => e -> Int -> Int
@@ -123,14 +123,14 @@ poffsetof =  offsetof . fromProxy
 {- |
   @since 0.2.1
   
-  'psizeof#' is proxy version of 'sizeof#'.
+  'psizeof#' is proxy version of 'sizeof##'.
 -}
 psizeof# :: Unboxed e => proxy e -> Int# -> Int#
 psizeof# =  sizeof# . fromProxy
 {- |
   @since 0.3
   
-  'pchunkof#' is proxy version of 'chunkof#'.
+  'pchunkof#' is proxy version of 'chunkof##'.
 -}
 pchunkof# :: Unboxed e => proxy e -> (# Int#, Int# #)
 pchunkof# e = chunkof# (fromProxy e)
@@ -180,8 +180,8 @@ pcloneUnboxed =  cloneUnboxed1#
 {- |
   @since 0.2
   
-  @cloneUnboxed# e bytes# o# c#@ creates new @c#@-element length immutable slice
-  of @bytes#@ beginning from @o#@-th element.
+  @'cloneUnboxed#' e bytes# o# c#@ creates new @c#@-element length immutable
+  slice of @bytes#@ beginning from @o#@-th element.
 -}
 cloneUnboxed# :: Unboxed e => e -> ByteArray# -> Int# -> Int# -> ByteArray#
 cloneUnboxed# e = cloneUnboxed## (toProxy## e)
@@ -303,8 +303,8 @@ fromFoldableM# es = \ s1# -> case pnewUnboxed es n# s1# of
 {- |
   @since 0.2.1
   
-  @cloneUnboxedM# e mbytes# o# c#@ creates new @c#@-element length mutable slice
-  of @bytes#@ beginning from @o#@-th element.
+  @'cloneUnboxedM#' e mbytes# o# c#@ creates new @c#@-element length mutable
+  slice of @bytes#@ beginning from @o#@-th element.
 -}
 cloneUnboxedM# :: Unboxed e => e -> MutableByteArray# s -> Int# -> Int#
                -> State# s -> (# State# s, MutableByteArray# s #)
