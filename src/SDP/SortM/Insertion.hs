@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.SortM.Insertion
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -48,7 +48,7 @@ insertionSortBy cmp es = do n <- getSizeOf es; unsafeInsertionSort cmp es 0 0 (n
 --------------------------------------------------------------------------------
 
 {- |
-  @unsafeInsertionSort cmp es b s e@ is internal sorting procedure, where
+  @'unsafeInsertionSort' cmp es b s e@ is internal sorting procedure, where
   @cmp@ - compare function, @es@ - data structure, @[b .. s]@ - sorted range,
   @[b .. e]@ - sortable range.
 -}

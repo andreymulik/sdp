@@ -350,6 +350,11 @@ cloneUnboxed## e bytes# o# c# = unwrap $ runST $ ST $
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+  
+  See 'eqUnboxed##'.
+-}
 peqUnboxed :: Unboxed e => proxy e -> ByteArray# -> Int#
            -> ByteArray# -> Int# -> Int# -> Bool
 peqUnboxed e = eqUnboxed## (toProxy# e)
@@ -365,9 +370,19 @@ pnewUnboxed =  newUnboxed . fromProxy
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+  
+  See 'sizeof##'.
+-}
 psizeof## :: Unboxed e => Proxy# (proxy e) -> Int# -> Int#
 psizeof## p# c# = sizeof## (unliftProxy## p#) c#
 
+{- |
+  @since 0.3
+  
+  See 'eqUnboxed##'.
+-}
 peqUnboxed# :: Unboxed e => Proxy# (proxy e) -> ByteArray# -> Int#
             -> ByteArray# -> Int# -> Int# -> Bool
 peqUnboxed# e = eqUnboxed## (unliftProxy## e)
