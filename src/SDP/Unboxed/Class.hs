@@ -145,7 +145,7 @@ class Eq e => Unboxed e
     readUnboxed# mbytes# i# = go proxy#
       where
         go e = \ s1# -> case readUnboxedOff# mbytes# (sizeof## e i#) s1# of
-          (# s2#, res #) -> (# s2#, asProxy# e res #)
+          (# s2#, res #) -> (# s2#, asProxy## e res #)
     
     {- |
       @sinze 0.3
@@ -157,7 +157,7 @@ class Eq e => Unboxed e
     readUnboxedOff# mbytes# o# = go proxy#
       where
         go e = \ s1# -> case (!>#) mbytes# (offsetof## e o#) s1# of
-          (# s2#, res #) -> (# s2#, asProxy# e res #)
+          (# s2#, res #) -> (# s2#, asProxy## e res #)
     
     {-# INLINE writeByteArray# #-}
     -- | Unsafe 'MutableByteArray#' writer (by index).
@@ -206,7 +206,7 @@ class Eq e => Unboxed e
       First argument used as type variable.
     -}
     newUnboxed# :: Proxy# e -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-    newUnboxed# e = newUnboxed' (asProxy# e filler)
+    newUnboxed# e = newUnboxed' (asProxy## e filler)
     
     {-# INLINE newUnboxed' #-}
     {- |
@@ -1080,12 +1080,12 @@ instance Unboxed Bool
         ob# = 8# -# bo#; b# = bo# +# n#
     
     copyUnboxed## e bytes# o1# mbytes# o2# c# = if isTrue# (c# <# 1#) then \ s1# -> s1# else
-      \ s1# -> case writeUnboxed# mbytes# o2# (asProxy# e (bytes# !# o1#)) s1# of
+      \ s1# -> case writeUnboxed# mbytes# o2# (asProxy## e (bytes# !# o1#)) s1# of
         s2# -> copyUnboxed## e bytes# (o1# +# 1#) mbytes# (o2# +# 1#) (c# -# 1#) s2#
     
     copyUnboxedM## e src# o1# mbytes# o2# n# = if isTrue# (n# <# 1#) then \ s1# -> s1# else
       \ s1# -> case readUnboxed# src# o1# s1# of
-        (# s2#, x #) -> case writeUnboxed# mbytes# o2# (asProxy# e x) s2# of
+        (# s2#, x #) -> case writeUnboxed# mbytes# o2# (asProxy## e x) s2# of
           s3# -> copyUnboxedM## e src# (o1# +# 1#) mbytes# (o2# +# 1#) (n# -# 1#) s3#
     
     sortUnboxed# _ bs# n# o# = case n# <# 2# of
@@ -1215,14 +1215,14 @@ instance (Enum e, Shape e, Bounded e, Rank1 e, Unboxed e, Shape (e' :& e), Unbox
       where
         go p# =
           let r# = rank## p#; o# = i#*#r# +# i#
-          in  (asProxy# p# (bytes# !# o#)) :& (bytes# !# (o# +# r#))
+          in  (asProxy## p# (bytes# !# o#)) :& (bytes# !# (o# +# r#))
     
     readUnboxed# bytes# i# = go proxy#
       where
         go p# = let r# = rank## p#; o# = i#*#r# +# i# in
           \ s1# -> case readUnboxed# bytes# o# s1# of
             (# s2#, es #) -> case readUnboxed# bytes# (o# +# r#) s2# of
-              (# s3#, e #) -> (# s3#, asProxy# p# es :& e #)
+              (# s3#, e #) -> (# s3#, asProxy## p# es :& e #)
     
     writeUnboxed# bytes# i# (es :& e) = let r# = rank# es; o# = i#*#r# +# i# in
       \ s1# -> case writeUnboxed# bytes# o# es s1# of
@@ -2000,7 +2000,7 @@ writeRadixSort# e bs# tmp# idx# n# o# = h# bs# o# tmp# 0# s# 0#
       (# s2#, w# #) -> let wo# = word2Int# w# +# io# in case readWordArray# idx# wo# s2# of
         (# s3#, off# #) -> case writeWordArray# idx# wo# (off# `plusWord#` ox01#) s3# of
           s4# -> case readUnboxed# xs# ix# s4# of
-            (# s5#, v #) -> case writeUnboxed# ys# (word2Int# off#) (asProxy# e v) s5# of
+            (# s5#, v #) -> case writeUnboxed# ys# (word2Int# off#) (asProxy## e v) s5# of
               s6# -> go# xs# (ix# +# 1#) ys# (iy# +# 1#) (i# -# 1#) (bx# +# s#) io# s6#
     
     ox01# = int2Word# 1#
