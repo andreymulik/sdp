@@ -360,7 +360,7 @@ pnewUnboxed =  newUnboxed . fromProxy
 --------------------------------------------------------------------------------
 
 psizeof## :: Unboxed e => Proxy# (proxy e) -> Int# -> Int#
-psizeof## p# c# = sizeof## (fromProxy## p#) c#
+psizeof## p# c# = sizeof## (unliftProxy## p#) c#
 
 --------------------------------------------------------------------------------
 

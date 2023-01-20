@@ -26,8 +26,7 @@ module SDP.Unboxed
   pthawUnboxed, pfreezeUnboxed, cloneUnboxed1#, peqUnboxed,
   
   -- ** Kind @(Type -> Type -> Type)@ proxies
-  fromProxy1, pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1,
-  pcloneUnboxedM1,
+  pnewUnboxed1, pcloneUnboxed1, pcopyUnboxed1, pcopyUnboxedM1, pcloneUnboxedM1,
   
   -- * Wrap helpers
   Wrap (..), lzero#, single#, fromList#, fromFoldable#, fromListN#,
@@ -44,8 +43,6 @@ import SDP.Proxy
 
 import GHC.Exts
 import GHC.ST
-
-import Control.Exception.SDP
 
 default ()
 
@@ -301,6 +298,8 @@ fromFoldableM# es = \ s1# -> case pnewUnboxed es n# s1# of
   where
     !n@(I# n#) = length es
 
+--------------------------------------------------------------------------------
+
 {- |
   @since 0.2.1
   
@@ -412,9 +411,5 @@ pcloneUnboxedM1 :: Unboxed e => p (proxy e) -> MutableByteArray# s -> Int# -> In
                 -> State# s -> (# State# s, MutableByteArray# s #)
 pcloneUnboxedM1 =  cloneUnboxedM# . fromProxy1
 
---------------------------------------------------------------------------------
-
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "SDP.Unboxed."
 
 
