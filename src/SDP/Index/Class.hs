@@ -428,7 +428,7 @@ instance (Index i, Rank1 i) => Index (E :& i)
     defLimit = go proxy#
       where
         go :: Index i => Proxy# i -> (E :& i) -> Maybe Integer
-        go e _ = defLimit (fromProxy# e)
+        go e _ = defLimit (fromProxy## e)
     
     size  (E:&l, E:&u) =  size (l, u)
     sizes (E:&l, E:&u) = [size (l, u)]
@@ -523,7 +523,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
         l = lim res proxy#
         
         lim :: Index i => (i' :& i :& i) -> Proxy# i -> Integer
-        lim _ i = fromMaybe n (defLimit (fromProxy# i))
+        lim _ i = fromMaybe n (defLimit (fromProxy## i))
     
     extendBounds i'@(i :& is) bnds@(l :& ls, u :& us) =
         isEmpty bnds ? (i', i') $ (l' :& ls', u' :& us')

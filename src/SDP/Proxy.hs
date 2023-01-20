@@ -15,7 +15,7 @@ module SDP.Proxy
   fromProxy, toProxy, fromProxy1, toProxy1,
   
   -- * Proxy\#
-  toProxy##, fromProxy#, asProxy#, unliftProxy##
+  toProxy##, fromProxy##, asProxy#, unliftProxy##
 )
 where
 
@@ -61,8 +61,8 @@ toProxy## =  \ _ -> proxy#
   
   Returns 'UnreachableException' (with function name for debug) of suitable type.
 -}
-fromProxy# :: Proxy# e -> e
-fromProxy# =  \ _ -> unreachEx "fromProxy#: inappropriate use, (fromProxy# e)\
+fromProxy## :: Proxy# e -> e
+fromProxy## =  \ _ -> unreachEx "fromProxy##: inappropriate use, (fromProxy## e)\
                               \ should never be evaluated."
 
 --------------------------------------------------------------------------------
