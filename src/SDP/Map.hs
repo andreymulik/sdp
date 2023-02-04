@@ -115,7 +115,7 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       the maps @xs@ and @ys@ contain value with the same key, the conflict is
       resolved by the @f@ function, which choices, joins or replaces the value.
     -}
-    default union'' :: Index key => (key -> e -> e -> e) -> map -> map -> map
+    default union'' :: Ord key => (key -> e -> e -> e) -> map -> map -> map
     union'' :: (key -> e -> e -> e) -> map -> map -> map
     union'' f = toMap ... on go assocs
       where
@@ -136,7 +136,7 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       @containers@ library or equivalents. @sdp@ doesn't provide such
       capabilities.
     -}
-    default difference'' :: Index key => (key -> e -> e -> Maybe e) -> map -> map -> map
+    default difference'' :: Ord key => (key -> e -> e -> Maybe e) -> map -> map -> map
     difference'' :: (key -> e -> e -> Maybe e) -> map -> map -> map
     difference'' f = toMap ... on go assocs
       where
@@ -151,7 +151,7 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       by keys. Function @f@ choices, joins or replaces elements of @xs@ and @ys@
       with same key.
     -}
-    default intersection'' :: Index key => (key -> e -> e -> e) -> map -> map -> map
+    default intersection'' :: Ord key => (key -> e -> e -> e) -> map -> map -> map
     intersection'' :: (key -> e -> e -> e) -> map -> map -> map
     intersection'' f = toMap ... on go assocs
       where
