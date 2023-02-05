@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Templates.AnyBorder
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -149,11 +149,9 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~
     AnyBorder l u xs + AnyBorder _ _ ys = AnyBorder l u (xs + ys)
     AnyBorder l u xs - AnyBorder _ _ ys = AnyBorder l u (xs - ys)
     
-    xs' * ys' = mx /= ny ? undEx "(*)" $ viewOf (l, u) $ fromListN (nx * my)
-        [
+    xs' * ys' = mx /= ny ? undEx "(*)" $ viewOf (l, u) $ fromListN (nx * my) [
           sum [ xs !^ (i * mx + k) * ys !^ (k * my + j) | k <- [0 .. mx - 1] ]
-        |
-          i <- [0 .. nx - 1], j <- [0 .. my - 1]
+        | i <- [0 .. nx - 1], j <- [0 .. my - 1]
         ]
       where
         l = fromGIndex (E :& unsafeIndex  1 :& unsafeIndex  1)
@@ -681,5 +679,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
 
 
