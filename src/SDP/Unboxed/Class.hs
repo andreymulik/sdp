@@ -1210,7 +1210,7 @@ instance (Unboxed e, Rank1 e) => Unboxed (I1 e)
     
     sortUnboxed# e = sortUnboxed# (fromGValue# e)
       where
-        fromGValue# :: Proxy# e -> Proxy# (E :& e)
+        fromGValue# :: Proxy# (E :& e) -> Proxy# e
         fromGValue# =  \ _ -> proxy#
     
     sizeof## = psizeof##
