@@ -142,7 +142,14 @@ instance (Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
 
 {- Show and Read instances. -}
 
-instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Show e) => Show (AnyChunks rep e)
+#ifdef SDP_DEBUG_MODE
+instance (Indexed1 rep Int e, Show e) => Show (AnyChunks rep e)
+  where
+    showsPrec p (AnyChunks ess) = showParen (p > appPrec) $ showString "unlist "
+                                . foldMap ((. showChar ' ') . shows . listL) ess
+#else
+instance {-# OVERLAPPABLE #-} (Indexed1 rep Int e, Show e)
+      => Show (AnyChunks rep e)
   where
     showsPrec = assocsPrec "unlist "
 
@@ -154,6 +161,7 @@ instance (Indexed1 rep Int e, Read e) => Read (AnyChunks rep e)
   where
     readPrec = indexedPrec' "ublist"
     readList = readListDefault
+#endif
 
 --------------------------------------------------------------------------------
 
@@ -782,4 +790,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
+
 
