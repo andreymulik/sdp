@@ -61,6 +61,7 @@ import GHC.Types
 import GHC.ST ( ST (..) )
 
 import Data.Default.Class
+import Data.List.NonEmpty ( NonEmpty (..) )
 import Data.Typeable
 import Data.Coerce
 import Data.String
@@ -720,7 +721,7 @@ instance NullableM (ST s) (STBytes# s e)
     newNull = ST $ \ s1# -> case newByteArray# 0# s1# of
         (# s2#, marr# #) -> (# s2#, coerce' (STBytes# 0 0 marr#) #)
       where
-        coerce' :: forall s e. STBytes# s Word -> STBytes# s e
+        coerce' :: STBytes# s Word -> STBytes# s e
         coerce' =  unsafeCoerce
 
 --------------------------------------------------------------------------------
@@ -1374,7 +1375,7 @@ done' =  \ (MIOBytes# arr) -> stToMIO (done arr)
 {-# INLINE nubSorted #-}
 nubSorted :: Compare e -> SBytes# e -> SBytes# e
 nubSorted f es@(SBytes# _ _ _) = case unsnoc' es of
-  Just (xs, x) -> fromList $ sfoldr (\ e ls@(l : _) -> f e l == EQ ? ls $ e : ls) [x] xs
+  Just (xs, x) -> fromList . toList $ sfoldr (\ e (l :| ls) -> f e l == EQ ? l :| ls $ e :| l : ls) (x :| []) xs
   _            -> es
 
 --------------------------------------------------------------------------------
@@ -1390,6 +1391,5 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
 
 
