@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.Map
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -54,16 +54,16 @@ infixl 9 .!, !, !?
   to 'Linear' data structures and aren't limited by the 'Bordered' context
   (doesn't restrict key type).
 -}
-class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
+class Eq key => Map map key e | map -> key, map -> e
   where
     {-# MINIMAL toMap', ((.!) | (!?)) #-}
     
     {- Create, view and update Map. -}
     
     -- | Returns list of associations @(index, element)@.
-    default assocs :: (Bordered map key, Linear map e) => map -> [(key, e)]
     assocs :: map -> [(key, e)]
     assocs es = indices es `zip` listL es
+    default assocs :: (Bordered map key, Linear map e) => map -> [(key, e)]
     
     {- |
       A less specific version of 'SDP.Indexed.Indexed.assoc' that creates a new
@@ -72,7 +72,7 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       
       > Z // ascs = toMap -- forall ascs
     -}
-    toMap :: [(key, e)] -> map
+    toMap :: Nullable map => [(key, e)] -> map
     toMap =  toMap' (undEx "toMap {default}")
     
     {- |
@@ -83,13 +83,14 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       (when expanding, concatenating, etc.) for most structures since they don't
       store it.
     -}
-    toMap' :: e -> [(key, e)] -> map
+    toMap' :: Nullable map => e -> [(key, e)] -> map
     
     -- | Filter with key.
-    filter' :: (key -> e -> Bool) -> map -> map
+    filter' :: Nullable map => (key -> e -> Bool) -> map -> map
     filter' f = toMap . kfoldr (\ k x xs -> f k x ? (k, x) : xs $ xs) []
     
     -- | Update elements of immutable structure (by copying).
+    default (//) :: Nullable map => map -> [(key, e)] -> map
     (//) :: map -> [(key, e)] -> map
     (//) =  toMap ... (++) . assocs
     
@@ -115,7 +116,10 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       the maps @xs@ and @ys@ contain value with the same key, the conflict is
       resolved by the @f@ function, which choices, joins or replaces the value.
     -}
-    default union'' :: Ord key => (key -> e -> e -> e) -> map -> map -> map
+    default union'' :: (Nullable map, Ord key)
+                    => (key -> e -> e -> e)
+                    -> map -> map -> map
+    
     union'' :: (key -> e -> e -> e) -> map -> map -> map
     union'' f = toMap ... on go assocs
       where
@@ -136,8 +140,13 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       @containers@ library or equivalents. @sdp@ doesn't provide such
       capabilities.
     -}
-    default difference'' :: Ord key => (key -> e -> e -> Maybe e) -> map -> map -> map
-    difference'' :: (key -> e -> e -> Maybe e) -> map -> map -> map
+    default difference'' :: (Nullable map, Ord key)
+                         => (key -> e -> e -> Maybe e)
+                         -> map -> map -> map
+    
+    difference'' :: Nullable map => (key -> e -> e -> Maybe e)
+                 -> map -> map -> map
+    
     difference'' f = toMap ... on go assocs
       where
         go xs'@(x'@(i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
@@ -151,8 +160,13 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       by keys. Function @f@ choices, joins or replaces elements of @xs@ and @ys@
       with same key.
     -}
-    default intersection'' :: Ord key => (key -> e -> e -> e) -> map -> map -> map
-    intersection'' :: (key -> e -> e -> e) -> map -> map -> map
+    default intersection'' :: (Nullable map, Ord key)
+                           => (key -> e -> e -> e)
+                           -> map -> map -> map
+    
+    intersection'' :: Nullable map => (key -> e -> e -> e)
+                   -> map -> map -> map
+    
     intersection'' f = toMap ... on go assocs
       where
         go xs'@((i, x) : xs) ys'@((j, y) : ys) = case i <=> j of
@@ -190,6 +204,7 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
     -}
     insert' :: key -> e -> map -> map
     insert' k e es = toMap $ assocs es :< (k, e)
+    default insert' :: Nullable map => key -> e -> map -> map
     
     {- |
       @since 0.3
@@ -217,9 +232,9 @@ class (Eq key, Nullable map) => Map map key e | map -> key, map -> e
       when removed from the middle, the actual value should be replaced with the
       default value.
     -}
-    default delete' :: Eq key => key -> map -> map
     delete' :: key -> map -> map
     delete' k = toMap . except ((== k) . fst) . assocs
+    default delete' :: (Nullable map, Eq key) => key -> map -> map
     
     {- Read element. -}
     
@@ -290,11 +305,15 @@ union' :: Map map key e => (e -> e -> e) -> map -> map -> map
 union' =  union'' . const
 
 -- | 'intersection''' without key argument.
-intersection' :: Map map key e => (e -> e -> e) -> map -> map -> map
+intersection' :: (Nullable map, Map map key e)
+              => (e -> e -> e) -> map -> map
+              -> map
 intersection' =  intersection'' . const
 
 -- | 'difference''' without key argument.
-difference' :: Map map key e => (e -> e -> Maybe e) -> map -> map -> map
+difference' :: (Nullable map, Map map key e)
+            => (e -> e -> Maybe e) -> map -> map
+            -> map
 difference' =  difference'' . const
 
 --------------------------------------------------------------------------------
@@ -366,20 +385,26 @@ instance Map [e] Int e
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE empEx #-}
 empEx :: String -> a
 empEx =  throw . EmptyRange . showString "in SDP.Map."
 
+{-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Map."
 
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Map."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Map."
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Map."
+
 
 
 

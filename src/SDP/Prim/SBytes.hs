@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Prim.SBytes
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -42,29 +42,29 @@ where
 
 import Prelude ()
 import SDP.SafePrelude
+import SDP.SortM.Tim
 import SDP.IndexedM
 import SDP.Unboxed
 import SDP.SortM
 import SDP.Sort
 import SDP.Scan
 
-import SDP.SortM.Tim
-
 import qualified GHC.Exts as E
 import GHC.Exts
   (
-    ByteArray#, MutableByteArray#, State#, Int#, (+#), (-#),
+    ByteArray#, MutableByteArray#, State#, Int#, (+#), (-#), isTrue#,
     newByteArray#, unsafeFreezeByteArray#, sameMutableByteArray#
   )
 
-import GHC.Types
+import GHC.Int ( Int (..) )
 import GHC.ST ( ST (..) )
 
 import Data.Default.Class
-import Data.List.NonEmpty ( NonEmpty (..) )
+import Data.List.NonEmpty ( NonEmpty ((:|)) )
 import Data.Typeable
 import Data.Coerce
 import Data.String
+import Data.Kind
 
 import Text.Read
 
@@ -1375,21 +1375,26 @@ done' =  \ (MIOBytes# arr) -> stToMIO (done arr)
 {-# INLINE nubSorted #-}
 nubSorted :: Compare e -> SBytes# e -> SBytes# e
 nubSorted f es@(SBytes# _ _ _) = case unsnoc' es of
-  Just (xs, x) -> fromList . toList $ sfoldr (\ e (l :| ls) -> f e l == EQ ? l :| ls $ e :| l : ls) (x :| []) xs
+  Just (xs, x) ->
+    let y :| ys = sfoldr (\ e (l :| ls) -> f e l == EQ ? l :| ls $ e :| (l : ls)) (x :| []) xs
+    in  fromList (y : ys)
   _            -> es
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SBytes."
 
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
 

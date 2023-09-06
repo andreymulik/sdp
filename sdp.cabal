@@ -29,14 +29,18 @@ tested-with:
   GHC == 8.4.4,
   -- lts-14.27
   GHC == 8.6.5,
-  -- lts-18.8
-  GHC == 8.10.6,
+  -- lts-16.31
+  GHC == 8.8.4,
   -- lts-18.24
   GHC == 8.10.7,
-  -- lts-19.21
+  -- lts-19.33
   GHC == 9.0.2,
-  -- nightly-2022-09-04
-  GHC == 9.2.4
+  -- lts-20.26
+  GHC == 9.2.8,
+  -- lts-21.9
+  GHC == 9.4.6,
+  -- nightly-2023-09-23
+  GHC == 9.6.2
 
 source-repository head
   type: git
@@ -59,10 +63,10 @@ Library
                -pgmPcpphs -optP--cpp -optP-traditional
   
   build-depends:
-    base               >= 4.9 && <   5,
-    fmr                >= 0.2 && <   1,
-    ghc-prim           >= 0.5 && < 0.9,
-    data-default-class >= 0.1 && < 0.2
+    base               >= 4.9 && <    5,
+    fmr                >= 0.3 && <    1,
+    ghc-prim           >= 0.5 && < 0.11,
+    data-default-class >= 0.1 && <  0.2
   
   -- GHC 8.2.2 bug
   if impl(ghc >= 8.4)

@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
-{-# LANGUAGE Trustworthy, CPP, TypeOperators, TypeFamilies, DefaultSignatures #-}
+{-# LANGUAGE Safe, CPP, TypeOperators, TypeFamilies, DefaultSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
@@ -8,7 +8,7 @@
 
 {- |
     Module      :  SDP.Set
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC Extensions)
@@ -38,8 +38,6 @@ import SDP.Linear
 import Data.Maybe ( isJust  )
 import Data.List  ( groupBy )
 
-import GHC.Types
-
 default ()
 
 --------------------------------------------------------------------------------
@@ -58,7 +56,7 @@ default ()
   (comparability, transitivity, reflexivity and antisymmetry). With wrong
   comparator, the result may become implementation-dependent.
 -}
-class Nullable s => SetWith s o | s -> o
+class SetWith s o | s -> o
   where
     {-# MINIMAL intersectionWith, unionWith, differenceWith,
       lookupLTWith, lookupGTWith #-}
@@ -66,9 +64,9 @@ class Nullable s => SetWith s o | s -> o
     {- Creation functions. -}
     
     -- | Creates ordered set from linear structure.
-    default setWith :: Linear s o => Compare o -> s -> s
     setWith :: Compare o -> s -> s
     setWith f = fromList . setWith f . listL
+    default setWith :: Linear s o => Compare o -> s -> s
     
     {- |
       Creates set from linear structure using additional function for
@@ -84,20 +82,20 @@ class Nullable s => SetWith s o | s -> o
     insertWith f = unionWith f . single
     
     -- | Deleting element from set.
-    deleteWith :: Compare o -> o -> s -> s
+    default deleteWith :: (Nullable s, Linear s o) => Compare o -> o -> s -> s
+    deleteWith :: Nullable s => Compare o -> o -> s -> s
     deleteWith f = flip (differenceWith f) . single
-    default deleteWith :: Linear s o => Compare o -> o -> s -> s
     
     {- Basic operations on sets. -}
     
     -- | Intersection of two sets.
-    intersectionWith :: Compare o -> s -> s -> s
+    intersectionWith :: Nullable s => Compare o -> s -> s -> s
     
     -- | Difference (relative complement, aka A / B) of two sets.
-    differenceWith :: Compare o -> s -> s -> s
+    differenceWith :: Nullable s => Compare o -> s -> s -> s
     
     -- | Symmetric difference of two sets.
-    symdiffWith :: Compare o -> s -> s -> s
+    symdiffWith :: Nullable s => Compare o -> s -> s -> s
     symdiffWith f xs ys = differenceWith f (unionWith f xs ys) (intersectionWith f xs ys)
     
     -- | Union of two sets.
@@ -106,38 +104,38 @@ class Nullable s => SetWith s o | s -> o
     {- Generalization of basic set operations on foldable. -}
     
     -- | Fold by 'intersectionWith'.
-    intersectionsWith :: Foldable f => Compare o -> f s -> s
+    intersectionsWith :: (Nullable s, Foldable f) => Compare o -> f s -> s
     intersectionsWith =  (`foldl` Z) . intersectionWith
     
     -- | Fold by 'differenceWith'.
-    differencesWith :: Foldable f => Compare o -> f s -> s
+    differencesWith :: (Nullable s, Foldable f) => Compare o -> f s -> s
     differencesWith =  (`foldl` Z) . differenceWith
     
     -- | Fold by 'unionWith'.
-    unionsWith :: Foldable f => Compare o -> f s -> s
+    unionsWith :: (Nullable s, Foldable f) => Compare o -> f s -> s
     unionsWith =  (`foldl` Z) . unionWith
     
     -- | Fold by 'symdiffWith'.
-    symdiffsWith :: Foldable f => Compare o -> f s -> s
+    symdiffsWith :: (Nullable s, Foldable f) => Compare o -> f s -> s
     symdiffsWith =  (`foldl` Z) . symdiffWith
     
     {- Сomparsion operations. -}
     
     -- | Compares sets on intersection.
-    isIntersectsWith :: Compare o -> s -> s -> Bool
+    isIntersectsWith :: Nullable s => Compare o -> s -> s -> Bool
     isIntersectsWith f = not ... isDisjointWith f
     
     -- | Compares sets on disjoint.
-    isDisjointWith :: Compare o -> s -> s -> Bool
+    isDisjointWith :: Nullable s => Compare o -> s -> s -> Bool
     isDisjointWith f = isNull ... intersectionWith f
     
     -- | Same as 'elem', but can work faster. By default, uses 'find'.
-    default memberWith :: (t o ~~ s, Foldable t) => Compare o -> o -> s -> Bool
+    default memberWith :: (t o ~ s, Foldable t) => Compare o -> o -> s -> Bool
     memberWith :: Compare o -> o -> s -> Bool
     memberWith f e = isJust . find (\ x -> f e x == EQ)
     
     -- | Сhecks whether a first set is a subset of second.
-    default isSubsetWith :: (t o ~~ s, Foldable t) => Compare o -> s -> s -> Bool
+    default isSubsetWith :: (t o ~ s, Foldable t) => Compare o -> s -> s -> Bool
     isSubsetWith :: Compare o -> s -> s -> Bool
     isSubsetWith f xs ys = all (\ x -> memberWith f x ys) xs
     
@@ -172,7 +170,7 @@ class Nullable s => SetWith s o | s -> o
   
   'Set', as well as 'SetWith', doesn't provide data protection/validation.
 -}
-class Nullable s => Set s o | s -> o
+class Set s o | s -> o
   where
     -- | The same as @'setWith' 'compare'@.
     default set :: (SetWith s o, Ord o) => s -> s
@@ -185,13 +183,13 @@ class Nullable s => Set s o | s -> o
     insert =  insertWith compare
     
     -- | Same as @'deleteWith' 'compare'@.
-    default delete :: (SetWith s o, Ord o) => o -> s -> s
-    delete :: o -> s -> s
+    default delete :: (Nullable s, SetWith s o, Ord o) => o -> s -> s
+    delete :: Nullable s => o -> s -> s
     delete =  deleteWith compare
     
     -- | Same as @'intersectionWith' 'compare'@.
-    default (/\) :: (SetWith s o, Ord o) => s -> s -> s
-    (/\) :: s -> s -> s
+    default (/\) :: (Nullable s, SetWith s o, Ord o) => s -> s -> s
+    (/\) :: Nullable s => s -> s -> s
     (/\) =  intersectionWith compare
     
     -- | Same as @'unionWith' 'compare'@.
@@ -200,23 +198,23 @@ class Nullable s => Set s o | s -> o
     (\/) =  unionWith compare
     
     -- | Same as @'differenceWith' 'compare'@.
-    default (\\) :: (SetWith s o, Ord o) => s -> s -> s
-    (\\) :: s -> s -> s
+    default (\\) :: (Nullable s, SetWith s o, Ord o) => s -> s -> s
+    (\\) :: Nullable s => s -> s -> s
     (\\) =  differenceWith compare
     
     -- | Same as @'symdiffWith' 'compare'@.
-    default (\^/) :: (SetWith s o, Ord o) => s -> s -> s
-    (\^/) :: s -> s -> s
+    default (\^/) :: (Nullable s, SetWith s o, Ord o) => s -> s -> s
+    (\^/) :: Nullable s => s -> s -> s
     (\^/) =  symdiffWith compare
     
     -- | Same as @'isDisjointWith' 'compare'@.
-    default (/?\) :: (SetWith s o, Ord o) => s -> s -> Bool
-    (/?\) :: s -> s -> Bool
+    default (/?\) :: (Nullable s, SetWith s o, Ord o) => s -> s -> Bool
+    (/?\) :: Nullable s => s -> s -> Bool
     (/?\) =  isDisjointWith compare
     
     -- | Same as @'isIntersectsWith' 'compare'@.
-    default (\?/) :: (SetWith s o, Ord o) => s -> s -> Bool
-    (\?/) :: s -> s -> Bool
+    default (\?/) :: (Nullable s, SetWith s o, Ord o) => s -> s -> Bool
+    (\?/) :: Nullable s => s -> s -> Bool
     (\?/) =  isIntersectsWith compare
     
     -- | Same as @'isSubsetWith' 'compare'@.
@@ -225,23 +223,23 @@ class Nullable s => Set s o | s -> o
     (\+/) =  isSubsetWith compare
     
     -- | Same as @'intersectionsWith' 'compare'@.
-    default intersections :: (Foldable f, SetWith s o, Ord o) => f s -> s
-    intersections :: Foldable f => f s -> s
+    default intersections :: (Nullable s, Foldable f, SetWith s o, Ord o) => f s -> s
+    intersections :: (Nullable s, Foldable f) => f s -> s
     intersections =  intersectionsWith compare
     
     -- | Same as @'unionsWith' 'compare'@.
-    default unions :: (Foldable f, SetWith s o, Ord o) => f s -> s
-    unions :: Foldable f => f s -> s
+    default unions :: (Nullable s, Foldable f, SetWith s o, Ord o) => f s -> s
+    unions :: (Nullable s, Foldable f) => f s -> s
     unions =  unionsWith compare
     
     -- | Same as @'differencesWith' 'compare'@.
-    differences :: Foldable f => f s -> s
+    default differences :: (Nullable s, Foldable f, SetWith s o, Ord o) => f s -> s
+    differences :: (Nullable s, Foldable f) => f s -> s
     differences =  differencesWith compare
-    default differences :: (Foldable f, SetWith s o, Ord o) => f s -> s
     
     -- | Same as @'symdiffsWith' compare'@.
-    default symdiffs :: (Foldable f, SetWith s o, Ord o) => f s -> s
-    symdiffs :: Foldable f => f s -> s
+    default symdiffs :: (Nullable s, Foldable f, SetWith s o, Ord o) => f s -> s
+    symdiffs :: (Nullable s, Foldable f) => f s -> s
     symdiffs =  symdiffsWith compare
     
     -- | Same as @'memberWith' 'compare'@.
@@ -377,4 +375,6 @@ instance SetWith [o] o
     lookupGEWith _ _ _ = Nothing
     
     groupSetWith cmp f = map (foldr1 f) . groupBy ((== EQ) ... cmp) . sortBy cmp
+
+
 

@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Index.Class
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -18,10 +18,10 @@ module SDP.Index.Class
   module SDP.Shape,
   
   -- * Shapes
-  (:|:), SubIndex, takeDim, dropDim, joinDim, splitDim,
+  (:|:), SubIndex (..), splitDim,
   
   -- * Indices
-  Index (..),
+  Index (..), SizesOf,
   
   -- ** Helpers
   InBounds (..), offsetIntegral, defaultBoundsUnsign
@@ -34,7 +34,6 @@ import SDP.Shape
 import Data.Maybe
 import Data.Char ( ord )
 
-import GHC.Types
 import GHC.Exts
 
 import Foreign.C.Types
@@ -55,23 +54,29 @@ data InBounds = ER -- ^ Empty range
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+  
+  'SizesOf' is type of @(':&')@-based list of sizes. @Rank i = Rank (SizesOf i)@.
+-}
+type family SizesOf i
+  where
+    SizesOf     E     = E
+    SizesOf (i' :& i) = SizesOf i' :& Int
+    SizesOf     i     = SizesOf (GIndex i)
+
+--------------------------------------------------------------------------------
+
 -- | @(':|:')@ is closed type family of shape differences.
 type family i :|: j
   where
     i :|: E = i
     i :|: j = DimInit i :|: DimInit j
 
-{- |
-  'SubIndex' is service constraint that corresponds closed (internal) class
-  @Sub@. @'SubIndex' i j @ matches if 'Index' type @i@ is subspace of 'Index'
-  type @j@.
--}
-type SubIndex = Sub
-
 --------------------------------------------------------------------------------
 
 -- Internal class of shape differences.
-class (Index i, Index j, Index (i :|: j)) => Sub i j
+class (Index i, Index j, Index (i :|: j)) => SubIndex i j
   where
     {- |
       Drop some dimensions (second argument used as type variable).
@@ -100,7 +105,7 @@ class (Index i, Index j, Index (i :|: j)) => Sub i j
     -}
     takeDim :: i -> j
 
-instance {-# OVERLAPS #-} (Index i, E ~~ (i :|: i)) => Sub i i
+instance {-# OVERLAPS #-} (Index i, E ~ (i :|: i)) => SubIndex i i
   where
     dropDim = \ _ _ -> E
     joinDim = const
@@ -108,16 +113,16 @@ instance {-# OVERLAPS #-} (Index i, E ~~ (i :|: i)) => Sub i i
 
 instance
   (
-    ij ~~ (i :|: j), DimInit ij ~~ (DimInit i :|: j), DimLast ij ~~ DimLast i,
-    Index i, Index j, Index ij, Sub (DimInit i) j
-  ) => Sub i j
+    ij ~ (i :|: j), DimInit ij ~ (DimInit i :|: j), DimLast ij ~ DimLast i,
+    Index i, Index j, Index ij, SubIndex (DimInit i) j
+  ) => SubIndex i j
   where
     dropDim i' j' = let (is, i) = unconsDim i' in consDim (dropDim is j') i
     joinDim j' ij = let (is, i) = unconsDim ij in consDim (joinDim j' is) i
     takeDim = takeDim . initDim
 
 -- | 'splitDim' returns pair of shape difference and subshape.
-splitDim :: Sub i j => i -> (i :|: j, j)
+splitDim :: SubIndex i j => i -> (i :|: j, j)
 splitDim i = let j = takeDim i in (dropDim i j, j)
 
 --------------------------------------------------------------------------------
@@ -156,7 +161,7 @@ splitDim i = let j = takeDim i in (dropDim i j, j)
 class
   (
     Shape (DimLast i), Shape (DimInit i), Shape (GIndex i),
-    Ord i, Shape i, Show i
+    SizesOf (GIndex i) ~ SizesOf i, Ord i, Shape i, Show i
   ) => Index i
   where
     -- | Returns the size of range.
@@ -167,9 +172,9 @@ class
     
     -- | Returns the sizes of range dimensionwise.
     {-# INLINE sizes #-}
-    sizes :: (i, i) -> [Int]
+    sizes :: (i, i) -> SizesOf i
     sizes =  sizes . toGBounds
-    default sizes :: Index (GIndex i) => (i, i) -> [Int]
+    default sizes :: Index (GIndex i) => (i, i) -> SizesOf i
     
     -- | Returns the index belonging to the given range.
     {-# INLINE safeElem #-}
@@ -180,7 +185,7 @@ class
     {-# INLINE ordBounds #-}
     ordBounds :: (i, i) -> (i, i)
     ordBounds bs = isEmpty bs ? swap bs $ bs
-    default ordBounds :: GIndex i ~~ I1 i => (i, i) -> (i, i)
+    default ordBounds :: GIndex i ~ I1 i => (i, i) -> (i, i)
     
     -- | Returns size of biggest range, that may be represented by this type.
     defLimit :: i -> Maybe Integer
@@ -291,13 +296,13 @@ class
       
       Checks if @ij@ in @bnds@ subshape, may 'throw' 'IndexException'.
     -}
-    subshape :: (Sub i j, Index (i :|: j)) => (i, i) -> i :|: j -> (j, j)
+    subshape :: (SubIndex i j, Index (i :|: j)) => (i, i) -> i :|: j -> (j, j)
     subshape (l, u) ij = checkBounds (l', u') ij (lj, uj) "subshape {default}"
       where
         (l', lj) = splitDim l
         (u', uj) = splitDim u
     
-    slice :: (Sub i j, ij ~~ (i :|: j), Index j) => (i, i) -> ij -> ((ij, ij), (j, j))
+    slice :: (SubIndex i j, ij ~ (i :|: j), Index j) => (i, i) -> ij -> ((ij, ij), (j, j))
     slice (l, u) ij = checkBounds (ls, us) ij ((ls, us), (lj, uj)) "slice {default}"
       where
         (ls, lj) = splitDim l
@@ -314,7 +319,7 @@ instance Index E
     defLimit     = Just . const (-1)
     
     size  = const 0
-    sizes = const []
+    sizes = const E
     range = const []
     
     offset _ _ = emptyEx "offset {E}"
@@ -335,7 +340,7 @@ instance Index E
 instance Index ()
   where
     size  = const 1
-    sizes = const [1]
+    sizes = const (E :& 1)
     range = const [()]
     
     defLimit = Just . const 0
@@ -430,8 +435,8 @@ instance (Index i, Rank1 i) => Index (E :& i)
         go :: Index i => Proxy# i -> (E :& i) -> Maybe Integer
         go e _ = defLimit (fromProxy## e)
     
-    size  (E:&l, E:&u) =  size (l, u)
-    sizes (E:&l, E:&u) = [size (l, u)]
+    size  (E:&l, E:&u) = size (l, u)
+    sizes (E:&l, E:&u) = E :& size (l, u)
     range (E:&l, E:&u) = (E :&) <$> range (l, u)
     
     next = \ (E:&l, E:&u) (E:&i) -> E :& next (l, u) i
@@ -466,8 +471,10 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
         err = unreachEx "defLimit {i' :& i :& i}"
     
     size  (ls :& l, us :& u) = size (l, u) * size (ls, us)
-    sizes (ls :& l, us :& u) = sizes (ls, us) ++ sizes (l, u)
     range (ls :& l, us :& u) = liftA2 (:&) (range (ls, us)) (range (l, u))
+    sizes (ls :& l, us :& u) = sizes (ls, us) :& s
+      where
+        (E :& s) = sizes (E :& l, E :& u)
     
     prev bs@(ls :& l, us :& u) ix
         | isEmpty bs = emptyEx "prev {i' :& i :& i}"
@@ -592,19 +599,27 @@ defaultBoundsUnsign n = n < 1 ? ub 1 0 $ ub 0 (n - 1) where ub = on (,) unsafeIn
 -- | Check bounds and 'throw' 'IndexException' if needed.
 checkBounds :: Index i => (i, i) -> i -> res -> String -> res
 checkBounds bnds i res = case inBounds bnds i of
-  ER -> throw . EmptyRange      . showString "in SDP.Index."
-  OR -> throw . IndexOverflow   . showString "in SDP.Index."
-  UR -> throw . IndexUnderflow  . showString "in SDP.Index."
   IN -> const res
+  ER -> emptyEx
+  UR -> underEx
+  OR -> overEx
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE emptyEx #-}
 emptyEx :: String -> a
 emptyEx =  throw . EmptyRange . showString "in SDP.Index."
 
+{-# NOINLINE overEx #-}
+overEx :: String -> a
+overEx =  throw . EmptyRange . showString "in SDP.Index."
+
+{-# NOINLINE underEx #-}
+underEx :: String -> a
+underEx =  throw . EmptyRange . showString "in SDP.Index."
+
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Index."
-
-
 
 

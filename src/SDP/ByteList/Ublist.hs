@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.ByteList.Ublist
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -44,7 +44,7 @@ type Ublist = AnyChunks SBytes#
 
 --------------------------------------------------------------------------------
 
-instance (Unboxed e) => Sort (Ublist e) e
+instance Unboxed e => Sort (Ublist e) e
   where
     sortBy cmp es = runST $ do es' <- thaw es; timSortBy cmp es'; done es'
     
@@ -57,7 +57,7 @@ instance (Unboxed e) => Sort (Ublist e) e
 --------------------------------------------------------------------------------
 
 {-# INLINE done #-}
-done :: (Unboxed e) => STBytes# s e -> ST s (Ublist e)
+done :: Unboxed e => STBytes# s e -> ST s (Ublist e)
 done =  unsafeFreeze
 
 

@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.Bordered
-    Copyright   :  (c) Andrey Mulik 2021-2022
+    Copyright   :  (c) Andrey Mulik 2021-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -124,7 +124,7 @@ class (Index i, Estimate b) => Bordered b i | b -> i
     upper =  snd . bounds
     
     -- | Returns the virtual geometry of givel structure.
-    sizesOf :: b -> [Int]
+    sizesOf :: b -> SizesOf i
     sizesOf =  sizes . bounds
     
     {-# INLINE indexIn #-}
@@ -181,7 +181,7 @@ class (Monad m, Index i, EstimateM m b) => BorderedM m b i | b -> i
     getUpper =  snds . getBounds
     
     -- | 'getSizesOf' returns 'sizes' of mutable data structure.
-    getSizesOf :: b -> m [Int]
+    getSizesOf :: b -> m (SizesOf i)
     getSizesOf =  fmap sizes . getBounds
     
     -- | 'nowIndexIn' is 'indexIn' version for mutable structures.

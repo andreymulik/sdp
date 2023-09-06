@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SArray
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -37,16 +37,22 @@ where
 import Prelude ()
 import SDP.SafePrelude
 import SDP.IndexedM
-import SDP.SortM
 import SDP.Sort
 import SDP.Scan
 
 import SDP.SortM.Tim
+import SDP.SortM
+
+import Data.Default.Class
+import Data.Typeable
+import Data.Coerce
+import Data.String
+import Data.Kind
 
 import qualified GHC.Exts as E
 import GHC.Exts
   (
-    Array#, MutableArray#, State#, Int#,
+    Array#, MutableArray#, State#, Int#, isTrue#,
     
     newArray#, indexArray#, readArray#, writeArray#, sameMutableArray#,
     thawArray#, unsafeThawArray#, freezeArray#, unsafeFreezeArray#,
@@ -54,13 +60,8 @@ import GHC.Exts
     (+#), (-#), (==#)
   )
 
-import GHC.Types
-import GHC.ST ( ST (..), STRep )
-
-import Data.Default.Class
-import Data.Typeable
-import Data.Coerce
-import Data.String
+import GHC.Int ( Int (..) )
+import GHC.ST  ( ST (..), STRep )
 
 import Text.Read
 
@@ -1401,20 +1402,24 @@ nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SArray."
 
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.SArray."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SArray."
 
+{-# NOINLINE pfailEx #-}
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
 
 

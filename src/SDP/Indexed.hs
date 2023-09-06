@@ -9,7 +9,7 @@
 
 {- |
     Module      :  SDP.Indexed
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -50,7 +50,7 @@ default ()
 
 --------------------------------------------------------------------------------
 
-{-# DEPRECATED imap "deprecated in favour 'SDP.Indexed.Indexed.imap', \
+{-# DEPRECATED imap "deprecated in favour 'SDP.Indexed.Indexed.reshape', \
       \will be removed in sdp-0.4" #-}
 
 -- | 'Indexed' is class of ordered associative arrays with static bounds.
@@ -274,7 +274,7 @@ binaryContain f e es =
 memberSorted :: Indexed v i e => Compare e -> e -> v -> Bool
 memberSorted =  binaryContain
 
+{-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Indexed."
-
 

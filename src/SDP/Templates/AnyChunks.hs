@@ -8,7 +8,7 @@
 
 {- |
     Module      :  SDP.Templates.AnyChunks
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -445,7 +445,7 @@ instance (Monad m, LinearM1 m rep e) => ForceableM m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 
-instance LinearM1 m rep e => LinearM m (AnyChunks rep e) e
+instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) e
   where
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
@@ -647,8 +647,11 @@ instance Indexed1 rep Int e => Indexed (AnyChunks rep e) Int e
 
 {- MapM and IndexedM instances. -}
 
-instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e)
-      => MapM m (AnyChunks rep e) Int e
+instance
+    (
+      NullableM m (rep e), BorderedM1 m rep Int e, LinearM1 m rep e,
+      MapM1 m rep Int e
+    ) => MapM m (AnyChunks rep e) Int e
   where
     newMap ascs = AnyChunks <$> sequence (go bnds ascs)
       where
@@ -694,7 +697,8 @@ instance (LinearM1 m rep e, MapM1 m rep Int e, BorderedM1 m rep Int e)
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
-instance IndexedM1 m rep Int e => IndexedM m (AnyChunks rep e) Int e
+instance (NullableM m (rep e), IndexedM1 m rep Int e)
+      => IndexedM m (AnyChunks rep e) Int e
   where
     fromAssocs bnds ascs = AnyChunks <$> sequence (go bnds ascs)
       where
@@ -710,17 +714,21 @@ instance IndexedM1 m rep Int e => IndexedM m (AnyChunks rep e) Int e
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
     
-    fromIndexed' = newLinear  .  listL
+    fromIndexed' = newLinear . listL
     fromIndexedM = newLinear <=< getLeft
 
 --------------------------------------------------------------------------------
 
 {- SortM instance. -}
 
-instance (BorderedM1 m rep Int e, SortM1 m rep e, LinearM1 m rep e)
-      => SortM m (AnyChunks rep e) e
+instance
+    (
+      NullableM m (rep e), BorderedM1 m rep Int e, LinearM1 m rep e,
+      SortM1 m rep e
+    ) => SortM m (AnyChunks rep e) e
   where
-    sortMBy     = timSortBy
+    sortMBy = timSortBy
+    
     sortedMBy f = go . toChunks
       where
         go (x1 : x2 : xs) =
@@ -765,8 +773,10 @@ instance {-# OVERLAPPABLE #-} Freeze1 m mut imm e
 --------------------------------------------------------------------------------
 
 -- | Creates new immutable structure using 'merged'.
-instance {-# OVERLAPPABLE #-} (LinearM1 m mut e, Freeze1 m mut imm e)
-      => Freeze m (AnyChunks mut e) (imm e)
+instance {-# OVERLAPPABLE #-}
+    (
+      NullableM m (mut e), LinearM1 m mut e, Freeze1 m mut imm e
+    ) => Freeze m (AnyChunks mut e) (imm e)
   where
     unsafeFreeze (AnyChunks es) = unsafeFreeze =<< merged es
     freeze       (AnyChunks es) = freeze       =<< merged es
@@ -779,14 +789,19 @@ instance {-# OVERLAPS #-} Freeze1 m mut imm e
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Templates.AnyChunks."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Templates.AnyChunks."
 
+{-# NOINLINE pfailEx #-}
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
+
+--------------------------------------------------------------------------------
 
 lim :: Int
 lim =  1024

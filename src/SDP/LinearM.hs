@@ -1,6 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, RankNTypes #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, GADTs, ViewPatterns, PatternSynonyms #-}
+{-# LANGUAGE TypeOperators #-}
+
+#if MIN_VERSION_fmr(0,3,0)
+{-# LANGUAGE TypeFamilies, DataKinds #-}
+#endif
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -8,7 +13,7 @@
 
 {- |
     Module      :  SDP.LinearM
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -18,7 +23,7 @@
 module SDP.LinearM
 (
   -- * Exports
-  module SDP.Linear,
+  module SDP.Linear, (+=), (=+), (~=),
   
   -- * LinearM class
   LinearM (..), LinearM1, LinearM2,
@@ -44,8 +49,13 @@ import SDP.SafePrelude
 import SDP.Linear
 import SDP.Map
 
-import Data.Property hiding ( set )
+#if MIN_VERSION_fmr(0,3,0)
+import Data.Field
+import Data.Proxy
+#else
 import Data.Typeable
+import Data.Property hiding ( set )
+#endif
 
 import Control.Exception.SDP
 
@@ -60,15 +70,14 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
-    => LinearM m l e | l -> m, l -> e
+class (Monad m, ForceableM m l, EstimateM m l) => LinearM m l e | l -> m, l -> e
   where
     {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
         (getLeft|getRight), (!#>), writeM, copyTo #-}
     
     -- | Monadic 'single'.
-    singleM :: e -> m l
-    singleM =  newLinear . single
+    singleM :: NullableM m l => e -> m l
+    singleM =  newLinear . pure
     
     {- |
       'getHead' is monadic version of 'head'. This procedure mustn't modify the
@@ -91,6 +100,7 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
     -}
     prepend :: e -> l -> m l
     prepend e es = newLinear . (e :) =<< getLeft es
+    default prepend :: NullableM m l => e -> l -> m l
     
     {- |
       Appends new element to the end of the structure (monadic 'toLast').
@@ -99,20 +109,21 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
     -}
     append :: l -> e -> m l
     append es e = newLinear . (:< e) =<< getLeft es
+    default append :: NullableM m l => l -> e -> m l
     
     -- | Monadic 'fromList'.
     {-# INLINE newLinear #-}
-    newLinear :: [e] -> m l
+    newLinear :: NullableM m l => [e] -> m l
     newLinear =  fromFoldableM
     
     -- | Monadic 'fromListN'.
     {-# INLINE newLinearN #-}
-    newLinearN :: Int -> [e] -> m l
+    newLinearN :: NullableM m l => Int -> [e] -> m l
     newLinearN =  newLinear ... take
     
     -- | Monadic 'fromFoldable'.
     {-# INLINE fromFoldableM #-}
-    fromFoldableM :: Foldable f => f e -> m l
+    fromFoldableM :: NullableM m l => Foldable f => f e -> m l
     fromFoldableM =  newLinear . toList
     
     -- | Left view of line.
@@ -135,11 +146,13 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
     -- | @copied' es l n@ returns the slice of @es@ from @l@ of length @n@.
     copied' :: l -> Int -> Int -> m l
     copied' es l n = getLeft es >>= newLinearN n . drop l
+    default copied' :: NullableM m l => l -> Int -> Int -> m l
     
     -- | Monadic 'reverse', returns new structure.
     {-# INLINE reversed #-}
     reversed :: l -> m l
     reversed =  newLinear <=< getRight
+    default reversed :: NullableM m l => l -> m l
     
     {- |
       @since 0.2.1
@@ -149,16 +162,16 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
     reversed' es = ofoldr (\ i e go -> do writeM es i e; go) (return ()) =<< getRight es
     
     -- | Monadic 'concat'.
-    merged :: Foldable f => f l -> m l
+    merged :: NullableM m l => Foldable f => f l -> m l
     merged =  newLinear . concat <=< sequence . foldr ((:) . getLeft) []
     
     -- | Monadic version of 'replicate'.
     {-# INLINE filled #-}
-    filled :: Int -> e -> m l
+    filled :: NullableM m l => Int -> e -> m l
     filled n = newLinearN n . replicate n
     
     -- | @'removed' n es@ removes element with offset @n@ from @es@.
-    removed :: Int -> l -> m l
+    removed :: NullableM m l => Int -> l -> m l
     removed n es = newLinear . remove n =<< getLeft es
     
     {- |
@@ -174,12 +187,12 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       let go k ej = when (k <= j) $ do ek <- es !#> k; writeM es k ej; go (k + 1) ek
       in  when (i < j) $ go i =<< (es !#> j)
     
-    filterM :: (e -> m Bool) -> l -> m l
+    filterM :: NullableM m l => (e -> m Bool) -> l -> m l
     filterM go = newLinear <=< foldrM (\ e xs ->
         do b <- go e; return (b ? e : xs $ xs)
       ) []
     
-    exceptM :: (e -> m Bool) -> l -> m l
+    exceptM :: NullableM m l => (e -> m Bool) -> l -> m l
     exceptM go = newLinear <=< foldrM (\ e xs ->
         do b <- go e; return (b ? xs $ e : xs)
       ) []
@@ -235,6 +248,7 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       
       Same as 'mapWithM'', but keeps argument stucture like 'fmap'.
     -}
+    default mapWithM' :: NullableM m l => (Int -> e -> m e) -> l -> m l
     mapWithM' :: (Int -> e -> m e) -> l -> m l
     mapWithM' =  newLinear <=<< listWithM
     
@@ -291,7 +305,7 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       
       Mutable version of 'iterate'.
     -}
-    iterateM :: Int -> (e -> m e) -> e -> m l
+    iterateM :: NullableM m l => Int -> (e -> m e) -> e -> m l
     iterateM n go e = newLinearN n =<< iterate' n e id
       where
         iterate' 0 _ xs' = return (xs' [])
@@ -302,35 +316,35 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       
       'iterate' for mutable structures.
     -}
-    miterate :: Int -> (e -> e) -> e -> m l
+    miterate :: NullableM m l => Int -> (e -> e) -> e -> m l
     miterate n = newLinearN n ... iterate n
     
     {- |
       @takeM n es@ returns a reference to the @es@, keeping first @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    takeM :: Int -> l -> m l
+    takeM :: NullableM m l => Int -> l -> m l
     takeM n es = do s <- getSizeOf es; sansM (s - n) es
     
     {- |
       @dropM n es@ returns a reference to the @es@, discarding first @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    dropM :: Int -> l -> m l
+    dropM :: NullableM m l => Int -> l -> m l
     dropM n es = do s <- getSizeOf es; keepM (s - n) es
     
     {- |
       @keepM n es@ returns a reference to the @es@, keeping last @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    keepM :: Int -> l -> m l
+    keepM :: NullableM m l => Int -> l -> m l
     keepM n es = do s <- getSizeOf es; dropM (s - n) es
     
     {- |
       @sansM n es@ returns a reference to the @es@, discarding last @n@ elements.
       Changes in the source and result must be synchronous.
     -}
-    sansM :: Int -> l -> m l
+    sansM :: NullableM m l => Int -> l -> m l
     sansM n es = do s <- getSizeOf es; takeM (s - n) es
     
     {- |
@@ -338,7 +352,7 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       discarding first @n@ elements. Changes in the source and result must be
       synchronous.
     -}
-    splitM :: Int -> l -> m (l, l)
+    splitM :: NullableM m l => Int -> l -> m (l, l)
     splitM n es = liftA2 (,) (takeM n es) (dropM n es)
     
     {- |
@@ -346,14 +360,14 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       keeping last @n@ elements. Changes in the source and results must be
       synchronous.
     -}
-    divideM :: Int -> l -> m (l, l)
+    divideM :: NullableM m l => Int -> l -> m (l, l)
     divideM n es = liftA2 (,) (sansM n es) (keepM n es)
     
     {- |
       @splitM ns es@ returns the sequence of @es@ prefix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    splitsM :: Foldable f => f Int -> l -> m [l]
+    splitsM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
     splitsM ns es =
       let f ds' n = do ds <- ds'; (d,d') <- splitM n (head ds); pure (d':d:ds)
       in  reverse <$> foldl f (pure [es]) ns
@@ -362,7 +376,7 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       @dividesM ns es@ returns the sequence of @es@ suffix references of length
       @n <- ns@. Changes in the source and results must be synchronous.
     -}
-    dividesM :: Foldable f => f Int -> l -> m [l]
+    dividesM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
     dividesM ns es =
       let f n ds' = do ds <- ds'; (d, d') <- divideM n (head ds); pure (d':d:ds)
       in  foldr f (pure [es]) ns
@@ -371,21 +385,21 @@ class (Monad m, ForceableM m l, NullableM m l, EstimateM m l)
       @partsM n es@ returns the sequence of @es@ prefix references, splitted by
       offsets in @es@. Changes in the source and results must be synchronous.
     -}
-    partsM :: Foldable f => f Int -> l -> m [l]
+    partsM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
     partsM =  splitsM . go . toList where go is = zipWith (-) is (0 : is)
     
     {- |
       @chunksM n es@ returns the sequence of @es@ prefix references of length
       @n@. Changes in the source and results must be synchronous.
     -}
-    chunksM :: Int -> l -> m [l]
+    chunksM :: NullableM m l => Int -> l -> m [l]
     chunksM n es = do (t, d) <- splitM n es; nowNull d ?^ pure [t] $ (t :) <$> chunksM n d
     
     {- |
       @eachM n es@ returns new sequence of @es@ elements with step @n@. eachM
       shouldn't return references to @es@.
     -}
-    eachM :: Int -> l -> m l
+    eachM :: NullableM m l => Int -> l -> m l
     eachM n = newLinearN n . each n <=< getLeft
     
     -- | @prefixM p es@ returns the longest @es@ prefix size, satisfying @p@.
@@ -497,79 +511,133 @@ cast' ::
   ) => Prop m record -> Maybe (FieldLinearM l e m record)
 cast' =  cast
 #else
--- | 'FieldLinearM' is a service type used to prepend, append or remove element.
-data FieldLinearM m record
+data instance AccessRep "linear" "" m l e
+
+newtype instance AccessRep "linear" "head" m l e = AccessHead {accessHead :: AccessUse "linear" "head" m l e}
+newtype instance AccessRep "linear" "last" m l e = AccessLast {accessLast :: AccessUse "linear" "last" m l e}
+
+newtype instance AccessRep "linear" "left"  m l e = AccessLeft  {accessLeft  :: AccessUse "linear"  "left" m l e}
+newtype instance AccessRep "linear" "right" m l e = AccessRight {accessRight :: AccessUse "linear" "right" m l e}
+
+newtype instance AccessRep "linear" "prepend" m l e = AccessPrepend {accessPrepend :: AccessUse "linear" "prepend" m l e}
+newtype instance AccessRep "linear" "append"  m l e = AccessAppend  {accessAppend  :: AccessUse "linear"  "append" m l e}
+newtype instance AccessRep "linear" "remove"  m l e = AccessRemove  {accessRemove  :: AccessUse "linear"  "remove" m l e}
+
+--------------------------------------------------------------------------------
+
+type instance AccessUse "linear" "" m l e = ()
+
+type instance AccessUse "linear" "left"  m l e = l -> m [e]
+type instance AccessUse "linear" "right" m l e = l -> m [e]
+
+type instance AccessUse "linear" "head" m l e = l -> m e
+type instance AccessUse "linear" "last" m l e = l -> m e
+
+type instance AccessUse "linear" "prepend" m l e = e -> l -> m l
+type instance AccessUse "linear" "append"  m l e = l -> e -> m l
+type instance AccessUse "linear" "remove"  m l e = Int -> l -> m l
+
+--------------------------------------------------------------------------------
+
+instance Attribute "linear" "" m l e where attribute = undefined
+
+instance LinearM m l e => Attribute "linear" "left" m l e
   where
-    Prepend :: (FieldModifyM field m record l, LinearM m l e)
-            => !e -> !field -> FieldLinearM m record
-    
-    Append  :: (FieldModifyM field m record l, LinearM m l e)
-            => !field -> !e -> FieldLinearM m record
-    
-    Delete  :: (FieldModifyM field m record l, LinearM m l e)
-            => !Int -> !field -> FieldLinearM m record
-  deriving ( Typeable )
+    attribute = AccessLeft getLeft
 
-instance IsProp FieldLinearM
+instance LinearM m l e => Attribute "linear" "right" m l e
   where
-    performProp record (Prepend e field) = () <$ modifyRecordM field record (prepend  e)
-    performProp record (Append  field e) = () <$ modifyRecordM field record (`append` e)
-    performProp record (Delete  n field) = () <$ modifyRecordM field record (removed  n)
+    attribute = AccessRight getRight
 
-{- |
-  @since 0.2.1
-  
-  @(':+=')@ is @fmr@-compatible 'prepend' element pattern for 'LinearM' fields.
--}
-pattern (:+=) :: (Typeable m, Typeable record, Monad m)
-              => (FieldModifyM field m record l, LinearM m l e)
-              => e -> field -> Prop m record
-pattern e :+= field = Prop (Prepend e field)
+instance LinearM m l e => Attribute "linear" "head" m l e
+  where
+    attribute = AccessHead getHead
 
-{- |
-  @since 0.2.1
-  
-  @(':=+')@ is @fmr@-compatible 'append' element pattern for 'LinearM' fields.
--}
-pattern (:=+) :: (Typeable m, Typeable record, Monad m)
-              => (FieldModifyM field m record l, LinearM m l e)
-              => field -> e -> Prop m record
-pattern field :=+ e = Prop (Append field e)
+instance LinearM m l e => Attribute "linear" "last" m l e
+  where
+    attribute = AccessLast getLast
 
-{- |
-  @since 0.2.1
-  
-  @(':~=')@ is @fmr@-compatible delete element pattern for 'LinearM' fields, see
-  'removed'.
--}
-pattern (:~=) :: (Typeable m, Typeable record, Monad m)
-              => (FieldModifyM field m record l, LinearM m l e)
-              => Int -> field -> Prop m record
-pattern n :~= field = Prop (Delete n field)
+instance LinearM m l e => Attribute "linear" "append" m l e
+  where
+    attribute = AccessAppend append
+
+instance LinearM m l e => Attribute "linear" "prepend" m l e
+  where
+    attribute = AccessPrepend prepend
+
+instance (NullableM m l, LinearM m l e) => Attribute "linear" "remove" m l e
+  where
+    attribute = AccessRemove removed
+
+--------------------------------------------------------------------------------
+
+instance IsMVar m var => UseAttribute var "linear" "" m l e
+  where
+    useAttr _ _ = ()
+
+instance IsMVar m var => UseAttribute var "linear" "head" m l e
+  where
+    useAttr attr _ rep = do l <- fromMRef attr; accessHead l rep
+
+instance IsMVar m var => UseAttribute var "linear" "last" m l e
+  where
+    useAttr attr _ rep = do l <- fromMRef attr; accessLast l rep
+
+instance IsMVar m var => UseAttribute var "linear" "left" m l e
+  where
+    useAttr attr _ rep = do l <- fromMRef attr; accessLeft l rep
+
+instance IsMVar m var => UseAttribute var "linear" "right" m l e
+  where
+    useAttr attr _ rep = do l <- fromMRef attr; accessRight l rep
+
+instance IsMVar m var => UseAttribute var "linear" "append" m l e
+  where
+    useAttr attr _ rep e = do l <- fromMRef attr; accessAppend l rep e
+
+instance IsMVar m var => UseAttribute var "linear" "prepend" m l e
+  where
+    useAttr attr _ e rep = do l <- fromMRef attr; accessPrepend l e rep
+
+instance IsMVar m var => UseAttribute var "linear" "remove" m l e
+  where
+    useAttr attr _ rep n = do l <- fromMRef attr; accessRemove l rep n
+
+pattern (:+=) :: UseField "linear" "append" api
+              => FieldT m api l e -> e -> l -> m l
+
+pattern fld :+= val <- (const Nothing -> Just (fld, val)) where (:+=) = flip (=+:)
+
+pattern (:=+) :: UseField "linear" "prepend" api
+              => FieldT m api l e -> e -> l -> m l
+
+pattern fld :=+ val <- (const Nothing -> Just (fld, val)) where (:=+) = flip (+=:)
+
+pattern (:~=) :: UseField "linear" "remove" api
+              => FieldT m api l e -> Int -> l -> m l
+
+pattern fld :~= n <- (const Nothing -> Just (fld, n)) where (:~=) = flip (~=:)
+
+--------------------------------------------------------------------------------
+
+linear' :: UseField "linear" sub api => Proxy sub -> FieldT m api rep a
+        -> AccessUse "linear" sub m rep a
+linear' =  use (Proxy :: Proxy "linear")
 
 -- | Same as @(':=+')@ but doesn't require 'Typeable'.
-(=+:) ::
-  (
-    LinearM m l e, FieldModifyM field m record l,
-    Typeable field, Typeable m, Typeable record
-  ) => field -> e -> Prop m record
-field =+: e = Prop (Append field e)
+(=+:) :: UseField "linear" "append" api
+      => e -> FieldT m api l e -> l -> m l
+(=+:) =  \ e fld l -> linear' (Proxy :: Proxy "append") fld l e
 
 -- | Same as @(':=+')@ but doesn't require 'Typeable'.
-(+=:) ::
-  (
-    LinearM m l e, FieldModifyM field m record l,
-    Typeable field, Typeable m, Typeable record
-  ) => e -> field -> Prop m record
-field +=: e = Prop (Prepend field e)
+(+=:) :: UseField "linear" "prepend" api
+      => e -> FieldT m api l e -> l -> m l
+(+=:) =  \ e fld l -> linear' (Proxy :: Proxy "prepend") fld e l
 
 -- | Same as @(':=+')@ but doesn't require 'Typeable'.
-(~=:) ::
-  (
-    LinearM m l e, FieldModifyM field m record l,
-    Typeable m, Typeable record, Typeable field
-  ) => Int -> field -> Prop m record
-n ~=: field = Prop (Delete n field)
+(~=:) :: UseField "linear" "remove" api
+      => Int -> FieldT m api l e -> l -> m l
+(~=:) =  \ n fld l -> linear' (Proxy :: Proxy "remove") fld n l
 #endif
 
 --------------------------------------------------------------------------------
@@ -590,6 +658,33 @@ type LinearM'' m l = forall i e . LinearM m (l i e) e
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+  
+  Same as 'prepend'
+-}
+(+=) :: LinearM m l e => e -> l -> m l
+(+=) =  prepend
+
+{- |
+  @since 0.3
+  
+  Same as 'append'
+-}
+(=+) :: LinearM m l e => l -> e -> m l
+(=+) =  append
+
+{- |
+  @since 0.3
+  
+  Same as 'removed'
+-}
+(~=) :: (NullableM m l, LinearM m l e) => Int -> l -> m l
+(~=) =  removed
+
+--------------------------------------------------------------------------------
+
+{-# NOINLINE emptyEx #-}
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
 

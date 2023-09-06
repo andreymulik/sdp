@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Finite
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -40,7 +40,6 @@ import Data.Typeable
 import Data.Data
 
 import GHC.Generics
-import GHC.Types
 import GHC.Read
 
 import qualified GHC.Exts as E
@@ -98,11 +97,11 @@ instance (Default d, Default d') => Default (d :& d') where def = def :& def
 
 {- Overloaded indices. -}
 
-instance (IsList (i' :& i), E.Item (i' :& i) ~~ i, Show i) => Show (i' :& i)
+instance (IsList (i' :& i), E.Item (i' :& i) ~ i, Show i) => Show (i' :& i)
   where
     showsPrec p = showsPrec p . E.toList
 
-instance (IsList (i' :& i), E.Item (i' :& i) ~~ i, Read i) => Read (i' :& i)
+instance (IsList (i' :& i), E.Item (i' :& i) ~ i, Read i) => Read (i' :& i)
   where
     readPrec = E.fromList <$> readPrec
 
@@ -115,7 +114,7 @@ instance IsList (E :& i)
     
     toList (E :& i) = [i]
 
-instance (E.Item (i' :& i) ~~ i, IsList (i' :& i)) => IsList (i' :& i :& i)
+instance (E.Item (i' :& i) ~ i, IsList (i' :& i)) => IsList (i' :& i :& i)
   where
     type Item (i' :& i :& i) = i
     
@@ -202,9 +201,15 @@ ind13 a b c d e f g h i j k l m     = E:&a:&b:&c:&d:&e:&f:&g:&h:&i:&j:&k:&l:&m
 ind14 a b c d e f g h i j k l m n   = E:&a:&b:&c:&d:&e:&f:&g:&h:&i:&j:&k:&l:&m:&n
 ind15 a b c d e f g h i j k l m n o = E:&a:&b:&c:&d:&e:&f:&g:&h:&i:&j:&k:&l:&m:&n:&o
 
+--------------------------------------------------------------------------------
+
 unsnoc :: [i] -> ([i], i)
 unsnoc    [i]   = ([], i)
 unsnoc (i : is) = (i :) `first` unsnoc is
-unsnoc     _    = throw $ UnexpectedRank "in SDP.Finite.fromList"
+unsnoc     _    = unexpectedRank
+
+{-# NOINLINE unexpectedRank #-}
+unexpectedRank :: a
+unexpectedRank =  throw $ UnexpectedRank "in SDP.Finite.fromList"
 
 

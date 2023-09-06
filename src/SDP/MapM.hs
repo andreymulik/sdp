@@ -48,9 +48,9 @@ class (Monad m, Eq key) => MapM m map key e | map -> m, map -> key, map -> e
     {-# MINIMAL newMap', overwrite, ((>!)|(!?>)), kfoldrM, kfoldlM #-}
     
     -- | 'getAssocs' is version of 'SDP.Map.assocs' for mutable maps.
-    default getAssocs :: LinearM m map e => map -> m [(key, e)]
     getAssocs :: map -> m [(key, e)]
     getAssocs es = liftA2 zip (getKeys es) (getLeft es)
+    default getAssocs :: LinearM m map e => map -> m [(key, e)]
     
     -- | Create new mutable map from list of @(key, element)@ associations.
     newMap :: [(key, e)] -> m map
@@ -330,21 +330,21 @@ type MapM' m map key = forall e . MapM m (map e) key e
 -- | 'MapM' contraint for @(Type -> Type -> Type)@-kind types.
 type MapM'' m map = forall key e . MapM m (map key e) key e
 #endif
-
 --------------------------------------------------------------------------------
 
+{-# NOINLINE empEx #-}
 empEx :: String -> a
 empEx =  throw . EmptyRange . showString "in SDP.MapM."
 
+{-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.MapM."
 
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.MapM."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.MapM."
-
-
-
 

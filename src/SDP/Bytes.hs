@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Bytes
-    Copyright   :  (c) Andrey Mulik 2019
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -23,14 +23,13 @@ module SDP.Bytes
 )
 where
 
+import SDP.Templates.AnyBorder
+import SDP.Prim.SBytes
 import SDP.Indexed
 import SDP.Unboxed
 import SDP.Sort
 import SDP.Scan
 import SDP.Set
-
-import SDP.Templates.AnyBorder
-import SDP.Prim.SBytes
 
 default ()
 
@@ -38,8 +37,4 @@ default ()
 
 -- | 'Bytes' - unboxed array.
 type Bytes = AnyBorder SBytes#
-
-
-
-
 

@@ -65,8 +65,6 @@ fromProxy# :: Proxy# e -> proxy e
 fromProxy# =  \ _ -> unreachEx "fromProxy#: inappropriate use, (fromProxy# e)\
                               \ should never be evaluated."
 
---------------------------------------------------------------------------------
-
 {- |
   @since 0.3
   
@@ -83,8 +81,6 @@ toProxy## =  \ _ -> proxy#
 fromProxy## :: Proxy# e -> e
 fromProxy## =  \ _ -> unreachEx "fromProxy##: inappropriate use, (fromProxy## e)\
                               \ should never be evaluated."
-
---------------------------------------------------------------------------------
 
 {- |
   @since 0.3
@@ -125,6 +121,10 @@ fromProxy1 =  \ _ -> unreachEx "fromProxy1: inappropriate use, (fromProxy1 e)\
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "SDP.Proxy."
+
+
+
 

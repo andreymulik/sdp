@@ -1,8 +1,8 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Safe, TypeOperators #-}
 
 {- |
     Module      :  SDP.Index
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -17,19 +17,54 @@ module SDP.Index
   module SDP.Shape,
   
   -- * Shapes
-  (:|:), SubIndex, takeDim, dropDim, joinDim, splitDim,
+  (C.:|:), C.SubIndex, takeDim, dropDim, joinDim, C.splitDim,
   
   -- * Indices
-  Index (..),
+  C.Index (..), C.SizesOf,
   
   -- ** Helpers
-  InBounds (..), offsetIntegral, defaultBoundsUnsign
+  C.InBounds (..), C.offsetIntegral, C.defaultBoundsUnsign
 )
 where
 
-import SDP.Index.Class
+import qualified SDP.Index.Class as C
 import SDP.Shape
 
 import SDP.Nullable
+
+default ()
+
+--------------------------------------------------------------------------------
+
+{- |
+  Take some dimensions.
+  
+  @
+  takeDim ([1,2,3,4] :: I4 Int) === [1] :: I1 Int
+  takeDim ([1,2,3,4] :: I4 Int) === E@
+-}
+takeDim :: C.SubIndex i j => i -> j
+takeDim =  C.takeDim
+
+{- |
+  Drop some dimensions (second argument used as type variable).
+  
+  @
+  dropDim ([1,2,3,4] :: I4 Int)    ([] :: E)      === [1,2,3,4]
+  dropDim ([1,2,3,4] :: I4 Int) ([1,2] :: I2 Int) ===   [3,4]@
+-}
+dropDim :: C.SubIndex i j => i -> j -> i C.:|: j
+dropDim =  C.dropDim
+
+{- |
+  Join some dimensions.
+  
+  @
+  joinDim ([1,2] :: I2 Int)  [3]  ===  [1,2,3]  :: I3 Int
+  joinDim ([1,2] :: I2 Int) [3,4] === [1,2,3,4] :: I4 Int@
+-}
+joinDim :: C.SubIndex i j => j -> (i C.:|: j) -> i
+joinDim =  C.joinDim
+
 
 

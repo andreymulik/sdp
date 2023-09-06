@@ -1,9 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, GADTs #-}
-{-# LANGUAGE Trustworthy, MagicHash, PatternSynonyms, UndecidableInstances #-}
+{-# LANGUAGE Safe, MagicHash, PatternSynonyms, UndecidableInstances, DataKinds #-}
 
 {- |
     Module      :  SDP.Prim.TArray
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable
@@ -24,8 +24,6 @@ import SDP.Prim.SArray hiding ( set )
 
 import Data.Field
 
-import GHC.Conc
-
 import Control.Exception.SDP
 
 default ()
@@ -33,25 +31,25 @@ default ()
 --------------------------------------------------------------------------------
 
 -- | 'SArray#' of @stm@ 'TVar's.
-type TArray# = MArray# STM
+type TArray# = MArray# STM TVar
 
 {-# COMPLETE TArray# #-}
 -- | Legacy pattern synonym for @sdp-0.2@ compatibility.
-pattern TArray# :: SArray# (Var STM e) -> TArray# e
+pattern TArray# :: SArray# (TVar e) -> TArray# e
 pattern TArray# es = MArray# es
 
 --------------------------------------------------------------------------------
 
 -- | Generalized array of variables.
-data MArray# m e
+data MArray# m var e
   where
-    MArray# :: MonadVar m => {-# UNPACK #-} !(SArray# (Var m e)) -> MArray# m e
+    MArray# :: IsMVar m var => {-# UNPACK #-} !(SArray# (var e)) -> MArray# m var e
 
 --------------------------------------------------------------------------------
 
 {- Eq instance. -}
 
-instance Eq (Var m e) => Eq (MArray# m e)
+instance Eq (var e) => Eq (MArray# m var e)
   where
     MArray# xs == MArray# ys = xs == ys
 
@@ -59,12 +57,12 @@ instance Eq (Var m e) => Eq (MArray# m e)
 
 {- Nullable and NullableM instances. -}
 
-instance MonadVar m => Nullable (MArray# m e)
+instance IsMVar m var => Nullable (MArray# m var e)
   where
     isNull = \ (MArray# es) -> isNull es
     lzero  = MArray# Z
 
-instance MonadVar m => NullableM m (MArray# m e)
+instance IsMVar m var => NullableM m (MArray# m var e)
   where
     newNull = return Z
     nowNull = return . isNull
@@ -73,7 +71,7 @@ instance MonadVar m => NullableM m (MArray# m e)
 
 {- Estimate and EstimateM instances. -}
 
-instance Estimate (MArray# m e)
+instance Estimate (MArray# m var e)
   where
     sizeOf = sizeOf . unpack
     
@@ -89,7 +87,7 @@ instance Estimate (MArray# m e)
     (.>)   = (>)   . sizeOf
     (.<)   = (<)   . sizeOf
 
-instance Monad m => EstimateM m (MArray# m e)
+instance Monad m => EstimateM m (MArray# m var e)
   where
     getSizeOf = return . sizeOf
     
@@ -109,7 +107,7 @@ instance Monad m => EstimateM m (MArray# m e)
 
 {- Bordered and BorderedM instances. -}
 
-instance Bordered (MArray# m e) Int
+instance Bordered (MArray# m var e) Int
   where
     lower _ = 0
     upper   = upper . unpack
@@ -122,7 +120,8 @@ instance Bordered (MArray# m e) Int
     
     viewOf bnds (MArray# es) = MArray# (viewOf bnds es)
 
-instance MonadVar m => BorderedM m (MArray# m e) Int
+instance (Attribute "set" "" m (var e) e, IsMVar m var)
+      => BorderedM m (MArray# m var e) Int
   where
     getIndexOf = return ... indexOf
     getIndices = return . indices
@@ -136,14 +135,15 @@ instance MonadVar m => BorderedM m (MArray# m e) Int
 
 {- ForceableM and LinearM instances. -}
 
-instance MonadVar m => ForceableM m (MArray# m e)
+instance IsMVar m var => ForceableM m (MArray# m var e)
   where
-    copied (MArray# arr) = MArray# <$> otraverse (const $ var <=< get this') arr
+    copied (MArray# arr) = MArray# <$> otraverse (const $ var <=< fromMRef) arr
 
-instance MonadVar m => LinearM m (MArray# m e) e
+instance (Attribute "set" "" m (var e) e, IsMVar m var)
+      => LinearM m (MArray# m var e) e
   where
-    getHead = get this . head . unpack
-    getLast = get this . last . unpack
+    getHead = fromMRef . head . unpack
+    getLast = fromMRef . last . unpack
     singleM = fmap (MArray# . single) . var
     
     prepend e es = MArray# . (:> unpack es) <$> var e
@@ -153,11 +153,11 @@ instance MonadVar m => LinearM m (MArray# m e) e
     newLinearN  n = fmap (MArray# . fromListN n) . mapM var
     fromFoldableM = fmap (MArray# . fromList) . foldr (liftA2 (:) . var) (return [])
     
-    (!#>)  = get this ... (!^) . unpack
+    (!#>)  = fromMRef ... (!^) . unpack
     writeM = writeM'
     
-    getLeft  = mapM (get this) . listL . unpack
-    getRight = mapM (get this) . listR . unpack
+    getLeft  = mapM fromMRef . listL . unpack
+    getRight = mapM fromMRef . listR . unpack
     merged   = return . MArray# . concatMap unpack
     reversed = return . MArray# . reverse . unpack
     filled n = fmap (MArray# . fromList) . replicateM n . var
@@ -173,11 +173,11 @@ instance MonadVar m => LinearM m (MArray# m e) e
         n1 = sizeOf src
         n2 = sizeOf trg
     
-    ofoldlM f base = ofoldl (\ i es -> ($ f i) . (es >>=<<) . get this) (return base) . unpack
-    ofoldrM f base = ofoldr (\ i -> ($ f i) ... (>>=<<) . get this) (return base) . unpack
+    ofoldlM f base = ofoldl (\ i es -> ($ f i) . (es >>=<<) . fromMRef) (return base) . unpack
+    ofoldrM f base = ofoldr (\ i -> ($ f i) ... (>>=<<) . fromMRef) (return base) . unpack
     
-    foldlM f base = foldl (\ es -> ($ f) . (es >>=<<) . get this) (return base) . unpack
-    foldrM f base = foldr (($ f) ... (>>=<<) . get this) (return base) . unpack
+    foldlM f base = foldl (\ es -> ($ f) . (es >>=<<) . fromMRef) (return base) . unpack
+    foldrM f base = foldr (($ f) ... (>>=<<) . fromMRef) (return base) . unpack
     
     takeM n = return . MArray# . take n . unpack
     dropM n = return . MArray# . drop n . unpack
@@ -185,26 +185,22 @@ instance MonadVar m => LinearM m (MArray# m e) e
     sansM n = return . MArray# . sans n . unpack
     
     prefixM p es =
-      let
-          go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ 1) $ return i
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ 1) $ return i
           c = sizeOf es
       in  go 0
     
     suffixM p es =
-      let
-          go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
           c = sizeOf es
       in  go (c - 1)
     
     mprefix p es =
-      let
-          go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
           c = sizeOf es
       in  go 0
     
     msuffix p es =
-      let
-          go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
           c = sizeOf es
       in  go (c - 1)
 
@@ -212,14 +208,15 @@ instance MonadVar m => LinearM m (MArray# m e) e
 
 {- MapM instance. -}
 
-instance MonadVar m => MapM m (MArray# m e) Int e
+instance (Attribute "set" "" m (var e) e, IsMVar m var)
+      => MapM m (MArray# m var e) Int e
   where
     newMap' defvalue ascs =
       let bnds = rangeBounds (fsts ascs)
       in  fromAssocs' bnds defvalue ascs
     
     {-# INLINE writeM' #-}
-    writeM' = setField this ... (!^) . unpack
+    writeM' (MArray# es) key e = accessSet attribute (es !^ key) e
     
     (>!) = (!#>)
     
@@ -232,7 +229,8 @@ instance MonadVar m => MapM m (MArray# m e) Int e
 
 {- IndexedM instance. -}
 
-instance MonadVar m => IndexedM m (MArray# m e) Int e
+instance (Attribute "set" "" m (var e) e, IsMVar m var)
+      => IndexedM m (MArray# m var e) Int e
   where
     fromAssocs' bnds defvalue ascs = do
       es <- filled (size bnds) defvalue
@@ -251,25 +249,32 @@ instance MonadVar m => IndexedM m (MArray# m e) Int e
 
 {- Freeze and Thaw instances. -}
 
-instance MonadVar m => Thaw m (SArray# e) (MArray# m e)
+instance IsMVar m var => Thaw m (SArray# e) (MArray# m var e)
   where
     thaw es = MArray# <$> mapM var es
 
-instance Monad m => Freeze m (MArray# m e) (SArray# e)
+instance Monad m => Freeze m (MArray# m var e) (SArray# e)
   where
-    freeze (MArray# es) = get this `mapM` es
+    freeze (MArray# es) = fromMRef `mapM` es
 
 --------------------------------------------------------------------------------
 
-unpack :: MArray# m e -> SArray# (Var m e)
+unpack :: MArray# m var e -> SArray# (var e)
 unpack =  \ (MArray# es) -> es
 
+--------------------------------------------------------------------------------
+
+{-# NOINLINE overEx #-}
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.TArray."
 
+{-# NOINLINE underEx #-}
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
 

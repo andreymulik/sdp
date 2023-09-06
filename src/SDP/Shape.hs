@@ -34,11 +34,11 @@ import SDP.Finite
 import SDP.Tuple
 import SDP.Proxy
 
+import Data.Kind
 import Data.Word
 import Data.Int
 
 import GHC.TypeLits
-import GHC.Types
 import GHC.Exts
 
 import Foreign.C.Types

@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Unboxed.Utils
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -98,8 +98,13 @@ shift32WI# =  xor# (int2Word# 0x01# `shiftL#` 31#)
   'Foreign.Storable.Storable' or another compatible API.
 -}
 {-# INLINE shift64WI# #-}
+#if MIN_VERSION_base(4,17,0)
+shift64WI# :: Word64# -> Word64#
+shift64WI# =  xor64# ((int64ToWord64# (intToInt64# 0x01#)) `uncheckedShiftL64#` 63#)
+#else
 shift64WI# :: Word# -> Word#
-shift64WI# = xor# (int2Word# 0x01# `shiftL#` 63#)
+shift64WI# =  xor# (int2Word# 0x01# `shiftL#` 63#)
+#endif
 
 --------------------------------------------------------------------------------
 

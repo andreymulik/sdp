@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
-{-# LANGUAGE Trustworthy, CPP, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE Trustworthy, CPP, TypeFamilies, ConstraintKinds, TypeOperators #-}
 {-# LANGUAGE PatternSynonyms, ViewPatterns, BangPatterns #-}
 
 #ifdef SDP_LINEAR_EXTRAS
@@ -12,7 +12,7 @@
 
 {- |
     Module      :  SDP.Linear
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -1150,11 +1150,11 @@ o_foldl1' =  sfoldl1'
 
 --------------------------------------------------------------------------------
 
+{-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
 
+{-# NOINLINE pfailEx #-}
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Linear."
-
-
 

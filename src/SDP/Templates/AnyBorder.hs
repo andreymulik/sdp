@@ -1,6 +1,6 @@
 {-# LANGUAGE Trustworthy, TypeFamilies, DeriveDataTypeable, DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, TypeOperators #-}
 
 {- |
     Module      :  SDP.Templates.AnyBorder
@@ -157,8 +157,8 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~
         l = fromGIndex (E :& unsafeIndex  1 :& unsafeIndex  1)
         u = fromGIndex (E :& unsafeIndex nx :& unsafeIndex my)
         
-        [nx, mx] = sizesOf xs'; xs = unpack xs'
-        [ny, my] = sizesOf ys'; ys = unpack ys'
+        E :& nx :& mx = sizesOf xs'; xs = unpack xs'
+        E :& ny :& my = sizesOf ys'; ys = unpack ys'
 
 --------------------------------------------------------------------------------
 
@@ -385,7 +385,8 @@ instance ForceableM1 m rep e => ForceableM m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
-instance (Index i, LinearM1 m rep e) => LinearM m (AnyBorder rep i e) e
+instance (Index i, NullableM m (rep e), LinearM1 m rep e)
+      => LinearM m (AnyBorder rep i e) e
   where
     getHead = getHead . unpack
     getLast = getLast . unpack
@@ -568,8 +569,11 @@ instance (Index i, Indexed1 rep Int e) => Indexed (AnyBorder rep i e) i e
 
 {- MapM, IndexedM instances. -}
 
-instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e)
-      => MapM m (AnyBorder rep i e) i e
+instance
+    (
+      Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e,
+      NullableM m (rep e)
+    ) => MapM m (AnyBorder rep i e) i e
   where
     newMap ascs =
       let bnds@(l, u) = rangeBounds (fsts ascs)
@@ -593,7 +597,8 @@ instance (Index i, MapM1 m rep Int e, LinearM1 m rep e, BorderedM1 m rep Int e)
     kfoldrM f base (AnyBorder l u es) = ofoldrM (f . index (l, u)) base es
     kfoldlM f base (AnyBorder l u es) = ofoldlM (f . index (l, u)) base es
 
-instance (Index i, IndexedM1 m rep Int e) => IndexedM m (AnyBorder rep i e) i e
+instance (Index i, NullableM m (rep e), IndexedM1 m rep Int e)
+      => IndexedM m (AnyBorder rep i e) i e
   where
     fromAssocs (l, u) ascs = AnyBorder l u <$> fromAssocs bnds ies
       where
@@ -665,9 +670,6 @@ instance {-# OVERLAPS #-} (Index i, Freeze1 m mut imm e)
 
 --------------------------------------------------------------------------------
 
-undEx :: String -> a
-undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
-
 {-# INLINE unpack #-}
 unpack :: AnyBorder rep i e -> rep e
 unpack =  \ (AnyBorder _ _ es) -> es
@@ -680,6 +682,9 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
 
+--------------------------------------------------------------------------------
 
-
+{-# NOINLINE undEx #-}
+undEx :: String -> a
+undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
 

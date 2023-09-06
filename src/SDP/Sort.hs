@@ -7,7 +7,7 @@
 
 {- |
     Module      :  SDP.Index
-    Copyright   :  (c) Andrey Mulik 2019-2021
+    Copyright   :  (c) Andrey Mulik 2019-2022
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
