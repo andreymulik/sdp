@@ -8,7 +8,7 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
-    
+
     "SDP.Templates.AnyBorder" provides 'AnyBorder' - template of generalized by
     index type structure, based on 'Int'-indexed primitive.
 -}
@@ -18,7 +18,7 @@ module SDP.Templates.AnyBorder
   module SDP.IndexedM,
   module SDP.Sort,
   module SDP.Scan,
-  
+
   -- * Border template
   AnyBorder (..)
 )
@@ -50,7 +50,7 @@ default ()
 
 {- |
   'AnyBorder' is template, that appends arbitrary bounds to any structure.
-  
+
   * 'Eq', 'Ord', 'Eq1' and 'Ord1' instances ingores bounds.
   * 'Thaw' and 'Freeze' instances for @'AnyBorder' rep e@ inherit @rep e@
   behavior.
@@ -113,7 +113,7 @@ instance (Index i, E.IsList (rep e), Estimate1 rep e)
       => E.IsList (AnyBorder rep i e)
   where
     type Item (AnyBorder rep i e) = E.Item (rep e)
-    
+
     fromListN = withBounds ... E.fromListN
     fromList  = withBounds . E.fromList
     toList    = E.toList . unpack
@@ -141,14 +141,14 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~
       => Num (AnyBorder rep ii e)
   where
     fromInteger = single . fromInteger
-    
+
     negate (AnyBorder l u rep) = AnyBorder l u (negate rep)
     signum (AnyBorder l u rep) = AnyBorder l u (signum rep)
     abs    (AnyBorder l u rep) = AnyBorder l u (abs    rep)
-    
+
     AnyBorder l u xs + AnyBorder _ _ ys = AnyBorder l u (xs + ys)
     AnyBorder l u xs - AnyBorder _ _ ys = AnyBorder l u (xs - ys)
-    
+
     xs' * ys' = mx /= ny ? undEx "(*)" $ viewOf (l, u) $ fromListN (nx * my) [
           sum [ xs !^ (i * mx + k) * ys !^ (k * my + j) | k <- [0 .. mx - 1] ]
         | i <- [0 .. nx - 1], j <- [0 .. my - 1]
@@ -156,7 +156,7 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~
       where
         l = fromGIndex (E :& unsafeIndex  1 :& unsafeIndex  1)
         u = fromGIndex (E :& unsafeIndex nx :& unsafeIndex my)
-        
+
         E :& nx :& mx = sizesOf xs'; xs = unpack xs'
         E :& ny :& my = sizesOf ys'; ys = unpack ys'
 
@@ -181,13 +181,13 @@ instance (Index i, NullableM1 m rep e) => NullableM m (AnyBorder rep i e)
 instance Index i => Estimate (AnyBorder rep i e)
   where
     sizeOf (AnyBorder l u _) = size (l, u)
-    
+
     (<==>) = on (<=>) sizeOf
     (.<=.) = on (<=)  sizeOf
     (.>=.) = on (>=)  sizeOf
     (.>.)  = on (>)   sizeOf
     (.<.)  = on (<)   sizeOf
-    
+
     (<.=>) = (<=>) . sizeOf
     (.>=)  = (>=)  . sizeOf
     (.<=)  = (<=)  . sizeOf
@@ -197,13 +197,13 @@ instance Index i => Estimate (AnyBorder rep i e)
 instance (Monad m, Index i) => EstimateM m (AnyBorder rep i e)
   where
     getSizeOf (AnyBorder l u _) = return $ size (l, u)
-    
+
     estimateMLT = return ... (.<.)
     estimateMGT = return ... (.>.)
     estimateMLE = return ... (.<=.)
     estimateMGE = return ... (.>=.)
     estimateM   = return ... (<==>)
-    
+
     lestimateMLT = return ... (.<)
     lestimateMGT = return ... (.>)
     lestimateMLE = return ... (.<=)
@@ -223,7 +223,7 @@ instance Index i => Bordered (AnyBorder rep i e) i
     indexOf  (AnyBorder l u _) = index   (l, u)
     indexIn  (AnyBorder l u _) = inRange (l, u)
     offsetOf (AnyBorder l u _) = offset  (l, u)
-    
+
     viewOf bnds es = size bnds >. es ? es $ uncurry AnyBorder bnds (unpack es)
 
 instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
@@ -233,7 +233,7 @@ instance (Index i, BorderedM1 m rep Int e) => BorderedM m (AnyBorder rep i e) i
     getBounds  (AnyBorder l u _) = return (l, u)
     getLower   (AnyBorder l _ _) = return l
     getUpper   (AnyBorder _ u _) = return u
-    
+
     getViewOf bnds es =
       let bnds' = defaultBounds (size bnds)
       in  uncurry AnyBorder bnds <$> getViewOf bnds' (unpack es)
@@ -253,29 +253,29 @@ instance (Index i, Zip rep) => Zip (AnyBorder rep i)
     all4 f as bs cs ds       = all4 f (unpack as) (unpack bs) (unpack cs) (unpack ds)
     all5 f as bs cs ds es    = all5 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es)
     all6 f as bs cs ds es fs = all6 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es) (unpack fs)
-    
+
     any2 f as bs             = any2 f (unpack as) (unpack bs)
     any3 f as bs cs          = any3 f (unpack as) (unpack bs) (unpack cs)
     any4 f as bs cs ds       = any4 f (unpack as) (unpack bs) (unpack cs) (unpack ds)
     any5 f as bs cs ds es    = any5 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es)
     any6 f as bs cs ds es fs = any6 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es) (unpack fs)
-    
+
     zipWith f as bs =
       let (l, u) = defaultBounds $ minimum [sizeOf as, sizeOf bs]
       in  AnyBorder l u $ zipWith f (unpack as) (unpack bs)
-    
+
     zipWith3 f as bs cs =
       let (l, u) = defaultBounds $ minimum [sizeOf as, sizeOf bs, sizeOf cs]
       in  AnyBorder l u $ zipWith3 f (unpack as) (unpack bs) (unpack cs)
-    
+
     zipWith4 f as bs cs ds =
       let (l, u) = defaultBounds $ minimum [sizeOf as, sizeOf bs, sizeOf cs, sizeOf ds]
       in  AnyBorder l u $ zipWith4 f (unpack as) (unpack bs) (unpack cs) (unpack ds)
-    
+
     zipWith5 f as bs cs ds es =
       let (l, u) = defaultBounds $ minimum [sizeOf as, sizeOf bs, sizeOf cs, sizeOf ds, sizeOf es]
       in  AnyBorder l u $ zipWith5 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es)
-    
+
     zipWith6 f as bs cs ds es fs =
       let (l, u) = defaultBounds $ minimum [sizeOf as, sizeOf bs, sizeOf cs, sizeOf ds, sizeOf es, sizeOf fs]
       in  AnyBorder l u $ zipWith6 f (unpack as) (unpack bs) (unpack cs) (unpack ds) (unpack es) (unpack fs)
@@ -283,7 +283,7 @@ instance (Index i, Zip rep) => Zip (AnyBorder rep i)
 instance (Index i, Applicative rep) => Applicative (AnyBorder rep i)
   where
     pure = uncurry AnyBorder (defaultBounds 1) . pure
-    
+
     (AnyBorder lf uf fs) <*> (AnyBorder le ue es) =
       let (l, u) = defaultBounds (size (lf, uf) * size (le, ue))
       in  AnyBorder l u (fs <*> es)
@@ -298,10 +298,10 @@ instance (Index i, Foldable rep) => Foldable (AnyBorder rep i)
     foldl  f base = foldl  f base . unpack
     foldr' f base = foldr' f base . unpack
     foldl' f base = foldl' f base . unpack
-    
+
     foldr1 f = foldr1 f . unpack
     foldl1 f = foldl1 f . unpack
-    
+
     length = length . unpack
     toList = toList . unpack
     null   = null   . unpack
@@ -312,70 +312,72 @@ instance (Index i, Traversable rep) => Traversable (AnyBorder rep i)
 
 --------------------------------------------------------------------------------
 
-{- Forceable and Linear instances. -}
+{- Forceable, Sequence and Linear instances. -}
 
 instance Forceable1 rep e => Forceable (AnyBorder rep i e)
   where
     force (AnyBorder l u rep) = AnyBorder l u (force rep)
 
-instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
+instance (Index i, Linear1 rep e) => Sequence (AnyBorder rep i e) e
   where
     single = withBounds . single
-    
+
     toHead e es = withBounds (e :> unpack es)
     toLast es e = withBounds (unpack es :< e)
-    
+
     head = head . unpack
     last = last . unpack
     tail = withBounds . tail . unpack
     init = withBounds . init . unpack
-    
-    fromList  = fromFoldable
+
+    fromList     = fromFoldable
+    fromFoldable = withBounds . fromFoldable
+
+    before es = withBounds ... before (unpack es)
+
+    listL = listL . unpack
+    listR = listR . unpack
+
+    prefix p = prefix p . unpack
+    suffix p = suffix p . unpack
+
+    nubBy f = withBounds . nubBy f . unpack
+    nub     = withBounds .   nub   . unpack
+
+    ofoldr f base = ofoldr f base . unpack
+    ofoldl f base = ofoldl f base . unpack
+
+    sfoldr f base = sfoldr f base . unpack
+    sfoldl f base = sfoldl f base . unpack
+
+    isPrefixOf xs ys = xs .<=. ys && on isPrefixOf unpack xs ys
+    isSuffixOf xs ys = xs .<=. ys && on isSuffixOf unpack xs ys
+
+    {-# INLINE (!^) #-}
+    (!^) = (!^) . unpack
+
+    write   (AnyBorder l u es) n e = AnyBorder l u (write es n e)
+    reverse (AnyBorder l u es)     = AnyBorder l u (reverse   es)
+
+instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
+  where
     fromListN = withBounds ... fromListN
     replicate = withBounds ... replicate
     iterate n = withBounds ... iterate n
-    
-    fromFoldable = withBounds . fromFoldable
-    
-    listL = listL . unpack
-    listR = listR . unpack
-    
-    {-# INLINE (!^) #-}
-    (!^) = (!^) . unpack
-    
-    write (AnyBorder l u es) n e = AnyBorder l u (write es n e)
-    
+
     concatMap = withBounds ... concatMap . (unpack .)
     concat    = withBounds  .  concatMap unpack
-    
+
     filter  f = withBounds . filter f . unpack
     remove  n = withBounds . remove n . unpack
-    before es = withBounds ... before (unpack es)
-    
-    reverse (AnyBorder l u rep) = AnyBorder l u (reverse rep)
-    
-    nubBy f = withBounds . nubBy f . unpack
-    nub     = withBounds .   nub   . unpack
-    
-    ofoldr f base = ofoldr f base . unpack
-    ofoldl f base = ofoldl f base . unpack
-    
-    sfoldr f base = sfoldr f base . unpack
-    sfoldl f base = sfoldl f base . unpack
-    
+
     take n = withBounds . take n . unpack
     drop n = withBounds . drop n . unpack
     keep n = withBounds . keep n . unpack
     sans n = withBounds . sans n . unpack
-    
+
     padL n e = withBounds . padL n e . unpack
     padR n e = withBounds . padR n e . unpack
-    
-    isPrefixOf xs ys = xs .<=. ys && on isPrefixOf unpack xs ys
-    isSuffixOf xs ys = xs .<=. ys && on isSuffixOf unpack xs ys
-    
-    prefix p = prefix p . unpack
-    suffix p = suffix p . unpack
 
 --------------------------------------------------------------------------------
 
@@ -390,61 +392,61 @@ instance (Index i, NullableM m (rep e), LinearM1 m rep e)
   where
     getHead = getHead . unpack
     getLast = getLast . unpack
-    
+
     prepend e = withBounds' <=< prepend e . unpack
     append es = withBounds' <=< append (unpack es)
-    
+
     newLinear = withBounds' <=< newLinear
     filled  n = withBounds' <=< filled n
-    
+
     getLeft   = getLeft  . unpack
     getRight  = getRight . unpack
-    
+
     {-# INLINE (!#>) #-}
     (!#>) = (!#>) . unpack
-    
+
     {-# INLINE writeM #-}
     writeM = writeM . unpack
-    
+
     copied'  (AnyBorder l u es) = (AnyBorder l u <$>) ... copied' es
     reversed (AnyBorder l u es) = AnyBorder l u <$> reversed es
-    
+
     copyTo src os trg ot = copyTo (unpack src) os (unpack trg) ot
-    
+
     ofoldrM f e = ofoldrM f e . unpack
     ofoldlM f e = ofoldlM f e . unpack
-    
+
     foldrM f e = foldrM f e . unpack
     foldlM f e = foldlM f e . unpack
-    
+
     takeM n es@(AnyBorder l u rep)
         | n <= 0 = newNull
         | n >= c = return es
         |  True  = AnyBorder l (index (l, u) n) <$> takeM n rep
       where
         c = size (l, u)
-    
+
     dropM n es@(AnyBorder l u rep)
         | n >= c = newNull
         | n <= 0 = return es
         |  True  = AnyBorder (index (l, u) n) u <$> dropM n rep
       where
         c = size (l, u)
-    
+
     keepM n es@(AnyBorder l u rep)
         | n <= 0 = newNull
         | n >= c = return es
         |  True  = AnyBorder (index (l, u) (c - n)) u <$> keepM n rep
       where
         c = size (l, u)
-    
+
     sansM n es@(AnyBorder l u rep)
         | n >= c = newNull
         | n <= 0 = return es
         |  True  = AnyBorder (index (l, u) (c - n)) u <$> sansM n rep
       where
         c = size (l, u)
-    
+
     splitM n es@(AnyBorder l u rep)
         | n <= 0 = do e' <- newNull; return (e', es)
         | n >= c = do e' <- newNull; return (es, e')
@@ -452,7 +454,7 @@ instance (Index i, NullableM m (rep e), LinearM1 m rep e)
       where
         i = index (l, u) n
         c = size  (l, u)
-    
+
     divideM n es@(AnyBorder l u rep)
         | n <= 0 = do e' <- newNull; return (es, e')
         | n >= c = do e' <- newNull; return (e', es)
@@ -460,10 +462,10 @@ instance (Index i, NullableM m (rep e), LinearM1 m rep e)
       where
         i = index (l, u) (c - n)
         c = size  (l, u)
-    
+
     miterate n = fmap (uncurry AnyBorder (defaultBounds n)) ... miterate n
     iterateM n = fmap (uncurry AnyBorder (defaultBounds n)) ... iterateM n
-    
+
     prefixM p = prefixM p . unpack
     suffixM p = suffixM p . unpack
     mprefix p = mprefix p . unpack
@@ -480,19 +482,19 @@ instance (Index i, SetWith1 rep e, Linear1 rep e)
       => SetWith (AnyBorder rep i e) e
   where
     isSubsetWith f = isSubsetWith f `on` unpack
-    
+
     setWith f = withBounds . setWith f . unpack
-    
+
     subsets = map withBounds . subsets . unpack
-    
+
     insertWith f e = withBounds . insertWith f e . unpack
     deleteWith f e = withBounds . deleteWith f e . unpack
-    
+
     intersectionWith f = withBounds ... on (intersectionWith f) unpack
     differenceWith   f = withBounds ... on (differenceWith   f) unpack
     symdiffWith      f = withBounds ... on (symdiffWith      f) unpack
     unionWith        f = withBounds ... on (unionWith        f) unpack
-    
+
     memberWith   f e = memberWith   f e . unpack
     lookupLTWith f o = lookupLTWith f o . unpack
     lookupGTWith f o = lookupGTWith f o . unpack
@@ -517,20 +519,20 @@ instance (Index i, Sort1 rep e) => Sort (AnyBorder rep i e) e
 instance (Index i, Indexed1 rep Int e) => Map (AnyBorder rep i e) i e
   where
     toMap ascs = isNull ascs ? Z $ assoc (rangeBounds (fsts ascs)) ascs
-    
+
     toMap' e ascs = isNull ascs ? Z $ assoc' (rangeBounds (fsts ascs)) e ascs
-    
+
     {-# INLINE (.!) #-}
     AnyBorder l u rep .! i = rep !^ offset (l, u) i
-    
+
     Z // ascs = toMap ascs
     (AnyBorder l u rep) // ascs =
       let ies = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
       in  AnyBorder l u (rep // ies)
-    
+
     p .$ (AnyBorder l u rep) = index (l, u) <$> p .$ rep
     p *$ (AnyBorder l u rep) = index (l, u) <$> p *$ rep
-    
+
     kfoldr f base (AnyBorder l u es) = kfoldr (f . index (l, u)) base es
     kfoldl f base (AnyBorder l u es) = kfoldl (f . index (l, u)) base es
 
@@ -540,26 +542,26 @@ instance (Index i, Indexed1 rep Int e) => Indexed (AnyBorder rep i e) i e
       where
         ies   = [ (offset bnds i, e) | (i, e) <- ascs, inRange bnds i ]
         bnds' = defaultBounds (size bnds)
-    
+
     assoc' bnds@(l, u) defvalue ascs = AnyBorder l u (assoc' bnds' defvalue ies)
       where
         ies   = [ (offset bnds i, e) | (i, e) <- ascs, inRange bnds i ]
         bnds' = defaultBounds $ size bnds
-    
+
     fromIndexed = withBounds . fromIndexed
-    
+
     {-
     AnyBorder l u rep !! ij = uncurry AnyBorder sub . take s $ drop o rep
       where
         (num, sub) = slice (l, u) ij
-        
+
         o = offset num ij * s
         s = size sub
-    
+
     slices es =
       let bnds = both takeDim (bounds es)
       in  uncurry AnyBorder bnds <$> size bnds `chunks` unpack es
-    
+
     unslice ess =
       let bnds = defaultBounds (foldr' ((+) . sizeOf) 0 ess)
       in  uncurry AnyBorder bnds (concatMap unpack ess)
@@ -578,22 +580,22 @@ instance
     newMap ascs =
       let bnds@(l, u) = rangeBounds (fsts ascs)
       in  AnyBorder l u <$> newMap [ (offset bnds i, e) | (i, e) <- ascs ]
-    
+
     newMap' defvalue ascs =
       let bnds@(l, u) = rangeBounds (fsts ascs)
       in  AnyBorder l u <$> newMap' defvalue [ (offset bnds i, e) | (i, e) <- ascs ]
-    
+
     {-# INLINE writeM' #-}
     writeM' (AnyBorder l u es) = writeM' es . offset (l, u)
-    
+
     {-# INLINE (>!) #-}
     (>!) (AnyBorder l u es) = (es !#>) . offset (l, u)
-    
+
     overwrite (AnyBorder l u es) ascs = overwrite es
       [
         (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i
       ]
-    
+
     kfoldrM f base (AnyBorder l u es) = ofoldrM (f . index (l, u)) base es
     kfoldlM f base (AnyBorder l u es) = ofoldlM (f . index (l, u)) base es
 
@@ -604,12 +606,12 @@ instance (Index i, NullableM m (rep e), IndexedM1 m rep Int e)
       where
         ies  = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
         bnds = (0, size  (l, u) - 1)
-    
+
     fromAssocs' (l, u) defvalue ascs = AnyBorder l u <$> fromAssocs' bnds defvalue ies
       where
         ies  = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
         bnds = (0, size (l, u) - 1)
-    
+
     fromIndexed' = withBounds' <=< fromIndexed'
     fromIndexedM = withBounds' <=< fromIndexedM
 
@@ -687,4 +689,6 @@ withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf
 {-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
+
+
 

@@ -57,28 +57,28 @@ source-repository head
 Library
   default-language: Haskell2010
   hs-source-dirs:   src
-  
+
   build-tools: cpphs >=1.19
   ghc-options: -O2 -Wall -Wcompat -Wall-missed-specialisations
                -pgmPcpphs -optP--cpp -optP-traditional
-  
+
   build-depends:
     base               >= 4.9 && <    5,
     fmr                >= 0.3 && <    1,
     ghc-prim           >= 0.5 && < 0.11,
     data-default-class >= 0.1 && <  0.2
-  
+
   -- GHC 8.2.2 bug
   if impl(ghc >= 8.4)
     cpp-options: -DSDP_LINEAR_EXTRAS
-  
+
   if impl(ghc >= 8.6)
     cpp-options: -DSDP_QUALIFIED_CONSTRAINTS
-  
+
   -- GHC 8.0.2 bug
   if impl(ghc == 8.0.2)
     cpp-options: -DSDP_DISABLE_SHAPED
-  
+
   exposed-modules:
     -- Commons
     SDP.SafePrelude
@@ -87,17 +87,18 @@ Library
     SDP.Tuple
     SDP.Ratio
     SDP.Proxy
-    
+
     -- Sorting
     SDP.SortM.Insertion
     SDP.SortM.Tim
     SDP.SortM
-    
+
     -- Classes
     SDP.Forceable
     SDP.Estimate
     SDP.Bordered
     SDP.Nullable
+    SDP.Sequence
     SDP.IndexedM
     SDP.LinearM
     SDP.Unboxed
@@ -112,17 +113,17 @@ Library
     SDP.Map
     SDP.Zip
     SDP.Set
-    
+
     -- Templates
     SDP.Templates.AnyBorder
     SDP.Templates.AnyChunks
     SDP.Templates.AnyVar
-    
+
     -- Primitives
     SDP.Prim.SArray
     SDP.Prim.SBytes
     SDP.Prim.TArray
-    
+
     -- Boxed arrays
     SDP.Array
     SDP.Array.ST
@@ -133,7 +134,7 @@ Library
     SDP.Unrolled.Unlist
     SDP.Unrolled.STUnlist
     SDP.Unrolled.IOUnlist
-    
+
     -- Unboxed arrays
     SDP.Bytes
     SDP.Bytes.ST
@@ -144,31 +145,30 @@ Library
     SDP.ByteList.Ublist
     SDP.ByteList.STUblist
     SDP.ByteList.IOUblist
-    
+
     -- STM arrays
     Control.Concurrent.SDP.TArray
     Control.Concurrent.SDP.TUnlist
     Control.Concurrent.SDP.TUnrolled
-    
+
     -- Service definitions
     Control.Exception.SDP
-    
+
     Text.Show.SDP
     Text.Read.SDP
-  
+
   other-modules:
     -- To eliminate cyclic imports within the library
     SDP.Internal.Utils
-    
+
     -- To eliminate cyclic imports in SDP.Nullable and SDP.Index
     SDP.Index.Class
-    
+
     -- Зrimitive operations that do not require the Unboxed class, but used in
     -- it and its instances
     SDP.Unboxed.Utils
-    
+
     -- Unboxed class with instances
     SDP.Unboxed.Class
-
 
 

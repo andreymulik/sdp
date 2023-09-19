@@ -12,7 +12,7 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
-    
+
     "SDP.Templates.AnyChunks" provides 'AnyChunks' - list of data chunks.
 -}
 module SDP.Templates.AnyChunks
@@ -20,7 +20,7 @@ module SDP.Templates.AnyChunks
   -- * Export
   module SDP.IndexedM,
   module SDP.Scan,
-  
+
   -- * Chunk list
   AnyChunks, fromChunks, fromChunksM, toChunks
 )
@@ -55,7 +55,7 @@ default ()
   'AnyChunks' is list of data chunks. AnyChunks shouldn't contain empty chunks,
   so the 'AnyChunks' constructor is made private (see 'fromChunks' and
   'fromChunksM').
-  
+
   * Efficiency of operations on @'AnyChunks' rep e@ are very sensitive in the
   efficiency of 'Bordered' and 'Linear' on @rep e@.
   * @'AnyChunks' rep e@ is only defined for Int-indexed @rep e@.
@@ -185,7 +185,7 @@ instance Linear1 (AnyChunks rep) Char => IsString (AnyChunks rep Char)
 instance Linear1 (AnyChunks rep) e => E.IsList (AnyChunks rep e)
   where
     type Item (AnyChunks rep e) = e
-    
+
     fromListN = fromListN
     fromList  = fromList
     toList    = listL
@@ -216,7 +216,7 @@ instance (Functor rep, Linear' rep) => Zip (AnyChunks rep)
     any5 f as bs cs ds es    = any5 f (listL as) (listL bs) (listL cs) (listL ds) (listL es)
     all6 f as bs cs ds es fs = all6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
     any6 f as bs cs ds es fs = any6 f (listL as) (listL bs) (listL cs) (listL ds) (listL es) (listL fs)
-    
+
     zipWith  f as bs             = fromList $ zipWith  f (listL as) (listL bs)
     zipWith3 f as bs cs          = fromList $ zipWith3 f (listL as) (listL bs) (listL cs)
     zipWith4 f as bs cs ds       = fromList $ zipWith4 f (listL as) (listL bs) (listL cs) (listL ds)
@@ -232,7 +232,7 @@ instance Foldable rep => Foldable (AnyChunks rep)
   where
     foldr f base (AnyChunks es) = flip (foldr f) `foldr` base $ es
     foldl f base (AnyChunks es) = foldl (foldl f) base es
-    
+
     elem e (AnyChunks es) = foldr ((||) . elem e) False es
     length (AnyChunks es) = foldr' ((+) . length) 0 es
     null   (AnyChunks es) = null es
@@ -268,18 +268,18 @@ instance Estimate1 rep e => Estimate (AnyChunks rep e)
         go o xs               (AnyChunks []) = xs <.=> (-o)
         go o (AnyChunks (x : xs)) (AnyChunks (y : ys)) =
           go (o + sizeOf x - sizeOf y) (AnyChunks xs) (AnyChunks ys)
-    
+
     (AnyChunks       []) <.=> n = 0 <=> n
     (AnyChunks (x : xs)) <.=> n = c > n ? GT $ AnyChunks xs <.=> (n - c)
       where
         c = sizeOf x
-    
+
     sizeOf (AnyChunks es) = foldr' ((+) . sizeOf) 0 es
 
 instance EstimateM1 m rep e => EstimateM m (AnyChunks rep e)
   where
     getSizeOf = foldr (liftA2 (+) . getSizeOf) (return 0) . toChunks
-    
+
     estimateM = go 0
       where
         go o (AnyChunks [])   (AnyChunks []) = return (o <=> 0)
@@ -289,7 +289,7 @@ instance EstimateM1 m rep e => EstimateM m (AnyChunks rep e)
           sx <- getSizeOf x
           sy <- getSizeOf y
           go (o + sx - sy) (AnyChunks xs) (AnyChunks ys)
-    
+
     lestimateM (AnyChunks       []) n = return (0 <=> n)
     lestimateM (AnyChunks (x : xs)) n = do
       c <- getSizeOf x
@@ -302,17 +302,17 @@ instance EstimateM1 m rep e => EstimateM m (AnyChunks rep e)
 instance Bordered1 rep Int e => Bordered (AnyChunks rep e) Int
   where
     indexIn es = \ i -> i >= 0 && i <. es
-    
+
     -- | Quick unchecked offset.
     offsetOf = const id
-    
+
     -- | Quick unchecked index.
     indexOf  = const id
-    
+
     lower   _ = 0
     upper  es = sizeOf es - 1
     bounds es = (0, sizeOf es - 1)
-    
+
     viewOf bnds es = AnyChunks (size bnds `go` toChunks es)
       where
         go c (x : xs) = let s = sizeOf x in case c <=> s of
@@ -325,10 +325,10 @@ instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
   where
     getLower = const $ return 0
     getUpper = fmap pred . getSizeOf
-    
+
     getIndices es = do n <- getSizeOf es; return [0 .. n - 1]
     nowIndexIn es = \ i -> i < 0 ? return False $ do n <- getSizeOf es; return (i < n)
-    
+
     getViewOf bnds (AnyChunks es) = AnyChunks <$> go (size bnds) es
       where
         go _    []    = return []
@@ -338,63 +338,81 @@ instance BorderedM1 m rep Int e => BorderedM m (AnyChunks rep e) Int
 
 --------------------------------------------------------------------------------
 
-{- Forceable and Linear instances. -}
+{- Forceable, Sequence and Linear instances. -}
 
 instance Forceable1 rep e => Forceable (AnyChunks rep e)
   where
     force = AnyChunks . force . E.coerce
 
-instance Linear1 rep e => Linear (AnyChunks rep e) e
+instance Linear1 rep e => Sequence (AnyChunks rep e) e
   where
     single e = AnyChunks [single e]
-    
+
     toHead e (AnyChunks es@(x : xs)) = AnyChunks $ sizeOf x < lim ? (e :> x) : xs $ single e : es
     toHead e                       _ = single e
-    
+
     toLast (AnyChunks (xs :< x)) e = isNull x ? AnyChunks xs :< e $ AnyChunks (xs :< (x :< e))
     toLast _                     e = single e
-    
+
     uncons = go . toChunks
       where
         go ((x :> xs) : xss) = (x, AnyChunks (xs : xss))
         go                 _ = pfailEx "(:>)"
-    
+
     unsnoc = go . toChunks
       where
         go (xss :< (xs :< x)) = (AnyChunks (xss :< xs), x)
         go                  _ = pfailEx "(:<)"
-    
+
+    ofoldr f' base' = go 0 f' base' . toChunks
+      where
+        go o f base (x : xs) = ofoldr (f . (o +)) (go (o + sizeOf x) f base xs) x
+        go _ _ base _ = base
+
+    ofoldl f' base' = go 0 f' base' . toChunks
+      where
+        go o f base (x : xs) = go (o + sizeOf x) f (ofoldl (f . (o +)) base x) xs
+        go _ _ base _ = base
+
+    sfoldr f base = foldr (flip $ sfoldr f) base . toChunks
+    sfoldl f base = foldl (sfoldl f) base . toChunks
+
     fromList = AnyChunks . fmap fromList . chunks lim
     listL    = foldr ((++) . listL) [] . toChunks
-    
+
     (AnyChunks (x : xs)) !^ i = let n = sizeOf x in i < n ? x !^ i $ AnyChunks xs !^ (i - n)
     _                    !^ _ = error "in SDP.Unrolled.Unlist.(!^)"
-    
+
     write es'@(AnyChunks es) n e =
       let
         go i (x : xs) = let c = sizeOf x in i < c ? write x i e : xs $ x : go (i - c) xs
         go _       xs = xs
       in  n < 0 ? es' $ AnyChunks (go n es)
-    
-    -- | Deduplicated chunks.
-    replicate n e = AnyChunks $ replicate count chunk :< rest
-      where
-        (count, rst) = n `divMod` lim
-        
-        chunk = replicate lim e
-        rest  = replicate rst e
-    
-    partition p = both fromList . partition p . listL
-    
+
     reverse (AnyChunks es) = AnyChunks (reverse <$> reverse es)
-    
+
     before (AnyChunks ess) i e = AnyChunks $ go (max 0 i) ess
       where
         go n (xs : xss) =
           let c = sizeOf xs
           in  n < c ? before xs n e : xss $ xs : go (n - c) xss
         go _     []     = [single e]
-    
+
+    -- | Deduplicated chunks.
+    prefix f = foldr' (\ e n -> let p = prefix f e in p ==. e ? p + n $ p) 0 . toChunks
+    suffix f = foldl' (\ n e -> let s = suffix f e in s ==. e ? s + n $ s) 0 . toChunks
+
+instance Linear1 rep e => Linear (AnyChunks rep e) e
+  where
+    replicate n e = AnyChunks $ replicate count chunk :< rest
+      where
+        (count, rst) = n `divMod` lim
+
+        chunk = replicate lim e
+        rest  = replicate rst e
+
+    partition p = both fromList . partition p . listL
+
     remove i es@(AnyChunks ess) = i < 0 ? es $ AnyChunks (go i ess)
       where
         go n (xs : xss)
@@ -404,20 +422,7 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
           where
             c = sizeOf xs
         go _     []     = []
-    
-    ofoldr f' base' = go 0 f' base' . toChunks
-      where
-        go o f base (x : xs) = ofoldr (f . (o +)) (go (o + sizeOf x) f base xs) x
-        go _ _ base _ = base
-    
-    ofoldl f' base' = go 0 f' base' . toChunks
-      where
-        go o f base (x : xs) = go (o + sizeOf x) f (ofoldl (f . (o +)) base x) xs
-        go _ _ base _ = base
-    
-    sfoldr f base = foldr (flip $ sfoldr f) base . toChunks
-    sfoldl f base = foldl (sfoldl f) base . toChunks
-    
+
     take n = AnyChunks . go n . toChunks
       where
         go c (x : xs) = let s = sizeOf x in case c <=> s of
@@ -433,9 +438,6 @@ instance Linear1 rep e => Linear (AnyChunks rep e) e
           LT -> drop c x : xs
           EQ -> xs
         go _    []    = []
-    
-    prefix f = foldr' (\ e n -> let p = prefix f e in p ==. e ? p + n $ p) 0 . toChunks
-    suffix f = foldl' (\ n e -> let s = suffix f e in s ==. e ? s + n $ s) 0 . toChunks
 
 --------------------------------------------------------------------------------
 
@@ -449,28 +451,28 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
   where
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
-    
+
     prepend e' es' = AnyChunks <$> go e' (toChunks es')
       where
         go e     []      = pure <$> newLinear [e]
         go e es@(x : xs) = do
           n <- getSizeOf x
           n < lim ? (: xs) <$> prepend e x $ (: es) <$> newLinear [e]
-    
+
     append es' e' = AnyChunks <$> go e' (toChunks es')
       where
         go e      []      = pure <$> newLinear [e]
         go e es@(xs :< x) = do
           n <- getSizeOf x
           n < lim ? (xs :<) <$> append x e $ (es :<) <$> newLinear [e]
-    
+
     newLinear = fmap AnyChunks . mapM newLinear . chunks lim
-    
+
     (!#>) (AnyChunks es) = go es
       where
         go (x : xs) i = do n <- getSizeOf x; i < n ? x !#> i $ go xs (i - n)
         go _        _ = overEx "(>!)"
-    
+
     {-# INLINE writeM #-}
     writeM = go . toChunks
       where
@@ -478,17 +480,17 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
         go (x : xs) i e = do
           n <- getSizeOf x
           i < n ? writeM x i e $ go xs (i - n) e
-    
+
     getLeft  (AnyChunks es) = concat <$> mapM getLeft es
     getRight (AnyChunks es) = (concat . reverse) <$> mapM getRight es
     reversed (AnyChunks es) = (AnyChunks . reverse) <$> mapM reversed es
-    
+
     filled c e =
       let (d, n) = c `divMod` lim
       in  AnyChunks <$> sequence (replicate d (filled lim e) :< filled n e)
-    
+
     copied' xs l n = copied =<< takeM n =<< dropM l xs
-    
+
     copyTo src os trg ot c = when (c > 0) $ do
         when (os < 0 || ot < 0) $ underEx "copyTo"
         src' <- dropM os src
@@ -499,14 +501,14 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
           n1 <- getSizeOf x
           n2 <- getSizeOf y
           let n' = n1 `min` n2 `min` n
-          
+
           copyTo x 0 y 0 n'
           dropM n' xs >>=<< dropM n' ys $ go (n - n')
         go n _ _ = when (n > 0) $ overEx "copyTo"
-    
+
     -- | Unsafe, returns joined stream of existing chunks.
     merged = return . AnyChunks . foldr ((++) . toChunks) []
-    
+
     ofoldrM f base' = ofoldrCh 0 base' . toChunks
       where
         ofoldrCh !o base (x : xs) = do
@@ -514,7 +516,7 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
           xs' <- ofoldrCh (o + n) base xs
           ofoldrM (f . (o +)) xs' x
         ofoldrCh _ base _ = return base
-    
+
     ofoldlM f base' = ofoldlCh 0 base' . toChunks
       where
         ofoldlCh !o base (x : xs) = do
@@ -522,13 +524,13 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
           x' <- ofoldlM (f . (o +)) base x
           ofoldlCh (o + n) x' xs
         ofoldlCh _ base _ = return base
-    
+
     foldrM f base = foldr ((=<<) . flip (foldrM f)) (return base) . toChunks
     foldlM f base = foldl (flip $ (=<<) . flip (foldlM f)) (return base) . toChunks
-    
+
     miterate n = fmap (AnyChunks  . pure) ... miterate n
     iterateM n = fmap (AnyChunks  . pure) ... iterateM n
-    
+
     takeM n (AnyChunks (e : es)) = n < 1 ? newNull $ do
       c <- getSizeOf e
       case n <=> c of
@@ -536,7 +538,7 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
         LT -> do t <- takeM n e; return (AnyChunks [t])
         GT -> do (AnyChunks ts) <- takeM (n - c) (AnyChunks es); return $ AnyChunks (e : ts)
     takeM _ es = return es
-    
+
     dropM n es'@(AnyChunks (e : es)) = n < 1 ? return es' $ do
       c <- getSizeOf e
       case n <=> c of
@@ -544,7 +546,7 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
         GT -> dropM (n - c) (AnyChunks es)
         LT -> do d <- dropM n e; return $ AnyChunks (d : es)
     dropM _ es = return es
-    
+
     prefixM f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- prefixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
     suffixM f (AnyChunks es) = foldl (\ p e -> do n <- getSizeOf e; c <- suffixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
     mprefix f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- mprefix f e; c == n ? (+ c) <$> p $ return c) (return 0) es
@@ -564,24 +566,24 @@ instance (SetWith1 rep e, Linear1 rep e, Ord (rep e))
       where
         go f e (x : xs) = memberWith f e x ? insertWith f e x : xs $ x : go f e xs
         go _ e        _ = [single e]
-    
+
     deleteWith f' e' = AnyChunks . go f' e' . toChunks
       where
         go f e (x : xs) = memberWith f e x ? deleteWith f e x : xs $ x : go f e xs
         go _ _        _ = []
-    
+
     intersectionWith f = fromList ... on (intersectionWith f) listL
     differenceWith   f = fromList ... on (differenceWith   f) listL
     symdiffWith      f = fromList ... on (symdiffWith      f) listL
     unionWith        f = fromList ... on (unionWith        f) listL
-    
+
     lookupLTWith f o = foldr ((<|>) . lookupLTWith f o) Nothing . toChunks
     lookupLEWith f o = foldr ((<|>) . lookupLEWith f o) Nothing . toChunks
     lookupGTWith f o = foldr ((<|>) . lookupGTWith f o) Nothing . toChunks
     lookupGEWith f o = foldr ((<|>) . lookupGEWith f o) Nothing . toChunks
-    
+
     memberWith f x (AnyChunks es) = memberWith f x `any` es
-    
+
     isSubsetWith f xs ys = sfoldr (\ e b -> memberWith f e ys && b) True xs
 
 --------------------------------------------------------------------------------
@@ -599,13 +601,13 @@ instance Indexed1 rep Int e => Map (AnyChunks rep e) Int e
     toMap ascs =
       let bnds = rangeBounds (fsts ascs)
       in  isNull ascs ? Z $ assoc bnds ascs
-    
+
     toMap' defvalue ascs =
       let bnds = rangeBounds (fsts ascs)
       in  isNull ascs ? Z $ assoc' bnds defvalue ascs
-    
+
     (.!) = (!^)
-    
+
     Z            // ascs = toMap ascs
     AnyChunks es // ascs = AnyChunks (go 0 es ascs)
       where
@@ -615,13 +617,13 @@ instance Indexed1 rep Int e => Map (AnyChunks rep e) Int e
           where
             (as, bs) = partition (inRange (l, n - 1) . fst) ies
             n = l + sizeOf es
-    
+
     p .$ AnyChunks (x : xs) = p .$ x <|> (+ sizeOf x) <$> p .$ AnyChunks xs
     _ .$                  _ = Nothing
-    
+
     p *$ AnyChunks (x : xs) = p *$ x ++ fmap (+ sizeOf x) (p *$ AnyChunks xs)
     _ *$                  _ = []
-    
+
     kfoldr f base es = let bnds = bounds es in kfoldr (f . index bnds) base es
     kfoldl f base es = let bnds = bounds es in kfoldl (f . index bnds) base es
 
@@ -633,14 +635,14 @@ instance Indexed1 rep Int e => Indexed (AnyChunks rep e) Int e
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     assoc' bnds defvalue ascs = AnyChunks (go bnds ascs)
       where
         go (l, u) ies = isEmpty (l, u) ? [] $ assoc' (l, n) defvalue as : go (n + 1, u) bs
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     fromIndexed es = AnyChunks [fromIndexed es]
 
 --------------------------------------------------------------------------------
@@ -656,36 +658,36 @@ instance
     newMap ascs = AnyChunks <$> sequence (go bnds ascs)
       where
         bnds = rangeBounds (fsts ascs)
-        
+
         go (l, u) ies = isEmpty (l, u) ? [] $ newMap as : go (n + 1, u) bs
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     newMap' defvalue ascs = AnyChunks <$> sequence (go bnds ascs)
       where
         bnds = rangeBounds (fsts ascs)
-        
+
         go (l, u) ies = newMap' defvalue as : go (n + 1, u) bs
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     insertM' = writeM'
-    
+
     deleteM' (AnyChunks es) = go es
       where
         go    []    _ = overEx "(>!)"
         go (x : xs) i = do
           n <- getSizeOf x
           i < n ? deleteM' x i $ go xs (i - n)
-    
+
     {-# INLINE writeM' #-}
     writeM' es i e = (i < 0) `unless` writeM es i e
-    
+
     {-# INLINE (>!) #-}
     es >! i = i < 0 ? overEx "(>!)" $ es !#> i
-    
+
     overwrite es ascs = go 0 (toChunks es) ((< 0) . fst `except` ascs)
       where
         go o (x : xs) ie = unless (null ie) $ do
@@ -693,7 +695,7 @@ instance
           let (as, bs) = partition (\ (i, _) -> i < n + o) ie
           overwrite x as >> go (n + o) xs bs
         go _ _ _ = return ()
-    
+
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
 
@@ -706,14 +708,14 @@ instance (NullableM m (rep e), IndexedM1 m rep Int e)
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     fromAssocs' bnds defvalue ascs = AnyChunks <$> sequence (go bnds ascs)
       where
         go (l, u) ies = fromAssocs' (l, n) defvalue as : go (n + 1, u) bs
           where
             (as, bs) = partition (inRange (l, n) . fst) ies
             n = min u (l + lim)
-    
+
     fromIndexed' = newLinear . listL
     fromIndexedM = newLinear <=< getLeft
 
@@ -728,7 +730,7 @@ instance
     ) => SortM m (AnyChunks rep e) e
   where
     sortMBy = timSortBy
-    
+
     sortedMBy f = go . toChunks
       where
         go (x1 : x2 : xs) =
@@ -747,7 +749,7 @@ instance {-# OVERLAPPABLE #-} (Linear1 imm e, Thaw1 m imm mut e)
     thaw (AnyChunks [e]) = thaw e
     -- any correct concat will create an intermediate structure in this case
     thaw (AnyChunks ess) = unsafeThaw (concat ess)
-    
+
     unsafeThaw = unsafeThaw . concat . toChunks
 
 -- | Creates one-chunk mutable stream, may be memory inefficient.
@@ -805,6 +807,3 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
-
-
-
