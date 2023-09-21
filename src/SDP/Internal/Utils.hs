@@ -2,17 +2,19 @@
 
 {- |
     Module      :  SDP.Internal.Utils
-    Copyright   :  (c) Andrey Mulik 2022
+    Copyright   :  (c) Andrey Mulik 2022-2023
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable (GHC extensions)
-    
+
     "SDP.Internal.Utils" provides some combinators for "SDP.SafePrelude".
 -}
 module SDP.Internal.Utils
 (
   -- * Combinators
-  on, (?), (?+), (?-), (?^), (?:), (+?), (...), (<=<<), (>>=>), (>>=<<)
+  on, (?), (?+), (?-),
+  (^+), (^-), (?^), (?:), (+?),
+  (...), (<=<<), (>>=>), (>>=<<)
 )
 where
 
@@ -30,7 +32,7 @@ default ()
 
 {- |
   Ternary operator.
-  
+
   > (odd 1 ? "is True" $ "is False") == "is True"
 -}
 {-# INLINE (?) #-}
@@ -46,6 +48,24 @@ default ()
 {-# INLINE (?-) #-}
 (?-) :: (a -> Bool) -> (a -> b) -> a -> Maybe b
 (?-) =  \ p f a -> p a ? Nothing $ Just (f a)
+
+{- |
+  @since 0.3
+
+  @p ^+ f $ a@ returns @'Just' (f a)@ if @(p a)@ and 'Nothing' otherwise.
+-}
+{-# INLINE (^+) #-}
+(^+) :: Monad m => (a -> m Bool) -> (a -> m b) -> a -> m (Maybe b)
+(^+) =  \ p f a -> do res <- p a; res ? (Just <$> f a) $ return Nothing
+
+{- |
+  @since 0.3
+
+  @p ^- f $ a@ returns 'Nothing' if @(p a)@ and @'Just' (f a)@ otherwise.
+-}
+{-# INLINE (^-) #-}
+(^-) :: Monad m => (a -> m Bool) -> (a -> m b) -> a -> m (Maybe b)
+(^-) =  \ p f a -> do res <- p a; res ? return Nothing $ (Just <$> f a)
 
 -- | Prepends 'Maybe' to list.
 {-# INLINE (?:) #-}
@@ -82,4 +102,3 @@ x +?      _ = x
 {-# INLINE (>>=<<) #-}
 (>>=<<) :: Monad m => m a -> m b -> (a -> b -> m c) -> m c
 (>>=<<) = \ ma mb f -> join $ liftM2 f ma mb
-

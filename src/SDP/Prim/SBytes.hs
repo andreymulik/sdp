@@ -801,15 +801,18 @@ instance ForceableM (ST s) (STBytes# s e)
       \ s1# -> case pcloneUnboxedM es marr# o# n# s1# of
         (# s2#, copy# #) -> (# s2#, STBytes# n 0 copy# #)
 
-instance Unboxed e => LinearM (ST s) (STBytes# s e) e
+instance Unboxed e => SequenceM (ST s) (STBytes# s e) e
   where
     getHead es = es >! 0
     getLast es = es >! upper es
-    newLinear  = fromFoldableM
 
-    newLinearN c es = let !n@(I# n#) = max 0 c in ST $
-      \ s1# -> case newLinearN# n# es s1# of
-        (# s2#, marr# #) -> (# s2#, STBytes# n 0 marr# #)
+    getTail (STBytes# 0 _  _) = pfailEx "getTail, expected nonempty array"
+    getTail (STBytes# n c es) = return (STBytes# (n - 1) (c + 1) es)
+
+    getInit (STBytes# 0 _  _) = pfailEx "getInit, expected nonempty array"
+    getInit (STBytes# n c es) = return (STBytes# (n - 1) c es)
+
+    newLinear = fromFoldableM
 
     fromFoldableM es = ST $ \ s1# -> case fromFoldableM# es s1# of
       (# s2#, n, marr# #) -> (# s2#, STBytes# n 0 marr# #)
@@ -817,18 +820,56 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
     getLeft  es@(STBytes# n _ _) = (es !#>) `mapM` [0 .. n - 1]
     getRight es@(STBytes# n _ _) = (es !#>) `mapM` [n - 1, n - 2 .. 0]
 
+    reversed es = do es' <- copied es; reversed' es'; return es'
+
+    ofoldrM f base = \ arr@(STBytes# n _ _) ->
+      let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
+      in  go 0
+
+    ofoldlM f base = \ arr@(STBytes# n _ _) ->
+      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ (f i)
+      in  go (n - 1)
+
+    foldrM f base = \ arr@(STBytes# n _ _) ->
+      let go i = n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f
+      in  go 0
+
+    foldlM f base = \ arr@(STBytes# n _ _) ->
+      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
+      in  go (n - 1)
+
     {-# INLINE (!#>) #-}
     STBytes# _ (I# o#) marr# !#> I# i# = ST $ readUnboxed# marr# (o# +# i#)
 
     writeM = writeM'
+
+    prefixM p es@(STBytes# c _ _) =
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ i) $ return i
+      in  go 0
+
+    suffixM p es@(STBytes# c _ _) =
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
+      in  go (max 0 (c - 1))
+
+    mprefix p es@(STBytes# c _ _) =
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
+      in  go 0
+
+    msuffix p es@(STBytes# c _ _) =
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
+      in  go (max 0 (c - 1))
+
+instance Unboxed e => LinearM (ST s) (STBytes# s e) e
+  where
+    newLinearN c es = let !n@(I# n#) = max 0 c in ST $
+      \ s1# -> case newLinearN# n# es s1# of
+        (# s2#, marr# #) -> (# s2#, STBytes# n 0 marr# #)
 
     copied' es@(STBytes# c (I# o#) marr#) l@(I# l#) n@(I# n#)
       | l >= 0 && n >= 0 && c >= l = ST $
         \ s1# -> case pcloneUnboxedM es marr# (o# +# l#) n# s1# of
           (# s2#, copy# #) -> (# s2#, STBytes# n 0 copy# #)
       | True = unreachEx "copied'"
-
-    reversed es = do es' <- copied es; reversed' es'; return es'
 
     reversed' es@(STBytes# n _ _) =
       let go i j = when (i < j) $ go (i + 1) (j - 1) >> swapM es i j
@@ -854,22 +895,6 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
         marr <$ foldr ((=<<) . writer) (return 0) ess
       where
         n = foldr' ((+) . sizeOf) 0 ess
-
-    ofoldrM f base = \ arr@(STBytes# n _ _) ->
-      let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
-      in  go 0
-
-    ofoldlM f base = \ arr@(STBytes# n _ _) ->
-      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ (f i)
-      in  go (n - 1)
-
-    foldrM f base = \ arr@(STBytes# n _ _) ->
-      let go i = n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f
-      in  go 0
-
-    foldlM f base = \ arr@(STBytes# n _ _) ->
-      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
-      in  go (n - 1)
 
     miterate n@(I# n#) f e = do
       es <- filled n e
@@ -918,22 +943,6 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
       | n <= 0 = do e' <- newNull; return (es, e')
       | n >= c = do e' <- newNull; return (e', es)
       |  True  = return (STBytes# n (c - n + o) marr#, STBytes# (c - n) o marr#)
-
-    prefixM p es@(STBytes# c _ _) =
-      let go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ i) $ return i
-      in  go 0
-
-    suffixM p es@(STBytes# c _ _) =
-      let go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
-      in  go (max 0 (c - 1))
-
-    mprefix p es@(STBytes# c _ _) =
-      let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
-      in  go 0
-
-    msuffix p es@(STBytes# c _ _) =
-      let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
-      in  go (max 0 (c - 1))
 
 --------------------------------------------------------------------------------
 
@@ -1089,33 +1098,27 @@ instance MonadIO io => ForceableM io (MIOBytes# io e)
   where
     copied (MIOBytes# es) = pack (copied es)
 
-instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
+instance (MonadIO io, Unboxed e) => SequenceM io (MIOBytes# io e) e
   where
     singleM = pack . singleM
     getHead = stToMIO . getHead . unpack
     getLast = stToMIO . getLast . unpack
 
-    prepend e = pack . prepend e . unpack
-    append es = pack . append (unpack es)
+    getTail (MIOBytes# (STBytes# 0 _  _)) = pfailEx "getTail, expected nonempty array"
+    getTail (MIOBytes# (STBytes# n c es)) = return (MIOBytes# (STBytes# (n - 1) (c + 1) es))
+
+    getInit (MIOBytes# (STBytes# 0 _  _)) = pfailEx "getInit, expected nonempty array"
+    getInit (MIOBytes# (STBytes# n c es)) = return (MIOBytes# (STBytes# (n - 1) c es))
+
+    e += es = pack (e += unpack es)
+    es =+ e = pack (unpack es =+ e)
 
     newLinear     = pack . newLinear
-    newLinearN    = pack ... newLinearN
     fromFoldableM = pack . fromFoldableM
-
-    (!#>) = stToMIO ... (!#>) . unpack
-
-    writeM es = stToMIO ... writeM (unpack es)
 
     reversed = pack  . reversed . unpack
     getLeft  = stToMIO . getLeft  . unpack
     getRight = stToMIO . getRight . unpack
-
-    copied' es = pack ... copied' (unpack es)
-
-    filled = pack ... filled
-    merged = pack  .  merged . foldr ((:) . unpack) []
-
-    copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
 
     ofoldrM f base = \ arr@(MIOBytes# (STBytes# n _ _)) ->
       let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
@@ -1133,13 +1136,12 @@ instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
       let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
       in  go (sizeOf arr - 1)
 
-    takeM n = pack . takeM n . unpack
-    dropM n = pack . dropM n . unpack
-    keepM n = pack . keepM n . unpack
-    sansM n = pack . sansM n . unpack
-
     prefixM f = stToMIO . prefixM f . unpack
     suffixM f = stToMIO . suffixM f . unpack
+
+    (!#>) = stToMIO ... (!#>) . unpack
+
+    writeM es = stToMIO ... writeM (unpack es)
 
     mprefix p es@(MIOBytes# (STBytes# c _ _)) =
       let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
@@ -1148,6 +1150,21 @@ instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
     msuffix p es@(MIOBytes# (STBytes# c _ _)) =
       let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
       in  go (max 0 (c - 1))
+
+instance (MonadIO io, Unboxed e) => LinearM io (MIOBytes# io e) e
+  where
+    newLinearN = pack ... newLinearN
+    copied' es = pack ... copied' (unpack es)
+
+    filled = pack ... filled
+    merged = pack  .  merged . foldr ((:) . unpack) []
+
+    copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
+
+    takeM n = pack . takeM n . unpack
+    dropM n = pack . dropM n . unpack
+    keepM n = pack . keepM n . unpack
+    sansM n = pack . sansM n . unpack
 
 --------------------------------------------------------------------------------
 
@@ -1396,9 +1413,12 @@ overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
+{-# NOINLINE pfailEx #-}
+pfailEx :: String -> a
+pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SBytes."
+
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
 
 

@@ -95,10 +95,11 @@ Library
 
     -- Classes
     SDP.Forceable
+    SDP.SequenceM
+    SDP.Sequence
     SDP.Estimate
     SDP.Bordered
     SDP.Nullable
-    SDP.Sequence
     SDP.IndexedM
     SDP.LinearM
     SDP.Unboxed

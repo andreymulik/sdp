@@ -447,26 +447,55 @@ instance (Monad m, LinearM1 m rep e) => ForceableM m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 
-instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) e
+instance LinearM1 m rep e => SequenceM m (AnyChunks rep e) e
   where
+    unconsM' (AnyChunks (e : es)) = fmap (second (AnyChunks . (: es))) <$> unconsM' e
+    unconsM'                    _ = pure Nothing
+
+    unsnocM' (AnyChunks (es :< e)) = fmap (first (AnyChunks . (es :<))) <$> unsnocM' e
+    unsnocM'                     _ = pure Nothing
+
     getHead = getHead . head . toChunks
     getLast = getLast . last . toChunks
 
-    prepend e' es' = AnyChunks <$> go e' (toChunks es')
+    e' += es' = AnyChunks <$> go e' (toChunks es')
       where
         go e     []      = pure <$> newLinear [e]
         go e es@(x : xs) = do
           n <- getSizeOf x
-          n < lim ? (: xs) <$> prepend e x $ (: es) <$> newLinear [e]
+          n < lim ? (: xs) <$> (e += x) $ (: es) <$> newLinear [e]
 
-    append es' e' = AnyChunks <$> go e' (toChunks es')
+    es' =+ e' = AnyChunks <$> go e' (toChunks es')
       where
         go e      []      = pure <$> newLinear [e]
         go e es@(xs :< x) = do
           n <- getSizeOf x
-          n < lim ? (xs :<) <$> append x e $ (es :<) <$> newLinear [e]
+          n < lim ? (xs :<) <$> (x =+ e) $ (es :<) <$> newLinear [e]
 
     newLinear = fmap AnyChunks . mapM newLinear . chunks lim
+
+    getLeft  (AnyChunks es) = concat <$> mapM getLeft es
+    getRight (AnyChunks es) = (concat . reverse) <$> mapM getRight es
+    reversed (AnyChunks es) = (AnyChunks . reverse) <$> mapM reversed es
+
+    ofoldrM f base' = ofoldrCh 0 base' . toChunks
+      where
+        ofoldrCh !o base (x : xs) = do
+          n   <- getSizeOf x
+          xs' <- ofoldrCh (o + n) base xs
+          ofoldrM (f . (o +)) xs' x
+        ofoldrCh _ base _ = return base
+
+    ofoldlM f base' = ofoldlCh 0 base' . toChunks
+      where
+        ofoldlCh !o base (x : xs) = do
+          n  <- getSizeOf x
+          x' <- ofoldlM (f . (o +)) base x
+          ofoldlCh (o + n) x' xs
+        ofoldlCh _ base _ = return base
+
+    foldrM f base = foldr ((=<<) . flip (foldrM f)) (return base) . toChunks
+    foldlM f base = foldl (flip $ (=<<) . flip (foldlM f)) (return base) . toChunks
 
     (!#>) (AnyChunks es) = go es
       where
@@ -481,10 +510,13 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
           n <- getSizeOf x
           i < n ? writeM x i e $ go xs (i - n) e
 
-    getLeft  (AnyChunks es) = concat <$> mapM getLeft es
-    getRight (AnyChunks es) = (concat . reverse) <$> mapM getRight es
-    reversed (AnyChunks es) = (AnyChunks . reverse) <$> mapM reversed es
+    prefixM f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- prefixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
+    suffixM f (AnyChunks es) = foldl (\ p e -> do n <- getSizeOf e; c <- suffixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
+    mprefix f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- mprefix f e; c == n ? (+ c) <$> p $ return c) (return 0) es
+    msuffix f (AnyChunks es) = foldl (\ p e -> do n <- getSizeOf e; c <- msuffix f e; c == n ? (+ c) <$> p $ return c) (return 0) es
 
+instance LinearM1 m rep e => LinearM m (AnyChunks rep e) e
+  where
     filled c e =
       let (d, n) = c `divMod` lim
       in  AnyChunks <$> sequence (replicate d (filled lim e) :< filled n e)
@@ -509,25 +541,6 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
     -- | Unsafe, returns joined stream of existing chunks.
     merged = return . AnyChunks . foldr ((++) . toChunks) []
 
-    ofoldrM f base' = ofoldrCh 0 base' . toChunks
-      where
-        ofoldrCh !o base (x : xs) = do
-          n   <- getSizeOf x
-          xs' <- ofoldrCh (o + n) base xs
-          ofoldrM (f . (o +)) xs' x
-        ofoldrCh _ base _ = return base
-
-    ofoldlM f base' = ofoldlCh 0 base' . toChunks
-      where
-        ofoldlCh !o base (x : xs) = do
-          n  <- getSizeOf x
-          x' <- ofoldlM (f . (o +)) base x
-          ofoldlCh (o + n) x' xs
-        ofoldlCh _ base _ = return base
-
-    foldrM f base = foldr ((=<<) . flip (foldrM f)) (return base) . toChunks
-    foldlM f base = foldl (flip $ (=<<) . flip (foldlM f)) (return base) . toChunks
-
     miterate n = fmap (AnyChunks  . pure) ... miterate n
     iterateM n = fmap (AnyChunks  . pure) ... iterateM n
 
@@ -546,11 +559,6 @@ instance (LinearM1 m rep e, NullableM m (rep e)) => LinearM m (AnyChunks rep e) 
         GT -> dropM (n - c) (AnyChunks es)
         LT -> do d <- dropM n e; return $ AnyChunks (d : es)
     dropM _ es = return es
-
-    prefixM f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- prefixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
-    suffixM f (AnyChunks es) = foldl (\ p e -> do n <- getSizeOf e; c <- suffixM f e; c == n ? (+ c) <$> p $ return c) (return 0) es
-    mprefix f (AnyChunks es) = foldr (\ e p -> do n <- getSizeOf e; c <- mprefix f e; c == n ? (+ c) <$> p $ return c) (return 0) es
-    msuffix f (AnyChunks es) = foldl (\ p e -> do n <- getSizeOf e; c <- msuffix f e; c == n ? (+ c) <$> p $ return c) (return 0) es
 
 --------------------------------------------------------------------------------
 
@@ -807,3 +815,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
+

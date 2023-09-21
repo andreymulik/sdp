@@ -47,7 +47,6 @@ import SDP.Forceable
 import SDP.Nullable
 
 import qualified Data.List as L
-import Data.Maybe
 
 #ifdef SDP_LINEAR_EXTRAS
 import qualified GHC.Exts as L
@@ -63,9 +62,7 @@ infixl 9 !^
 
 --------------------------------------------------------------------------------
 
-{-# RULES
-  "select/Just"  select  Just = listL;
-  #-}
+{-# RULES "select/Just" select Just = listL #-}
 
 {- |
   'Sequence' is a type class similar to 'Foldable' with three important differences:
@@ -155,22 +152,22 @@ class
     toLast es e = es ++ single e
 
     -- | Same as @'isNull' '?-' 'uncons'@
-    uncons' :: seq -> Maybe (e, seq)
-    uncons' =  isNull ?- \ xs -> (head xs, tail xs)
     default uncons' :: Nullable seq => seq -> Maybe (e, seq)
+    uncons' :: seq -> Maybe (e, seq)
+    uncons' =  isNull ?- uncons
 
     -- | Same as @'isNull' '?-' 'unsnoc'@
-    unsnoc' :: seq -> Maybe (seq, e)
-    unsnoc' =  isNull ?- \ xs -> (init xs, last xs)
     default unsnoc' :: Nullable seq => seq -> Maybe (seq, e)
+    unsnoc' :: seq -> Maybe (seq, e)
+    unsnoc' =  isNull ?- unsnoc
 
     -- | Separates line to 'head' and 'tail', deconstructor for ':>' pattern.
     uncons :: seq -> (e, seq)
-    uncons xs = fromMaybe (pfailEx "(:>)") (uncons' xs)
+    uncons es = (head es, tail es)
 
     -- | Separates line to 'init' and 'last', deconstructor for ':<' pattern.
     unsnoc :: seq -> (seq, e)
-    unsnoc xs = fromMaybe (pfailEx "(:<)") (unsnoc' xs)
+    unsnoc es = (init es, last es)
 
     -- | Returns first element of line, may fail.
     head :: seq -> e
@@ -556,8 +553,6 @@ o_foldr' =  sfoldr'
 -- | Same as 'sfoldl''.
 o_foldl' :: Sequence seq e => (b -> e -> b) -> b -> seq -> b
 o_foldl' =  sfoldl'
-
---------------------------------------------------------------------------------
 
 {-# DEPRECATED o_foldr1  "in favour 'sfoldr1'"  #-}
 {-# DEPRECATED o_foldl1  "in favour 'sfoldl1'"  #-}

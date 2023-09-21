@@ -72,9 +72,7 @@ infix 8 `filter`, `except`
 
 --------------------------------------------------------------------------------
 
-{-# RULES
-  "select'/Just" select' Just = id;
-  #-}
+{-# RULES "select'/Just" select' Just = id #-}
 
 {- |
   'Linear' is one of the main SDP classes, a class of linear data structures.
@@ -97,44 +95,18 @@ infix 8 `filter`, `except`
   @
     mconcat === fold
     mempty  === lzero
-    mappend === (<>) === (++)
-
-    isNull  (single e)   === False
-    isNull (toHead x xs) === False
-    isNull (toLast xs x) === False
-
-    sfoldr  === ofoldr . const
-    sfoldl  === ofoldl . const
-    sfoldr1 === ofoldr1 . const
-    sfoldl1 === ofoldl1 . const
-
-    reverse . reverse === id
-    listL === reverse . listR === listR . reverse
-    listR === reverse . listL === listL . reverse
 
     concat === fold
     concatMap === foldMap
     fromList === fromFoldable
     fromFoldable === foldr toHead Z
 
-    ofoldr f base xs === sfoldr (uncurry f) base (assocs xs)
     filter p = fromList . sfoldr (\ x xs -> p x ? x : xs $ xs) []
-    select f = sfoldr (\ x es -> case f x of {Just e -> e : es; _ -> es}) []
 
     -- For 'Foldable' instances:
-    toList === listL
-    length === sizeOf
     length (replicate n e) === n
-    length (toHead x xs) === length xs + 1
-    length (toLast xs x) === length xs + 1
 
     isNull xs === length xs == 0
-    length xs === length (listL xs) === length (listR xs)
-
-    sfoldr  === foldr
-    sfoldl  === foldl
-    sfoldr1 === foldr1
-    sfoldl1 === foldl1
   @
 -}
 class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
@@ -218,10 +190,6 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     drop :: Int -> l -> l
     drop n es = keep (sizeOf es - n) es
 
-    -- | @split n es@ is same to @(take n es, drop n es)@.
-    split :: Int -> l -> (l, l)
-    split n es = (take n es, drop n es)
-
     -- | @keep n es@ takes last @n@ elements of @es@.
     keep :: Int -> l -> l
     keep n es = drop (sizeOf es - n) es
@@ -229,6 +197,10 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     -- | @sans n es@ drops last @n@ elements of @es@.
     sans :: Int -> l -> l
     sans n es = take (sizeOf es - n) es
+
+    -- | @split n es@ is same to @(take n es, drop n es)@.
+    split :: Int -> l -> (l, l)
+    split n es = (take n es, drop n es)
 
     -- | @divide n es@ is same to @(sans n es, keep n es)@.
     divide :: Int -> l -> (l, l)
@@ -238,6 +210,14 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     splitsBy :: (e -> Bool) -> l -> [l]
     splitsBy e = map fromList . splitsBy e . listL
 
+    {- |
+      @splitsOn sub line@ splits @line@ by @sub@.
+
+      > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
+    -}
+    splitsOn :: Eq e => l -> l -> [l]
+    splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
+
     -- | Takes the longest 'prefix' by predicate.
     takeWhile :: (e -> Bool) -> l -> l
     takeWhile p es = take (prefix p es) es
@@ -246,13 +226,13 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     takeEnd :: (e -> Bool) -> l -> l
     takeEnd p es = keep (suffix p es) es
 
-    {- |
-      @splitsOn sub line@ splits @line@ by @sub@.
+    -- | Drops the longest 'prefix' by predicate.
+    dropWhile :: (e -> Bool) -> l -> l
+    dropWhile p es = drop (prefix p es) es
 
-      > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
-    -}
-    splitsOn :: Eq e => l -> l -> [l]
-    splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
+    -- | Drops the longest 'suffix' by predicate.
+    dropEnd :: (e -> Bool) -> l -> l
+    dropEnd p es = sans (suffix p es) es
 
     {- Pad/remove/replace. -}
 
@@ -273,14 +253,6 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     -}
     padR :: Int -> e -> l -> l
     padR n e = take n . (++ replicate n e)
-
-    -- | Drops the longest 'prefix' by predicate.
-    dropWhile :: (e -> Bool) -> l -> l
-    dropWhile p es = drop (prefix p es) es
-
-    -- | Drops the longest 'suffix' by predicate.
-    dropEnd :: (e -> Bool) -> l -> l
-    dropEnd p es = sans (suffix p es) es
 
     {- |
       @replaceBy sub new line@ replace every non-overlapping occurrence of @sub@
@@ -685,8 +657,10 @@ combo f = go . listL
         go'  i _    _     = i
 
 -- | intercalate is generalization of intercalate
-intercalate :: (Foldable f, Linear1 f l, Linear l e) => l -> f l -> l
-intercalate =  concat ... intersperse
+intercalate :: (Foldable f, Linear l e) => l -> f l -> l
+intercalate e es =
+  let xs = 1 `drop` foldr ((e :) ... (:)) [] es
+  in  concat (xs .< 2 ? [] $ xs)
 
 {- |
   @ascending es lengths@ checks if the subsequences of @es@ of lengths @lengths@
@@ -727,3 +701,6 @@ instance Linear [e] e
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
+
+
+

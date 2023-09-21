@@ -7,7 +7,7 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
-    
+
     "SDP.Templates.AnyVar" provides 'AnyVar' - template of generalized by
     index type structure, based on 'Int'-indexed primitive.
 -}
@@ -16,7 +16,7 @@ module SDP.Templates.AnyVar
   -- * Export
   module SDP.IndexedM,
   module SDP.SortM,
-  
+
   -- * Border template
   AnyVar ( AnyVar ), withAnyVar
 )
@@ -36,7 +36,7 @@ default ()
 
 {- |
   'AnyVar' is template, that appends arbitrary bounds to any structure.
-  
+
   * 'Eq', 'Ord', 'Eq1' and 'Ord1' instances ingores bounds.
   * 'Thaw' and 'Freeze' instances for @'AnyVar' m var rep@ inherit @rep@ behavior.
 -}
@@ -65,9 +65,9 @@ instance (IsMVar m var, NullableM m rep) => NullableM m (AnyVar m var rep)
 instance (IsMVar m var, EstimateM m rep) => EstimateM m (AnyVar m var rep)
   where
     lestimateM xs n = (`lestimateM` n) =<< unpack xs
-    
+
     estimateM = (join ... liftA2 estimateM) `on` unpack
-    
+
     getSizeOf = getSizeOf <=< unpack
 
 instance (Index i, IsMVar m var, BorderedM m rep i) => BorderedM m (AnyVar m var rep) i
@@ -76,7 +76,7 @@ instance (Index i, IsMVar m var, BorderedM m rep i) => BorderedM m (AnyVar m var
     getBounds  = getBounds  <=< unpack
     getLower   = getLower   <=< unpack
     getUpper   = getUpper   <=< unpack
-    
+
     getViewOf bnds (AnyVar es) = pack =<< getViewOf bnds =<< fromMRef es
 
 --------------------------------------------------------------------------------
@@ -89,56 +89,68 @@ instance (IsMVar m var, ForceableM m rep) => ForceableM m (AnyVar m var rep)
 
 instance
     (
-      Index i, BorderedM m rep i, LinearM m rep e, NullableM m rep,
-      Attribute "set" "" m (var rep) rep, IsMVar m var
-    ) => LinearM m (AnyVar m var rep) e
+      Attribute "set" "" m (var rep) rep, IsMVar m var,
+      Index i, BorderedM m rep i, LinearM m rep e
+    ) => SequenceM m (AnyVar m var rep) e
   where
     getHead = getHead <=< unpack
     getLast = getLast <=< unpack
-    
-    prepend e xs = xs <$ withAnyVar (prepend  e) xs
-    append  xs e = xs <$ withAnyVar (`append` e) xs
-    
+
+    getTail = pack <=< getTail <=< unpack
+    getInit = pack <=< getInit <=< unpack
+
+    e += xs = xs <$ withAnyVar (e +=) xs
+    xs =+ e = xs <$ withAnyVar (=+ e) xs
+
     getLeft  = getLeft  <=< unpack
     getRight = getRight <=< unpack
-    
+
     newLinear = pack <=< newLinear
-    filled  n = pack <=< filled  n
-    
+
+    reversed xs = xs <$ reversed' xs
+
     es !#> i = (!#> i) =<< unpack es
-    
+
     writeM es i e = do es' <- unpack es; writeM es' i e
-    
-    copied' es l n = do es' <- unpack es; pack =<< copied' es' l n
-    
-    reversed xs = xs <$ reversed xs
-    
-    copyTo src os trg ot n = do
-      src' <- unpack src
-      trg' <- unpack trg
-      copyTo src' os trg' ot n
-    
-    miterate n = pack <=<< miterate n
-    iterateM n = pack <=<< iterateM n
-    
+
     foldrM f e = foldrM f e <=< unpack
     foldlM f e = foldlM f e <=< unpack
-    
+
     ofoldrM f e = ofoldrM f e <=< unpack
     ofoldlM f e = ofoldlM f e <=< unpack
-    
-    takeM n es = es <$ withAnyVar (takeM n) es
-    dropM n es = es <$ withAnyVar (dropM n) es
-    keepM n es = es <$ withAnyVar (keepM n) es
-    sansM n es = es <$ withAnyVar (sansM n) es
-    
-    splitM  n = uncurry (liftA2 (,) `on` pack) <=< splitM  n <=< unpack
-    divideM n = uncurry (liftA2 (,) `on` pack) <=< divideM n <=< unpack
-    
+
     prefixM p = prefixM p <=< unpack
     suffixM p = suffixM p <=< unpack
     mprefix p = mprefix p <=< unpack
     msuffix p = msuffix p <=< unpack
+
+instance
+    (
+      Attribute "set" "" m (var rep) rep, IsMVar m var,
+      Index i, BorderedM m rep i, LinearM m rep e
+    ) => LinearM m (AnyVar m var rep) e
+  where
+    filled n = pack <=< filled n
+
+    copied' es l n = do es' <- unpack es; pack =<< copied' es' l n
+
+    copyTo src os trg ot n = do
+      src' <- unpack src
+      trg' <- unpack trg
+      copyTo src' os trg' ot n
+
+    miterate n = pack <=<< miterate n
+    iterateM n = pack <=<< iterateM n
+
+    reversed' = reversed' <=< unpack
+
+    takeM n es = es <$ withAnyVar (takeM n) es
+    dropM n es = es <$ withAnyVar (dropM n) es
+    keepM n es = es <$ withAnyVar (keepM n) es
+    sansM n es = es <$ withAnyVar (sansM n) es
+
+    splitM  n = uncurry (liftA2 (,) `on` pack) <=< splitM  n <=< unpack
+    divideM n = uncurry (liftA2 (,) `on` pack) <=< divideM n <=< unpack
 
 --------------------------------------------------------------------------------
 
@@ -152,16 +164,16 @@ instance
   where
     newMap' = pack <=<< newMap'
     newMap  = pack <=<  newMap
-    
+
     insertM' es key e = do es' <- unpack es; insertM' es' key e
     deleteM' es key   = do es' <- unpack es; deleteM' es' key
-    
+
     writeM' es i e = do es' <- unpack es; writeM' es' i e
-    
+
     es >! i = (>! i) =<< unpack es
-    
+
     overwrite es ascs = flip overwrite ascs =<< unpack es
-    
+
     kfoldrM f base = kfoldrM f base <=< unpack
     kfoldlM f base = kfoldlM f base <=< unpack
 
@@ -173,7 +185,7 @@ instance
   where
     fromAssocs  (l, u)   = pack <=< fromAssocs  (l, u)
     fromAssocs' (l, u) e = pack <=< fromAssocs' (l, u) e
-    
+
     fromIndexed' = pack <=< fromIndexed'
     fromIndexedM = pack <=< fromIndexedM
 
@@ -214,7 +226,4 @@ unpack =  fromMRef . fromAnyVar
 withAnyVar :: (Attribute "set" "" m (var rep) rep, IsMVar m var)
            => (rep -> m rep) -> AnyVar m var rep -> m ()
 withAnyVar f (AnyVar es) = accessSet attribute es =<< f =<< fromMRef es
-
-
-
 

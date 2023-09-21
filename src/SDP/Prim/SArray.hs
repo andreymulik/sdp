@@ -910,21 +910,18 @@ instance ForceableM (ST s) (STArray# s e)
       \ s1# -> case cloneMutableArray# marr# o# n# s1# of
         (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
 
-instance LinearM (ST s) (STArray# s e) e
+instance SequenceM (ST s) (STArray# s e) e
   where
     getHead es = es >! 0
     getLast es = es >! upper es
 
-    newLinear = fromFoldableM
+    getTail (STArray# 0 _  _) = pfailEx "getTail, expected nonempty array"
+    getTail (STArray# n c es) = return (STArray# (n - 1) (c + 1) es)
 
-    newLinearN c es = ST $ \ s1# -> case newArray# n# err s1# of
-      (# s2#, marr# #) ->
-        let go y r = \ i# s3# -> case writeArray# marr# i# y s3# of
-              s4# -> if isTrue# (i# ==# n# -# 1#) then s4# else r (i# +# 1#) s4#
-        in done' n marr# ( if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# )
-      where
-        err = undEx "newLinearN"
-        !n@(I# n#) = max 0 c
+    getInit (STArray# 0 _  _) = pfailEx "getInit, expected nonempty array"
+    getInit (STArray# n c es) = return (STArray# (n - 1) c es)
+
+    newLinear = fromFoldableM
 
     fromFoldableM es = ST $ \ s1# -> case newArray# n# err s1# of
       (# s2#, marr# #) ->
@@ -938,10 +935,57 @@ instance LinearM (ST s) (STArray# s e) e
     getLeft  es@(STArray# n _ _) = (es !#>) `mapM` [0 .. n - 1]
     getRight es@(STArray# n _ _) = (es !#>) `mapM` [n - 1, n - 2 .. 0]
 
+    reversed es = do
+      es' <- copied    es
+      es' <$ reversed' es'
+
+    ofoldrM f base = \ arr@(STArray# n _ _) ->
+      let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
+      in  go 0
+
+    ofoldlM f base = \ arr@(STArray# n _ _) ->
+      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f i
+      in  go (n - 1)
+
+    foldrM f base = \ arr@(STArray# n _ _) ->
+      let go i = n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f
+      in  go 0
+
+    foldlM f base = \ arr@(STArray# n _ _) ->
+      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
+      in  go (n - 1)
+
     {-# INLINE (!#>) #-}
     (!#>) (STArray# _ (I# o#) marr#) = \ (I# i#) -> ST $ readArray# marr# (o# +# i#)
 
     writeM = writeM'
+
+    prefixM p es@(STArray# c _ _) =
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ i) $ return i
+      in  go 0
+
+    suffixM p es@(STArray# c _ _) =
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
+      in  go (max 0 (c - 1))
+
+    mprefix p es@(STArray# c _ _) =
+      let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
+      in  go 0
+
+    msuffix p es@(STArray# c _ _) =
+      let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
+      in  go (max 0 (c - 1))
+
+instance LinearM (ST s) (STArray# s e) e
+  where
+    newLinearN c es = ST $ \ s1# -> case newArray# n# err s1# of
+      (# s2#, marr# #) ->
+        let go y r = \ i# s3# -> case writeArray# marr# i# y s3# of
+              s4# -> if isTrue# (i# ==# n# -# 1#) then s4# else r (i# +# 1#) s4#
+        in done' n marr# ( if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# )
+      where
+        err = undEx "newLinearN"
+        !n@(I# n#) = max 0 c
 
     copied' (STArray# c (I# o#) marr#) l@(I# l#) n@(I# n#)
       | l >= 0 && n >= 0 && c >= l = ST $
@@ -949,7 +993,6 @@ instance LinearM (ST s) (STArray# s e) e
           (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
       | True = undEx "copied'"
 
-    reversed  es = do es' <- copied es; reversed' es'; return es'
     reversed' es =
       let go i j = when (i < j) $ go (i + 1) (j - 1) >> swapM es i j
       in  go 0 (sizeOf es - 1)
@@ -975,22 +1018,6 @@ instance LinearM (ST s) (STArray# s e) e
         return marr
       where
         n = foldr' ((+) . sizeOf) 0 ess
-
-    ofoldrM f base = \ arr@(STArray# n _ _) ->
-      let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
-      in  go 0
-
-    ofoldlM f base = \ arr@(STArray# n _ _) ->
-      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f i
-      in  go (n - 1)
-
-    foldrM f base = \ arr@(STArray# n _ _) ->
-      let go i = n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f
-      in  go 0
-
-    foldlM f base = \ arr@(STArray# n _ _) ->
-      let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
-      in  go (n - 1)
 
     miterate n@(I# n#) f e = do
       es <- filled n e
@@ -1039,22 +1066,6 @@ instance LinearM (ST s) (STArray# s e) e
       | n <= 0 = do e' <- newNull; return (es, e')
       | n >= c = do e' <- newNull; return (e', es)
       |  True  = return (STArray# n (c - n + o) marr#, STArray# (c - n) o marr#)
-
-    prefixM p es@(STArray# c _ _) =
-      let go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ i) $ return i
-      in  go 0
-
-    suffixM p es@(STArray# c _ _) =
-      let go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
-      in  go (max 0 (c - 1))
-
-    mprefix p es@(STArray# c _ _) =
-      let go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
-      in  go 0
-
-    msuffix p es@(STArray# c _ _) =
-      let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
-      in  go (max 0 (c - 1))
 
 --------------------------------------------------------------------------------
 
@@ -1193,33 +1204,27 @@ instance MonadIO io => ForceableM io (MIOArray# io e)
   where
     copied = pack . copied . unpack
 
-instance MonadIO io => LinearM io (MIOArray# io e) e
+instance MonadIO io => SequenceM io (MIOArray# io e) e
   where
     singleM = pack . singleM
     getHead = stToMIO . getHead . unpack
     getLast = stToMIO . getLast . unpack
 
-    prepend e = pack . prepend e . unpack
-    append es = pack . append (unpack es)
+    getTail (MIOArray# (STArray# 0 _  _)) = pfailEx "getTail, expected nonempty array"
+    getTail (MIOArray# (STArray# n c es)) = return (MIOArray# (STArray# (n - 1) (c + 1) es))
+
+    getInit (MIOArray# (STArray# 0 _  _)) = pfailEx "getInit, expected nonempty array"
+    getInit (MIOArray# (STArray# n c es)) = return (MIOArray# (STArray# (n - 1) c es))
+
+    e += es = pack (e += unpack es)
+    es =+ e = pack (unpack es =+ e)
 
     newLinear     = pack . newLinear
-    newLinearN    = pack ... newLinearN
     fromFoldableM = pack . fromFoldableM
-
-    writeM = writeM'
-    (!#>)  = stToMIO ... (!#>) . unpack
 
     reversed  = pack . reversed . unpack
     getLeft   = stToMIO . getLeft  . unpack
     getRight  = stToMIO . getRight . unpack
-    reversed' = stToMIO . reversed' . unpack
-
-    copied' es = pack ... copied' (unpack es)
-
-    filled = pack ... filled
-    merged = pack . merged . foldr ((:) . unpack) []
-
-    copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
 
     ofoldrM f base = \ arr@(MIOArray# (STArray# n _ _)) ->
       let go i =  n == i ? return base $ (arr !#> i) >>=<< go (i + 1) $ f i
@@ -1237,10 +1242,8 @@ instance MonadIO io => LinearM io (MIOArray# io e) e
       let go i = -1 == i ? return base $ go (i - 1) >>=<< (arr !#> i) $ f
       in  go (sizeOf arr - 1)
 
-    takeM n = pack . takeM n . unpack
-    dropM n = pack . dropM n . unpack
-    keepM n = pack . keepM n . unpack
-    sansM n = pack . sansM n . unpack
+    writeM = writeM'
+    (!#>)  = stToMIO ... (!#>) . unpack
 
     prefixM f = stToMIO . prefixM f . unpack
     suffixM f = stToMIO . suffixM f . unpack
@@ -1252,6 +1255,24 @@ instance MonadIO io => LinearM io (MIOArray# io e) e
     msuffix p es@(MIOArray# (STArray# c _ _)) =
       let go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
       in  go (max 0 (c - 1))
+
+instance MonadIO io => LinearM io (MIOArray# io e) e
+  where
+    newLinearN = pack ... newLinearN
+
+    reversed' = stToMIO . reversed' . unpack
+
+    copied' es = pack ... copied' (unpack es)
+
+    filled = pack ... filled
+    merged = pack . merged . foldr ((:) . unpack) []
+
+    copyTo src so trg to = stToMIO . copyTo (unpack src) so (unpack trg) to
+
+    takeM n = pack . takeM n . unpack
+    dropM n = pack . dropM n . unpack
+    keepM n = pack . keepM n . unpack
+    sansM n = pack . sansM n . unpack
 
 --------------------------------------------------------------------------------
 
@@ -1425,5 +1446,4 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
-
 

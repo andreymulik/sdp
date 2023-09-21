@@ -1,7 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances #-}
 {-# LANGUAGE ConstraintKinds, DefaultSignatures, FlexibleContexts, RankNTypes #-}
 {-# LANGUAGE Safe, CPP, BangPatterns, GADTs, ViewPatterns, PatternSynonyms #-}
-{-# LANGUAGE TypeOperators #-}
 
 #if MIN_VERSION_fmr(0,3,0)
 {-# LANGUAGE TypeFamilies, DataKinds #-}
@@ -17,25 +16,27 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
-    
+
     "SDP.LinearM" is a module that provides 'BorderedM' and 'LinearM' classes.
 -}
 module SDP.LinearM
 (
   -- * Exports
-  module SDP.Linear, (+=), (=+), (~=),
-  
+  module SDP.SequenceM,
+  module SDP.Linear,
+
   -- * LinearM class
-  LinearM (..), LinearM1, LinearM2,
-  
+  LinearM (..), LinearM1, LinearM2, exceptM, (~=), eachM, eachFromM,
+  splitsM, dividesM, partsM, chunksM, intersperseM, intercalateM,
+
   -- ** LinearM field
   -- $fmrNotes
   pattern (:+=), pattern (:=+), pattern (:~=),
-  
+
 #if MIN_VERSION_fmr(0,3,0)
   (=+:), (+=:), (~=:),
 #endif
-  
+
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
@@ -45,9 +46,9 @@ module SDP.LinearM
 where
 
 import Prelude ()
-import SDP.SafePrelude
+import SDP.SafePrelude hiding ( filterM )
+import SDP.SequenceM
 import SDP.Linear
-import SDP.Map
 
 #if MIN_VERSION_fmr(0,3,0)
 import Data.Field
@@ -57,11 +58,7 @@ import Data.Typeable
 import Data.Property hiding ( set )
 #endif
 
-import Control.Exception.SDP
-
 default ()
-
-infixl 5 !#>
 
 --------------------------------------------------------------------------------
 
@@ -70,113 +67,220 @@ infixl 5 !#>
   designed with the possibility of in-place implementation, so many operations
   from 'Linear' have no analogues here.
 -}
-class (Monad m, ForceableM m l, EstimateM m l) => LinearM m l e | l -> m, l -> e
+class (SequenceM m l e, NullableM m l) => LinearM m l e | l -> m, l -> e
   where
-    {-# MINIMAL (newLinear|fromFoldableM), (takeM|sansM), (dropM|keepM),
-        (getLeft|getRight), (!#>), writeM, copyTo #-}
-    
-    -- | Monadic 'single'.
-    singleM :: NullableM m l => e -> m l
-    singleM =  newLinear . pure
-    
+    {-# MINIMAL (takeM|sansM), (dropM|keepM), copyTo #-}
+
+    -- | Monadic version of 'replicate'.
+    {-# INLINE filled #-}
+    filled :: Int -> e -> m l
+    filled n = newLinearN n . replicate n
+
     {- |
-      'getHead' is monadic version of 'head'. This procedure mustn't modify the
-      source structure or return references to its mutable fields.
+      @since 0.3
+
+      Monadic 'fromList''.
     -}
-    getHead :: l -> m e
-    getHead =  fmap head . getLeft
-    
-    {- |
-      'getLast' is monadic version of 'last'. This procedure mustn't modify the
-      source structure or return references to its mutable fields.
-    -}
-    getLast :: l -> m e
-    getLast =  fmap head . getRight
-    
-    {- |
-      Prepends new element to the start of the structure (monadic 'toHead').
-      Like most size-changing operations, @prepend@ doesn't guarantee the
-      correctness of the original structure after conversion.
-    -}
-    prepend :: e -> l -> m l
-    prepend e es = newLinear . (e :) =<< getLeft es
-    default prepend :: NullableM m l => e -> l -> m l
-    
-    {- |
-      Appends new element to the end of the structure (monadic 'toLast').
-      Like most size-changing operations, @append@ doesn't guarantee the
-      correctness of the original structure after conversion.
-    -}
-    append :: l -> e -> m l
-    append es e = newLinear . (:< e) =<< getLeft es
-    default append :: NullableM m l => l -> e -> m l
-    
-    -- | Monadic 'fromList'.
-    {-# INLINE newLinear #-}
-    newLinear :: NullableM m l => [e] -> m l
-    newLinear =  fromFoldableM
-    
+    newLinear' :: Maybe SizeHint -> [e] -> m l
+    newLinear' =  const newLinear
+
     -- | Monadic 'fromListN'.
     {-# INLINE newLinearN #-}
-    newLinearN :: NullableM m l => Int -> [e] -> m l
+    newLinearN :: Int -> [e] -> m l
     newLinearN =  newLinear ... take
-    
-    -- | Monadic 'fromFoldable'.
-    {-# INLINE fromFoldableM #-}
-    fromFoldableM :: NullableM m l => Foldable f => f e -> m l
-    fromFoldableM =  newLinear . toList
-    
-    -- | Left view of line.
-    {-# INLINE getLeft #-}
-    getLeft :: l -> m [e]
-    getLeft =  fmap reverse . getRight
-    
-    -- | Right view of line.
-    {-# INLINE getRight #-}
-    getRight :: l -> m [e]
-    getRight =  fmap reverse . getLeft
-    
-    -- | @('!#>')@ is unsafe monadic offset-based reader.
-    (!#>) :: l -> Int -> m e
-    
-    -- | Unsafe monadic offset-based writer.
-    writeM :: l -> Int -> e -> m ()
-    
+
+    {- |
+      @since 0.3
+
+      Mutable version of 'iterate'.
+    -}
+    iterateM :: Int -> (e -> m e) -> e -> m l
+    iterateM n go e = newLinearN n =<< iterate' n e id
+      where
+        iterate' 0 _ xs' = return (xs' [])
+        iterate' i x xs' = do x' <- go x; iterate' (i - 1) x' (xs' . (x :))
+
+    {- |
+      @since 0.3
+
+      'iterate' for mutable structures.
+    -}
+    miterate :: Int -> (e -> e) -> e -> m l
+    miterate n = newLinearN n ... iterate n
+
+    filterM :: (e -> m Bool) -> l -> m l
+    filterM go = newLinear <=< foldrM (\ e xs ->
+        do b <- go e; return (b ? e : xs $ xs)
+      ) []
+
+    -- | Monadic 'concat'.
+    merged :: Foldable f => f l -> m l
+    merged =  newLinear . concat <=< sequence . foldr ((:) . getLeft) []
+
+    {- |
+      @takeM n es@ returns a reference to the @es@, keeping first @n@ elements.
+      Changes in the source and result must be synchronous.
+    -}
+    takeM :: Int -> l -> m l
+    takeM n es = do s <- getSizeOf es; sansM (s - n) es
+
+    {- |
+      @dropM n es@ returns a reference to the @es@, discarding first @n@ elements.
+      Changes in the source and result must be synchronous.
+    -}
+    dropM :: Int -> l -> m l
+    dropM n es = do s <- getSizeOf es; keepM (s - n) es
+
+    {- |
+      @keepM n es@ returns a reference to the @es@, keeping last @n@ elements.
+      Changes in the source and result must be synchronous.
+    -}
+    keepM :: Int -> l -> m l
+    keepM n es = do s <- getSizeOf es; dropM (s - n) es
+
+    {- |
+      @sansM n es@ returns a reference to the @es@, discarding last @n@ elements.
+      Changes in the source and result must be synchronous.
+    -}
+    sansM :: Int -> l -> m l
+    sansM n es = do s <- getSizeOf es; takeM (s - n) es
+
+    {- |
+      @splitM n es@ returns pair of references to the @es@: keeping and
+      discarding first @n@ elements. Changes in the source and result must be
+      synchronous.
+    -}
+    splitM :: Int -> l -> m (l, l)
+    splitM n es = liftA2 (,) (takeM n es) (dropM n es)
+
+    {- |
+      @divideM n es@ returns pair of references to the @es@: discarding and
+      keeping last @n@ elements. Changes in the source and results must be
+      synchronous.
+    -}
+    divideM :: Int -> l -> m (l, l)
+    divideM n es = liftA2 (,) (sansM n es) (keepM n es)
+
+    {- |
+      @since 0.3
+
+      @splitsMOn sub line@ splits @line@ by @sub@. Returns new structure.
+    -}
+    splitsMOn :: Eq e => l -> l -> m [l]
+    splitsMOn sub line = do
+      sz <- getSizeOf sub
+      is <- infixesM sub line
+      mapM (dropM sz) =<< partsM is line
+
+    {-
+      @since 0.3
+
+      Monadic 'takeWhile'.
+    -}
+    takeWhile' :: (e -> Bool) -> l -> m l
+    takeWhile' f es = do c <- prefixM f es; takeM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'dropWhile'.
+    -}
+    dropWhile' :: (e -> Bool) -> l -> m l
+    dropWhile' f es = do c <- prefixM f es; dropM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'takeEnd'.
+    -}
+    takeEnd' :: (e -> Bool) -> l -> m l
+    takeEnd' f es = do c <- suffixM f es; keepM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'dropEnd'.
+    -}
+    dropEnd' :: (e -> Bool) -> l -> m l
+    dropEnd' f es = do c <- suffixM f es; sansM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'takeWhile'.
+    -}
+    takeWhileM :: (e -> m Bool) -> l -> m l
+    takeWhileM f es = do c <- mprefix f es; takeM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'dropWhile'.
+    -}
+    dropWhileM :: (e -> m Bool) -> l -> m l
+    dropWhileM f es = do c <- mprefix f es; dropM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'takeEnd'.
+    -}
+    takeEndM :: (e -> m Bool) -> l -> m l
+    takeEndM f es = do c <- msuffix f es; keepM c es
+
+    {-
+      @since 0.3
+
+      Monadic 'dropEnd'.
+    -}
+    dropEndM :: (e -> m Bool) -> l -> m l
+    dropEndM f es = do c <- msuffix f es; sansM c es
+
+    {- |
+      @since 0.3
+
+      @replaceMBy sub new line@ replace every non-overlapping occurrence of @sub@
+      in @line@ with @new@. Returns new structure.
+    -}
+    replaceMBy :: Eq e => l -> l -> l -> m l
+    replaceMBy sub new = intercalateM new <=< splitsMOn sub
+
+    {- |
+      @since 0.3
+
+      @removeMAll sub line@ removes every non-overlapping occurrence of @sub@ in
+      @line@. Same as @do new <- newNull replaceMBy sub new line@.
+    -}
+    removeMAll :: Eq e => l -> l -> m l
+    removeMAll =  merged <=<< splitsMOn
+
+    -- | @'removed' n es@ removes element with offset @n@ from @es@.
+    removed :: Int -> l -> m l
+    removed n es = newLinear . remove n =<< getLeft es
+
     {-# INLINE copied' #-}
     -- | @copied' es l n@ returns the slice of @es@ from @l@ of length @n@.
     copied' :: l -> Int -> Int -> m l
     copied' es l n = getLeft es >>= newLinearN n . drop l
-    default copied' :: NullableM m l => l -> Int -> Int -> m l
-    
-    -- | Monadic 'reverse', returns new structure.
-    {-# INLINE reversed #-}
-    reversed :: l -> m l
-    reversed =  newLinear <=< getRight
-    default reversed :: NullableM m l => l -> m l
-    
+
     {- |
       @since 0.2.1
       Monadic in-place 'reverse', reverse elements of given structure.
     -}
     reversed' :: l -> m ()
     reversed' es = ofoldr (\ i e go -> do writeM es i e; go) (return ()) =<< getRight es
-    
-    -- | Monadic 'concat'.
-    merged :: NullableM m l => Foldable f => f l -> m l
-    merged =  newLinear . concat <=< sequence . foldr ((:) . getLeft) []
-    
-    -- | Monadic version of 'replicate'.
-    {-# INLINE filled #-}
-    filled :: NullableM m l => Int -> e -> m l
-    filled n = newLinearN n . replicate n
-    
-    -- | @'removed' n es@ removes element with offset @n@ from @es@.
-    removed :: NullableM m l => Int -> l -> m l
-    removed n es = newLinear . remove n =<< getLeft es
-    
+
+    {- |
+      @copyTo source soff target toff count@ writes @count@ elements of @source@
+      from @soff@ to @target@ starting with @toff@.
+    -}
+    copyTo :: l -> Int -> l -> Int -> Int -> m ()
+
+    {- Special operations. -}
+
     {- |
       @since 0.2.1
-      
+
       @'lshiftM' es i j@ cyclically shifts the elements with offsets between @i@
       and @j@ @(i < j)@ one position to the left (the @j@-th element is in the
       @i@-th position, the @i@-th in the @(i+1)@th, etc.) If @i >= j@, does
@@ -186,237 +290,91 @@ class (Monad m, ForceableM m l, EstimateM m l) => LinearM m l e | l -> m, l -> e
     lshiftM es i j =
       let go k ej = when (k <= j) $ do ek <- es !#> k; writeM es k ej; go (k + 1) ek
       in  when (i < j) $ go i =<< (es !#> j)
-    
-    filterM :: NullableM m l => (e -> m Bool) -> l -> m l
-    filterM go = newLinear <=< foldrM (\ e xs ->
-        do b <- go e; return (b ? e : xs $ xs)
-      ) []
-    
-    exceptM :: NullableM m l => (e -> m Bool) -> l -> m l
-    exceptM go = newLinear <=< foldrM (\ e xs ->
-        do b <- go e; return (b ? xs $ e : xs)
-      ) []
-    
-    {- |
-      @copyTo source soff target toff count@ writes @count@ elements of @source@
-      from @soff@ to @target@ starting with @toff@.
-    -}
-    copyTo :: l -> Int -> l -> Int -> Int -> m ()
-    
-    -- | 'ofoldrM' is right monadic fold with offset.
-    ofoldrM :: (Int -> e -> r -> m r) -> r -> l -> m r
-    ofoldrM f base = foldr ((=<<) . uncurry f) (pure base) . assocs <=< getLeft
-    
-    -- | 'ofoldlM' is left monadic fold with offset.
-    ofoldlM :: (Int -> r -> e -> m r) -> r -> l -> m r
-    ofoldlM f base es = foldl (flip $ uncurry ((=<<) ... flip . f)) (pure base)
-                      . assocs =<< getLeft es
-    
-    {- |
-      @since 0.3
-      
-      Same as 'listWithM'', but actions can be performed in any order (may be
-      parallel).
-    -}
-    listWithM :: (Int -> e -> m r) -> l -> m [r]
-    listWithM =  listWithM'
-    
-    {- |
-      @since 0.3
-      
-      @'listWithM'' go es@ executes an action @go@ for each offset and element
-      of @es@ from left to right.
-      
-      @
-      listWithM' go es === listWith' go =<< getLeft es
-      @
-    -}
-    listWithM' :: (Int -> e -> m r) -> l -> m [r]
-    listWithM' go = ofoldrM (\ o e xs -> (: xs) <$> go o e) []
-    
-    {- |
-      @since 0.3
-      
-      Same as 'mapWithM'', but actions can be performed in any order (may be
-      parallel).
-    -}
-    mapWithM :: (Int -> e -> m e) -> l -> m l
-    mapWithM =  mapWithM'
-    
-    {- |
-      @since 0.3
-      
-      Same as 'mapWithM'', but keeps argument stucture like 'fmap'.
-    -}
-    default mapWithM' :: NullableM m l => (Int -> e -> m e) -> l -> m l
-    mapWithM' :: (Int -> e -> m e) -> l -> m l
-    mapWithM' =  newLinear <=<< listWithM
-    
-    {- |
-      @since 0.3
-      
-      Same as 'mapWithM', but discards result.
-    -}
-    mapWithM_ :: (Int -> e -> m ()) -> l -> m ()
-    mapWithM_ f = ofoldrM (\ o e _ -> f o e) ()
-    
-    -- | 'ofoldrM'' is strict version of 'ofoldrM'.
-    ofoldrM' :: (Int -> e -> r -> m r) -> r -> l -> m r
-    ofoldrM' f = ofoldrM (\ !i e !r -> f i e r)
-    
-    -- | 'ofoldrM'' is strict version of 'ofoldrM'.
-    ofoldlM' :: (Int -> r -> e -> m r) -> r -> l -> m r
-    ofoldlM' f = ofoldlM (\ !i !r e -> f i r e)
-    
-    -- | 'foldrM' is just 'ofoldrM' in 'Linear' context.
-    foldrM :: (e -> r -> m r) -> r -> l -> m r
-    foldrM =  ofoldrM . const
-    
-    -- | 'foldlM' is just 'ofoldlM' in 'Linear' context.
-    foldlM :: (r -> e -> m r) -> r -> l -> m r
-    foldlM =  ofoldlM . const
-    
-    -- | 'foldrM'' is strict version of 'foldrM'.
-    foldrM' :: (e -> r -> m r) -> r -> l -> m r
-    foldrM' f = foldrM (\ e !r -> f e r)
-    
-    -- | 'foldlM'' is strict version of 'foldlM'.
-    foldlM' :: (r -> e -> m r) -> r -> l -> m r
-    foldlM' f = foldlM (\ !r e -> f r e)
-    
-    -- | 'foldrM1' is 'foldrM' version with 'last' element as base.
-    foldrM1 :: (e -> e -> m e) -> l -> m e
-    foldrM1 f = getLeft >=> \ es' -> case es' of
-      (es :< e) -> foldr ((=<<) . f) (pure e) es
-      _         -> emptyEx "foldrM1: must be non-empty"
-    
-    -- | 'foldlM1' is 'foldlM' version with 'head' element as base.
-    foldlM1 :: (e -> e -> m e) -> l -> m e
-    foldlM1 f = getLeft >=> \ es' -> case es' of
-      (e :> es) -> foldl (flip $ (=<<) . flip f) (pure e) es
-      _         -> emptyEx "foldlM1: must be non-empty"
-    
+
     -- | Just swap two elements.
     swapM :: l -> Int -> Int -> m ()
     swapM es i j = do ei <- es !#> i; writeM es i =<< es !#> j; writeM es j ei
-    
-    {- |
-      @since 0.3
-      
-      Mutable version of 'iterate'.
-    -}
-    iterateM :: NullableM m l => Int -> (e -> m e) -> e -> m l
-    iterateM n go e = newLinearN n =<< iterate' n e id
-      where
-        iterate' 0 _ xs' = return (xs' [])
-        iterate' i x xs' = do x' <- go x; iterate' (i - 1) x' (xs' . (x :))
-    
-    {- |
-      @since 0.3
-      
-      'iterate' for mutable structures.
-    -}
-    miterate :: NullableM m l => Int -> (e -> e) -> e -> m l
-    miterate n = newLinearN n ... iterate n
-    
-    {- |
-      @takeM n es@ returns a reference to the @es@, keeping first @n@ elements.
-      Changes in the source and result must be synchronous.
-    -}
-    takeM :: NullableM m l => Int -> l -> m l
-    takeM n es = do s <- getSizeOf es; sansM (s - n) es
-    
-    {- |
-      @dropM n es@ returns a reference to the @es@, discarding first @n@ elements.
-      Changes in the source and result must be synchronous.
-    -}
-    dropM :: NullableM m l => Int -> l -> m l
-    dropM n es = do s <- getSizeOf es; keepM (s - n) es
-    
-    {- |
-      @keepM n es@ returns a reference to the @es@, keeping last @n@ elements.
-      Changes in the source and result must be synchronous.
-    -}
-    keepM :: NullableM m l => Int -> l -> m l
-    keepM n es = do s <- getSizeOf es; dropM (s - n) es
-    
-    {- |
-      @sansM n es@ returns a reference to the @es@, discarding last @n@ elements.
-      Changes in the source and result must be synchronous.
-    -}
-    sansM :: NullableM m l => Int -> l -> m l
-    sansM n es = do s <- getSizeOf es; takeM (s - n) es
-    
-    {- |
-      @splitM n es@ returns pair of references to the @es@: keeping and
-      discarding first @n@ elements. Changes in the source and result must be
-      synchronous.
-    -}
-    splitM :: NullableM m l => Int -> l -> m (l, l)
-    splitM n es = liftA2 (,) (takeM n es) (dropM n es)
-    
-    {- |
-      @divideM n es@ returns pair of references to the @es@: discarding and
-      keeping last @n@ elements. Changes in the source and results must be
-      synchronous.
-    -}
-    divideM :: NullableM m l => Int -> l -> m (l, l)
-    divideM n es = liftA2 (,) (sansM n es) (keepM n es)
-    
-    {- |
-      @splitM ns es@ returns the sequence of @es@ prefix references of length
-      @n <- ns@. Changes in the source and results must be synchronous.
-    -}
-    splitsM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
-    splitsM ns es =
-      let f ds' n = do ds <- ds'; (d,d') <- splitM n (head ds); pure (d':d:ds)
-      in  reverse <$> foldl f (pure [es]) ns
-    
-    {- |
-      @dividesM ns es@ returns the sequence of @es@ suffix references of length
-      @n <- ns@. Changes in the source and results must be synchronous.
-    -}
-    dividesM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
-    dividesM ns es =
-      let f n ds' = do ds <- ds'; (d, d') <- divideM n (head ds); pure (d':d:ds)
-      in  foldr f (pure [es]) ns
-    
-    {- |
-      @partsM n es@ returns the sequence of @es@ prefix references, splitted by
-      offsets in @es@. Changes in the source and results must be synchronous.
-    -}
-    partsM :: (NullableM m l, Foldable f) => f Int -> l -> m [l]
-    partsM =  splitsM . go . toList where go is = zipWith (-) is (0 : is)
-    
-    {- |
-      @chunksM n es@ returns the sequence of @es@ prefix references of length
-      @n@. Changes in the source and results must be synchronous.
-    -}
-    chunksM :: NullableM m l => Int -> l -> m [l]
-    chunksM n es = do (t, d) <- splitM n es; nowNull d ?^ pure [t] $ (t :) <$> chunksM n d
-    
-    {- |
-      @eachM n es@ returns new sequence of @es@ elements with step @n@. eachM
-      shouldn't return references to @es@.
-    -}
-    eachM :: NullableM m l => Int -> l -> m l
-    eachM n = newLinearN n . each n <=< getLeft
-    
-    -- | @prefixM p es@ returns the longest @es@ prefix size, satisfying @p@.
-    prefixM :: (e -> Bool) -> l -> m Int
-    prefixM p = fmap (prefix p) . getLeft
-    
-    -- | @suffixM p es@ returns the longest @es@ suffix size, satisfying @p@.
-    suffixM :: (e -> Bool) -> l -> m Int
-    suffixM p = fmap (suffix p) . getLeft
-    
-    -- | @mprefix p es@ returns the longest @es@ prefix size, satisfying @p@.
-    mprefix :: (e -> m Bool) -> l -> m Int
-    mprefix p = foldr (\ e c -> do b <- p e; b ? succ <$> c $ pure 0) (pure 0) <=< getLeft
-    
-    -- | @msuffix p es@ returns the longest @es@ suffix size, satisfying @p@.
-    msuffix :: (e -> m Bool) -> l -> m Int
-    msuffix p = foldl (\ c e -> do b <- p e; b ? succ <$> c $ pure 0) (pure 0) <=< getLeft
+
+--------------------------------------------------------------------------------
+
+{- |
+  @since 0.3
+
+  'exceptM' is inverted 'filterM'.
+-}
+exceptM :: LinearM m l e => (e -> m Bool) -> l -> m l
+exceptM  = filterM . (fmap not .)
+
+{- |
+  @eachM n es@ returns new sequence of @es@ elements with step @n@. eachM
+  shouldn't return references to @es@.
+-}
+eachM :: LinearM m l e => Int -> l -> m l
+eachM n =
+  let hint = SizeHint 0 (max 0 n)
+  in  newLinear' (Just hint) . each n <=< getLeft
+
+{- |
+  @since 0.3
+
+  @eachFromM n es@ returns each nth element of structure, beginning from o.
+-}
+eachFromM :: LinearM m l e => Int -> Int -> l -> m l
+eachFromM n o =
+  let hint = SizeHint 0 (max 0 (n - o))
+  in  newLinear' (Just hint) . eachFrom n o <=< getLeft
+
+{- |
+  @splitM ns es@ returns the sequence of @es@ prefix references of length
+  @n <- ns@. Changes in the source and results must be synchronous.
+-}
+splitsM :: (LinearM m l e, Foldable f) => f Int -> l -> m [l]
+splitsM ns es =
+  let f ds' n = do ds <- ds'; (d, d') <- splitM n (head ds); pure (d':d:ds)
+  in  reverse <$> foldl f (pure [es]) ns
+
+{- |
+  @dividesM ns es@ returns the sequence of @es@ suffix references of length
+  @n <- ns@. Changes in the source and results must be synchronous.
+-}
+dividesM :: (LinearM m l e, Foldable f) => f Int -> l -> m [l]
+dividesM ns es =
+  let f n ds' = do ds <- ds'; (d, d') <- divideM n (head ds); pure (d':d:ds)
+  in  foldr f (pure [es]) ns
+
+{- |
+  @partsM n es@ returns the sequence of @es@ prefix references, splitted by
+  offsets in @es@. Changes in the source and results must be synchronous.
+-}
+partsM :: (LinearM m l e, Foldable f) => f Int -> l -> m [l]
+partsM =  splitsM . go . toList where go is = zipWith (-) is (0 : is)
+
+{- |
+  @chunksM n es@ returns the sequence of @es@ prefix references of length
+  @n@. Changes in the source and results must be synchronous.
+-}
+chunksM :: LinearM m l e => Int -> l -> m [l]
+chunksM n es = do (t, d) <- splitM n es; nowNull d ?^ pure [t] $ (t :) <$> chunksM n d
+
+-- | Monadic 'intersperse'.
+intersperseM :: LinearM m l e => e -> l -> m l
+intersperseM e es = do
+  xs <- drop 1 <$> foldrM (pure . (e :) ... (:)) [] es
+  xs .< 2 ? pure es $ newLinear xs
+
+-- | Monadic 'intercalate'.
+intercalateM :: (Foldable f, LinearM m l e) => l -> f l -> m l
+intercalateM e es = do
+  xs <- drop 1 <$> foldr (\ x xs' -> do xs <- xs'; pure (e : x : xs)) (pure []) es
+  merged (xs .< 2 ? [] $ xs)
+
+{- |
+  @since 0.3
+
+  Same as 'removed'
+-}
+(~=) :: LinearM m l e => Int -> l -> m l
+(~=) =  removed
 
 --------------------------------------------------------------------------------
 
@@ -425,7 +383,7 @@ class (Monad m, ForceableM m l, EstimateM m l) => LinearM m l e | l -> m, l -> e
 {- $fmrNotes
   Note that @fmr-0.3@ support starts with @sdp-0.2.1.2@ patch - previous
   versions only work with @fmr-0.2@.
-  
+
   Note that @fmr-0.3@ provides new field extension mechanism, therefore @(:+=)@,
   @(:=+)@ and @(:~=)@ patterns in @sdp-0.3@ implemented differently and have
   different types. @fmr-0.2@ and old style patterns support will be dropped
@@ -441,10 +399,10 @@ data FieldLinearM l e m field record
   where
     Prepend :: (LinearM m l e, FieldGet field, FieldSet field)
             => e -> field m record l -> FieldLinearM l e m field record
-    
+
     Append  :: (LinearM m l e, FieldGet field, FieldSet field)
             => field m record l -> e -> FieldLinearM l e m field record
-    
+
     Delete  :: (LinearM m l e, FieldGet field, FieldSet field)
             => Int -> field m record l -> FieldLinearM l e m field record
   deriving ( Typeable )
@@ -452,19 +410,19 @@ data FieldLinearM l e m field record
 instance IsProp (FieldLinearM l e)
   where
     performProp record (Append field e) = setRecord field record
-                    =<< flip append e =<< getRecord field record
-    
+                           =<< (=+ e) =<< getRecord field record
+
     performProp record (Delete n field) = setRecord field record
                         =<< removed n =<< getRecord field record
-    
+
     performProp record (Prepend e field) = setRecord field record
-                         =<< prepend e =<< getRecord field record
+                            =<< (e +=) =<< getRecord field record
 
 {-# WARNING (:+=) "different for fmr-0.2 and fmr-0.3" #-}
 
 {- |
   @since 0.2.1
-  
+
   @(':+=')@ is @fmr@-compatible 'prepend' element pattern for 'LinearM' fields.
 -}
 pattern (:+=) ::
@@ -478,7 +436,7 @@ pattern e :+= field <- (cast' -> Just (Prepend e field)) where (:+=) = Prop ... 
 
 {- |
   @since 0.2.1
-  
+
   @(':=+')@ is @fmr@-compatible 'append' element pattern for 'LinearM' fields.
 -}
 pattern (:=+) ::
@@ -492,7 +450,7 @@ pattern field :=+ e <- (cast' -> Just (Append field e)) where (:=+) = Prop ... A
 
 {- |
   @since 0.2.1
-  
+
   @(':~=')@ is @fmr@-compatible delete element pattern for 'LinearM' fields, see
   'removed'.
 -}
@@ -559,13 +517,13 @@ instance LinearM m l e => Attribute "linear" "last" m l e
 
 instance LinearM m l e => Attribute "linear" "append" m l e
   where
-    attribute = AccessAppend append
+    attribute = AccessAppend (=+)
 
 instance LinearM m l e => Attribute "linear" "prepend" m l e
   where
-    attribute = AccessPrepend prepend
+    attribute = AccessPrepend (+=)
 
-instance (NullableM m l, LinearM m l e) => Attribute "linear" "remove" m l e
+instance LinearM m l e => Attribute "linear" "remove" m l e
   where
     attribute = AccessRemove removed
 
@@ -655,36 +613,4 @@ type LinearM' m l = forall e . LinearM m (l e) e
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 #endif
-
---------------------------------------------------------------------------------
-
-{- |
-  @since 0.3
-  
-  Same as 'prepend'
--}
-(+=) :: LinearM m l e => e -> l -> m l
-(+=) =  prepend
-
-{- |
-  @since 0.3
-  
-  Same as 'append'
--}
-(=+) :: LinearM m l e => l -> e -> m l
-(=+) =  append
-
-{- |
-  @since 0.3
-  
-  Same as 'removed'
--}
-(~=) :: (NullableM m l, LinearM m l e) => Int -> l -> m l
-(~=) =  removed
-
---------------------------------------------------------------------------------
-
-{-# NOINLINE emptyEx #-}
-emptyEx :: String -> a
-emptyEx =  throw . PatternMatchFail . showString "in SDP.LinearM."
 

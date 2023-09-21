@@ -387,20 +387,29 @@ instance ForceableM1 m rep e => ForceableM m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
-instance (Index i, NullableM m (rep e), LinearM1 m rep e)
-      => LinearM m (AnyBorder rep i e) e
+instance (Index i, LinearM1 m rep e) => SequenceM m (AnyBorder rep i e) e
   where
+    unconsM' es'@(AnyBorder l u es) = nowNull es' ?^ pure Nothing $ fmap (second new) <$> unconsM' es
+      where
+        bnds = defaultBounds $ size (l, u) - 1
+        new  = uncurry AnyBorder bnds
+
+    unsnocM' es'@(AnyBorder l u es) = nowNull es' ?^ pure Nothing $ fmap (first new) <$> unsnocM' es
+      where
+        bnds = defaultBounds $ size (l, u) - 1
+        new  = uncurry AnyBorder bnds
+
     getHead = getHead . unpack
     getLast = getLast . unpack
 
-    prepend e = withBounds' <=< prepend e . unpack
-    append es = withBounds' <=< append (unpack es)
+    getLeft  = getLeft  . unpack
+    getRight = getRight . unpack
 
+    (+=) e es = withBounds' =<< (e += unpack es)
+    (=+) es e = withBounds' =<< (unpack es =+ e)
     newLinear = withBounds' <=< newLinear
-    filled  n = withBounds' <=< filled n
 
-    getLeft   = getLeft  . unpack
-    getRight  = getRight . unpack
+    reversed (AnyBorder l u es) = AnyBorder l u <$> reversed es
 
     {-# INLINE (!#>) #-}
     (!#>) = (!#>) . unpack
@@ -408,16 +417,25 @@ instance (Index i, NullableM m (rep e), LinearM1 m rep e)
     {-# INLINE writeM #-}
     writeM = writeM . unpack
 
-    copied'  (AnyBorder l u es) = (AnyBorder l u <$>) ... copied' es
-    reversed (AnyBorder l u es) = AnyBorder l u <$> reversed es
-
-    copyTo src os trg ot = copyTo (unpack src) os (unpack trg) ot
-
     ofoldrM f e = ofoldrM f e . unpack
     ofoldlM f e = ofoldlM f e . unpack
 
     foldrM f e = foldrM f e . unpack
     foldlM f e = foldlM f e . unpack
+
+    prefixM p = prefixM p . unpack
+    suffixM p = suffixM p . unpack
+    mprefix p = mprefix p . unpack
+    msuffix p = msuffix p . unpack
+
+instance (Index i, NullableM m (rep e), LinearM1 m rep e)
+      => LinearM m (AnyBorder rep i e) e
+  where
+    filled n = withBounds' <=< filled n
+
+    copied' (AnyBorder l u es) = (AnyBorder l u <$>) ... copied' es
+
+    copyTo src os trg ot = copyTo (unpack src) os (unpack trg) ot
 
     takeM n es@(AnyBorder l u rep)
         | n <= 0 = newNull
@@ -465,11 +483,6 @@ instance (Index i, NullableM m (rep e), LinearM1 m rep e)
 
     miterate n = fmap (uncurry AnyBorder (defaultBounds n)) ... miterate n
     iterateM n = fmap (uncurry AnyBorder (defaultBounds n)) ... iterateM n
-
-    prefixM p = prefixM p . unpack
-    suffixM p = suffixM p . unpack
-    mprefix p = mprefix p . unpack
-    msuffix p = msuffix p . unpack
 
 --------------------------------------------------------------------------------
 
@@ -689,6 +702,3 @@ withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf
 {-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
-
-
-

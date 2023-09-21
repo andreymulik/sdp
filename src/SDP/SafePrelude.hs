@@ -7,18 +7,18 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
-    
+
     "SDP.SafePrelude" module re-exports common "Prelude" definitions except
     those overridden in this library and its extensions (e.g. @sdp-io@).
-    
+
     In addition, this module re-exports the most common definitions from other
     @base@ and @sdp@ modules ("Control.Applicative", "Data.Bifunctor",
     "SDP.Estimate", etc.) and some useful combinators that were used in this
     library and may be useful to its users.
-    
+
     Import "Prelude" without conflicting functions, may require additional
     imports for functions overridden in other modules:
-    
+
     > import Prelude ()
     > import SDP.SafePrelude
 -}
@@ -27,26 +27,26 @@ module SDP.SafePrelude
   -- * Exports
   module Control.Applicative, liftA4, liftA5, liftA6,
   joinM1, joinM2, joinM3, joinM4, joinM5, joinM6,
-  
+
   module Control.Monad.IO.Class, stToMIO,
   module Control.Monad.ST,
   module Control.Monad, liftM6,
-  
+
   module Data.Functor.Classes,
   module Data.Bifunctor,
   module Data.Foldable,
-  
+
   module SDP.Comparing,
   module SDP.Estimate,
-  
+
   module Prelude,
-  
+
 #if !MIN_VERSION_base(4,11,0)
   Semigroup (..),
 #endif
-  
+
   -- * Combinators
-  (.), id, on, (?), (?+), (?-), (?^), (?:), (+?), (...),
+  (.), id, on, (?), (?+), (?-), (^+), (^-), (?^), (?:), (+?), (...),
   (<=<<), (>>=>), (>>=<<), whenJust
 )
 where
@@ -55,17 +55,17 @@ import Prelude hiding
   (
     -- defined in Control.Category
     (.), id,
-    
+
     -- defined in SDP.Zip and Data.List
     zip, zip3, zipWith, zipWith3,
-    
+
     -- defined in SDP.Scan and Data.List
     scanl, scanr, scanl1, scanr1,
-    
+
     -- defined in SDP.Linear and Data.List
     head, tail, init, last, take, drop, (!!), (++), reverse, filter, lookup,
     concat, concatMap, replicate, takeWhile, dropWhile, iterate,
-    
+
     -- defined in System.IO.Handle, System.IO.Classes (@sdp-io@) and System.IO
     readFile, writeFile, appendFile, getContents,
     getChar, putChar, getLine, putStr, putStrLn
@@ -89,7 +89,7 @@ import Control.Category
 
 import Control.Monad.IO.Class
 import Control.Monad.ST
-import Control.Monad hiding ( zipWithM, mfilter )
+import Control.Monad hiding ( zipWithM, mfilter, filterM )
 
 default ()
 
