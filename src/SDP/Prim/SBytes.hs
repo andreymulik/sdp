@@ -320,7 +320,7 @@ instance Monad m => BorderedM m (SBytes# e) Int
 instance Forceable (SBytes# e)
   where
     force es@(SBytes# n@(I# n#) (I# o#) bytes#) =
-      SBytes# n 0 (cloneUnboxed1# es bytes# n# o#)
+      SBytes# n 0 (pcloneUnboxed es bytes# n# o#)
 
 instance Unboxed e => Sequence (SBytes# e) e
   where
@@ -408,7 +408,7 @@ instance Unboxed e => Linear (SBytes# e) e
 
       let
         writeBlock# (SBytes# c@(I# c#) (I# o#) arr#) i@(I# i#) = ST $
-          \ s2# -> case pcopyUnboxed1 ess arr# o# marr# i# c# s2# of
+          \ s2# -> case copyUnboxed# (fromProxy1 ess) arr# o# marr# i# c# s2# of
             s3# -> (# s3#, i + c #)
 
       foldl (flip $ (=<<) . writeBlock#) (return 0) ess >> done marr
@@ -1376,7 +1376,7 @@ mapSBytes# f es@(SBytes# _ _ _) = fmapSBytes# f es
 -- | Create 'filled' by default value pseudo-primitive.
 alloc :: Unboxed e => Int -> ST s (STBytes# s e)
 alloc c@(I# c#) =
-  let res = ST $ \ s1# -> case pnewUnboxed1 res c# s1# of
+  let res = ST $ \ s1# -> case newUnboxed (fromProxy1 res) c# s1# of
         (# s2#, marr# #) -> (# s2#, STBytes# c 0 marr# #)
   in  res
 

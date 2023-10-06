@@ -8,7 +8,7 @@
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
-    
+
     The 'Index' class is an alternative to 'Data.Ix.Ix' with a richer interface,
     generalized indexes and more convenient function names.
 -}
@@ -16,13 +16,13 @@ module SDP.Index.Class
 (
   -- * Exports
   module SDP.Shape,
-  
+
   -- * Shapes
   (:|:), SubIndex (..), splitDim,
-  
+
   -- * Indices
   Index (..), SizesOf,
-  
+
   -- ** Helpers
   InBounds (..), offsetIntegral, defaultBoundsUnsign
 )
@@ -56,7 +56,7 @@ data InBounds = ER -- ^ Empty range
 
 {- |
   @since 0.3
-  
+
   'SizesOf' is type of @(':&')@-based list of sizes. @Rank i = Rank (SizesOf i)@.
 -}
 type family SizesOf i
@@ -80,25 +80,25 @@ class (Index i, Index j, Index (i :|: j)) => SubIndex i j
   where
     {- |
       Drop some dimensions (second argument used as type variable).
-      
+
       @
       dropDim ([1,2,3,4] :: I4 Int)    ([] :: E)      === [1,2,3,4]
       dropDim ([1,2,3,4] :: I4 Int) ([1,2] :: I2 Int) ===   [3,4]@
     -}
     dropDim :: i -> j -> i :|: j
-    
+
     {- |
       Join some dimensions.
-      
+
       @
       joinDim ([1,2] :: I2 Int)  [3]  ===  [1,2,3]  :: I3 Int
       joinDim ([1,2] :: I2 Int) [3,4] === [1,2,3,4] :: I4 Int@
     -}
     joinDim :: j -> i :|: j -> i
-    
+
     {- |
       Take some dimensions.
-      
+
       @
       takeDim ([1,2,3,4] :: I4 Int) === [1] :: I1 Int
       takeDim ([1,2,3,4] :: I4 Int) === E@
@@ -129,28 +129,28 @@ splitDim i = let j = takeDim i in (dropDim i j, j)
 
 {- |
   Index is service class based on @base@ Ix and @repa@ Shape.
-  
+
   Basic rules:
-  
+
   @
   size bnds >= 0
-  
+
   size bnds === product (sizes bnds)
-  
+
   isEmpty bnds === (size bnds == 0)
   isEmpty bnds === inRange bnds (safeElem bnds i)
-  
+
   isEmpty bnds => isOverflow  bnds i
   isEmpty bnds => isUnderflow bnds i
-  
+
   inRange bnds i =/= isEmpty     bnds
   inRange bnds i =/= isOverflow  bnds i
   inRange bnds i =/= isUnderflow bnds i
   inRange bnds i === (safeElem bnds i == i)
   @
-  
+
   Note:
-  
+
   * 'E' is (and should remain) the one and only one index of @rank 0@.
   * 'Index' is a generalization of 'Enum', so all @rank 1@ indices must satisfy
   'Enum' laws.
@@ -169,45 +169,45 @@ class
     size :: (i, i) -> Int
     default size :: Enum i => (i, i) -> Int
     size bnds@(l, u) = isEmpty bnds ? 0 $ u -. l + 1
-    
+
     -- | Returns the sizes of range dimensionwise.
     {-# INLINE sizes #-}
     sizes :: (i, i) -> SizesOf i
     sizes =  sizes . toGBounds
     default sizes :: Index (GIndex i) => (i, i) -> SizesOf i
-    
+
     -- | Returns the index belonging to the given range.
     {-# INLINE safeElem #-}
     safeElem :: (i, i) -> i -> i
     safeElem (l, u) = min u . max l
-    
+
     -- | Returns bounds of nonempty range (swaps bounds in each empty subshape).
     {-# INLINE ordBounds #-}
     ordBounds :: (i, i) -> (i, i)
     ordBounds bs = isEmpty bs ? swap bs $ bs
     default ordBounds :: GIndex i ~ I1 i => (i, i) -> (i, i)
-    
+
     -- | Returns size of biggest range, that may be represented by this type.
     defLimit :: i -> Maybe Integer
     defLimit i = Just (1 + toInteger (asTypeOf maxBound i))
     default defLimit :: (Integral i, Bounded i) => i -> Maybe Integer
-    
+
     -- | Returns default range by size.
     {-# INLINE defaultBounds #-}
     defaultBounds :: Int -> (i, i)
     defaultBounds n = both unsafeIndex (0, max 0 n - 1)
-    
+
     {- |
       @since 0.3
-      
+
       Boundaries of the minimum region to which the given set of indices belongs.
     -}
     rangeBounds :: Foldable f => f i -> (i, i)
     rangeBounds =  foldr extendBounds (defaultBounds 0)
-    
+
     {- |
       @since 0.3
-      
+
       Returns the bounds of the minimum region that includes the given index and
       region.
     -}
@@ -217,42 +217,42 @@ class
       OR -> (l, i)
       UR -> (i, u)
       IN -> bnds
-    
+
     -- | Returns index by offset in default range.
     {-# INLINE unsafeIndex #-}
     unsafeIndex :: Int -> i
     unsafeIndex =  toEnum
     default unsafeIndex :: Enum i => Int -> i
-    
+
     -- | Variant of 'unsafeIndex' for 'Integer's.
     {-# INLINE unsafeIndex' #-}
     unsafeIndex' :: Integer -> i
     unsafeIndex' =  unsafeIndex . fromInteger
-    
+
     -- | Checks if the bounds is empty.
     {-# INLINE isEmpty #-}
     isEmpty :: (i, i) -> Bool
     isEmpty =  uncurry (>)
-    
+
     -- | Checks the index status in bounds.
     inBounds :: (i, i) -> i -> InBounds
     inBounds (l, u) i | l > u = ER | i > u = OR | i < l = UR | True = IN
-    
+
     -- | Checks if the index is overflow.
     {-# INLINE isOverflow  #-}
     isOverflow :: (i, i) -> i -> Bool
     isOverflow (l, u) i = i > u || l > u
-    
+
     -- | Checks if the index is underflow.
     {-# INLINE isUnderflow #-}
     isUnderflow :: (i, i) -> i -> Bool
     isUnderflow (l, u) i = i < l || l > u
-    
+
     -- | Checks if the index is in 'range'.
     {-# INLINE inRange #-}
     inRange :: (i, i) -> i -> Bool
     inRange (l, u) i = l <= i && i <= u
-    
+
     -- | Returns previous index in 'range'.
     prev :: (i, i) -> i -> i
     default prev :: Enum i => (i, i) -> i -> i
@@ -261,7 +261,7 @@ class
       |     i <= l     = l
       |     i >  u     = u
       |      True      = pred i
-    
+
     -- | Returns next index in range.
     next :: (i, i) -> i -> i
     default next :: Enum i => (i, i) -> i -> i
@@ -270,13 +270,13 @@ class
       |     i >= u     = u
       |     i <  l     = l
       |      True      = succ i
-    
+
     -- | Returns 'offset' (indent) of 'index' in 'range'.
     {-# INLINE offset #-}
     offset :: (i, i) -> i -> Int
     default offset :: Enum i => (i, i) -> i -> Int
     offset bnds@(l, _) i = checkBounds bnds i (i -. l) "offset {default}"
-    
+
     -- | Returns 'index' by this 'offset' (indent) in 'range'.
     {-# INLINE index #-}
     index :: (i, i) -> Int -> i
@@ -284,25 +284,25 @@ class
     index bnds@(l, _) n =
       let res = toEnum (n + fromEnum l)
       in  checkBounds (0, size bnds - 1) n res "index {default}"
-    
+
     -- | Returns the ordered list of indices in this range.
     {-# INLINE range #-}
     range :: (i, i) -> [i]
     range =  uncurry enumFromTo
     default range :: Enum i => (i, i) -> [i]
-    
+
     {- |
       @subshape bnds ij@ returns subshape of @bnds@.
-      
+
       Checks if @ij@ in @bnds@ subshape, may 'throw' 'IndexException'.
     -}
-    subshape :: (SubIndex i j, Index (i :|: j)) => (i, i) -> i :|: j -> (j, j)
+    subshape :: SubIndex i j => (i, i) -> i :|: j -> (j, j)
     subshape (l, u) ij = checkBounds (l', u') ij (lj, uj) "subshape {default}"
       where
         (l', lj) = splitDim l
         (u', uj) = splitDim u
-    
-    slice :: (SubIndex i j, ij ~ (i :|: j), Index j) => (i, i) -> ij -> ((ij, ij), (j, j))
+
+    slice :: SubIndex i j => (i, i) -> i :|: j -> ((i :|: j, i :|: j), (j, j))
     slice (l, u) ij = checkBounds (ls, us) ij ((ls, us), (lj, uj)) "slice {default}"
       where
         (ls, lj) = splitDim l
@@ -317,23 +317,23 @@ instance Index E
     unsafeIndex' = const (emptyEx "unsafeIndex {E}")
     unsafeIndex  = const (emptyEx "unsafeIndex {E}")
     defLimit     = Just . const (-1)
-    
+
     size  = const 0
     sizes = const E
     range = const []
-    
+
     offset _ _ = emptyEx "offset {E}"
     index  _ _ = emptyEx "index {E}"
     ordBounds  = id
     next   _ _ = E
     prev   _ _ = E
-    
+
     inRange     _ _ = False
     isUnderflow _ _ = True
     isOverflow  _ _ = True
     isEmpty       _ = True
     inBounds    _ _ = ER
-    
+
     extendBounds = const id
     rangeBounds  = const (E, E)
 
@@ -342,27 +342,27 @@ instance Index ()
     size  = const 1
     sizes = const (E :& 1)
     range = const [()]
-    
+
     defLimit = Just . const 0
     next _ _ = ()
     prev _ _ = ()
-    
+
     inBounds    _ _ = IN
     inRange     _ _ = True
     isEmpty       _ = False
     isOverflow  _ _ = False
     isUnderflow _ _ = False
-    
+
     defaultBounds = const ((), ())
     index         = const unsafeIndex
     offset  _  _  = 0
-    
+
     unsafeIndex 0 = ()
     unsafeIndex _ = emptyEx "unsafeIndex ()"
-    
+
     unsafeIndex' 0 = ()
     unsafeIndex' _ = emptyEx "unsafeIndex' ()"
-    
+
     extendBounds = const id
     rangeBounds  = const ((), ())
 
@@ -434,29 +434,29 @@ instance (Index i, Rank1 i) => Index (E :& i)
       where
         go :: Index i => Proxy# i -> (E :& i) -> Maybe Integer
         go e _ = defLimit (fromProxy## e)
-    
+
     size  (E:&l, E:&u) = size (l, u)
     sizes (E:&l, E:&u) = E :& size (l, u)
     range (E:&l, E:&u) = (E :&) <$> range (l, u)
-    
+
     next = \ (E:&l, E:&u) (E:&i) -> E :& next (l, u) i
     prev = \ (E:&l, E:&u) (E:&i) -> E :& prev (l, u) i
-    
+
     inRange     = \ (E:&l, E:&u) (E:&i) -> inRange     (l, u) i
     isOverflow  = \ (E:&l, E:&u) (E:&i) -> isOverflow  (l, u) i
     isUnderflow = \ (E:&l, E:&u) (E:&i) -> isUnderflow (l, u) i
     safeElem    = \ (E:&l, E:&u) (E:&i) -> E :& safeElem (l, u) i
-    
+
     isEmpty   (E:&l, E:&u) = isEmpty (l, u)
     ordBounds (E:&l, E:&u) = let (l', u') = ordBounds (l, u) in (E:&l', E:&u')
-    
+
     offset = \ (E:&l, E:&u) (E:&i) -> offset (l, u) i
     index  = \ (E:&l, E:&u) -> (E:&) . index (l, u)
-    
+
     defaultBounds = both (E :&) . defaultBounds
     unsafeIndex'  = (E :&) . unsafeIndex'
     unsafeIndex   = (E :&) . unsafeIndex
-    
+
     extendBounds (E:&i) (E:&l, E:&u) = both (E:&) $ extendBounds i (l, u)
 
 -- [internal]: undecidable
@@ -467,15 +467,15 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
       where
         lim :: Index i => i -> Int -> (i' :& i :& i) -> Maybe Integer
         lim i l _ = (^ l) <$> defLimit i
-        
+
         err = unreachEx "defLimit {i' :& i :& i}"
-    
+
     size  (ls :& l, us :& u) = size (l, u) * size (ls, us)
     range (ls :& l, us :& u) = liftA2 (:&) (range (ls, us)) (range (l, u))
     sizes (ls :& l, us :& u) = sizes (ls, us) :& s
       where
         (E :& s) = sizes (E :& l, E :& u)
-    
+
     prev bs@(ls :& l, us :& u) ix
         | isEmpty bs = emptyEx "prev {i' :& i :& i}"
         |   i /= l   = is :& pred i
@@ -483,7 +483,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
         |    True    = ls :& l
       where
         (is :& i) = safeElem bs ix
-    
+
     next bs@(ls :& l, us :& u) ix
         | isEmpty bs = emptyEx "next {i' :& i :& i}"
         |   i /= u   = is :& succ i
@@ -491,47 +491,47 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
         |    True    = ls :& l
       where
         (is :& i) = safeElem bs ix
-    
+
     inBounds bs i
       |    isEmpty bs    = ER
       | isUnderflow bs i = UR
       | isOverflow  bs i = OR
       |       True       = IN
-    
+
     inRange     (ls :& l, us :& u) (is :& i) = inRange     (l, u) i && inRange     (ls, us) is
     isOverflow  (ls :& l, us :& u) (is :& i) = isOverflow  (l, u) i || isOverflow  (ls, us) is
     isUnderflow (ls :& l, us :& u) (is :& i) = isUnderflow (l, u) i || isUnderflow (ls, us) is
-    
+
     safeElem  (ls :& l, us :& u) (is :& i) = safeElem (ls, us) is :& safeElem (l, u) i
     isEmpty   (ls :& l, us :& u) = isEmpty (l, u) || isEmpty (ls, us)
     ordBounds (ls :& l, us :& u) = (ls' :& l', us' :& u')
       where
         (ls', us') = ordBounds (ls, us)
         (l',   u') = ordBounds (l,   u)
-    
+
     index bnds@(ls :& l, us :& u) c = checkBounds (0, size bnds - 1) c res err
       where
         (cs, i) = c `divMod` size (l, u)
         res = index (ls, us) cs :& index (l, u) i
         err = "index {i' :& i :& i}"
-    
+
     offset bnds ix@(is :& i) = checkBounds bnds ix res "offset {i' :& i :& i}"
       where
         res = offset (ls, us) is * size (l, u) + offset (l, u) i
         (ls :& l, us :& u) = bnds
-    
+
     unsafeIndex = unsafeIndex' . toInteger
-    
+
     unsafeIndex' n = res
       where
         (d, m) = n <= l ? (0, n) $ l `divMod` n
         res    = unsafeIndex' d :& unsafeIndex' m
-        
+
         l = lim res proxy#
-        
+
         lim :: Index i => (i' :& i :& i) -> Proxy# i -> Integer
         lim _ i = fromMaybe n (defLimit (fromProxy## i))
-    
+
     extendBounds i'@(i :& is) bnds@(l :& ls, u :& us) =
         isEmpty bnds ? (i', i') $ (l' :& ls', u' :& us')
       where
