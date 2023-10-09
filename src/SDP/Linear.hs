@@ -48,7 +48,7 @@ module SDP.Linear
   csfoldr', csfoldl', msfoldr, msfoldl, spanl, breakl, spanr, breakr,
   selectWhile', selectEnd', extractWhile', extractEnd', dropWhileEnd,
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
-  each, eachFrom, after, combo, ascending
+  each, eachFrom, combo, ascending
 )
 where
 
@@ -625,16 +625,6 @@ each n es = case n <=> 1 of
 eachFrom :: Linear l e => Int -> Int -> l -> l
 eachFrom o n = each n . drop o
 
-{- |
-  @since 0.2.1
-
-  @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
-
-  > after es i e == before es (i + 1) e
--}
-after :: Linear l e => l -> Int -> e -> l
-after es i = before es (i + 1)
-
 --------------------------------------------------------------------------------
 
 {- |
@@ -701,6 +691,4 @@ instance Linear [e] e
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
-
-
 

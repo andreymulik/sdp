@@ -32,11 +32,11 @@ module SDP.Sequence
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
-  Sequence', Sequence'',
+  Sequence', Sequence'', after,
 #endif
 
   -- ** Legacy
-  o_foldr1, o_foldl1, o_foldr1', o_foldl1',
+  selects, selects', o_foldr1, o_foldl1, o_foldr1', o_foldl1',
   o_foldr, o_foldl, o_foldr', o_foldl'
 )
 where
@@ -531,9 +531,49 @@ instance Sequence [e] e
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.2.1
+
+  @'after' es i e@ insert @e@ to @es@ after element with offset @i@.
+
+  > after es i e == before es (i + 1) e
+-}
+after :: Sequence s e => s -> Int -> e -> s
+after es i = before es (i + 1)
+
+--------------------------------------------------------------------------------
+
 {- Legacy. -}
 
-{-# DEPRECATED o_foldr  "in favour 'sfoldr'"  #-}
+{-# DEPRECATED selects "will be removed in sdp-0.4" #-}
+
+{- |
+  @selects fs es@ sequentially applies the functions from @fs@ to the
+  remainder of @es@, returns a list of selections and the remainder of the
+  last selection.
+-}
+selects :: (Sequence seq e, Foldable t)
+        => t (e -> Maybe a) -> seq
+        -> ([[a]], [e])
+selects fs es =
+  let g = \ as -> first (: as) ... flip extract
+  in  foldl (uncurry g) ([], listL es) fs
+
+{-# DEPRECATED selects' "will be removed in sdp-0.4" #-}
+
+{- |
+  @selects' fs es@ sequentially applies the functions from @fs@ to the
+  remainder of @es@, returns a line of selections and the remainder of the
+  last selection.
+-}
+selects' :: (Sequence seq e, Foldable t)
+         => t (e -> Maybe a) -> seq
+         -> ([[a]], seq)
+selects' =  bimap (map fromList) fromList ... selects
+
+--------------------------------------------------------------------------------
+
+
 {-# DEPRECATED o_foldl  "in favour 'sfoldl'"  #-}
 {-# DEPRECATED o_foldr' "in favour 'sfoldr''" #-}
 {-# DEPRECATED o_foldl' "in favour 'sfoldl''" #-}

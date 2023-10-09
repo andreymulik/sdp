@@ -20,7 +20,7 @@ module SDP.SequenceM
   -- * Export
 
   -- * SequenceM class
-  SequenceM (..), SequenceM1, SequenceM2,
+  SequenceM (..), SequenceM1, SequenceM2, prepend, append,
 
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
@@ -313,7 +313,27 @@ type SequenceM'' m l = forall i e . SequenceM m (l i e) e
 
 --------------------------------------------------------------------------------
 
+{-# DEPRECATED prepend "will be removed in sdp-0.4" #-}
+{-# DEPRECATED append  "will be removed in sdp-0.4" #-}
+
+{- |
+  @since 0.2
+
+  Same as @('+=')@, moved from 'SDP.LinearM.LinearM'.
+-}
+prepend :: SequenceM m seq e => e -> seq -> m seq
+prepend =  (+=)
+
+{- |
+  @since 0.2
+
+  Same as @('+=')@, moved from 'SDP.LinearM.LinearM'.
+-}
+append :: SequenceM m seq e => seq -> e -> m seq
+append =  (=+)
+
+--------------------------------------------------------------------------------
+
 {-# NOINLINE emptyEx #-}
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.SequenceM."
-
