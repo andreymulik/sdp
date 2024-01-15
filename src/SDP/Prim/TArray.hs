@@ -60,11 +60,11 @@ instance Eq (var e) => Eq (MArray# m var e)
 instance IsMVar m var => Nullable (MArray# m var e)
   where
     isNull = \ (MArray# es) -> isNull es
-    lzero  = MArray# Z
+    lzero  = MArray# lzero
 
 instance IsMVar m var => NullableM m (MArray# m var e)
   where
-    newNull = return Z
+    newNull = return lzero
     nowNull = return . isNull
 
 --------------------------------------------------------------------------------
@@ -241,8 +241,7 @@ instance (Attribute "set" "" m (var e) e, IsMVar m var)
   where
     fromAssocs' bnds defvalue ascs = do
       es <- filled (size bnds) defvalue
-      overwrite es ascs
-      return es
+      es <$ overwrite es ascs
 
     fromIndexed' es = do
       copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
@@ -266,6 +265,7 @@ instance Monad m => Freeze m (MArray# m var e) (SArray# e)
 
 --------------------------------------------------------------------------------
 
+{-# INLINE unpack #-}
 unpack :: MArray# m var e -> SArray# (var e)
 unpack =  \ (MArray# es) -> es
 

@@ -95,9 +95,9 @@ instance Eq e => Eq (SArray# e) where (==) = eq1
 
 instance Eq1 SArray#
   where
-    liftEq eq xs@(SArray# c1 _ _) ys@(SArray# c2 _ _) =
-      let eq' i = i == c1 || eq (xs !^ i) (ys !^ i) && eq' (i + 1)
-      in  c1 == c2 && eq' 0
+    liftEq eq xs@(SArray# cx _ _) ys@(SArray# cy _ _) =
+      let go i = i == cx || eq (xs !^ i) (ys !^ i) && go (i + 1)
+      in  cx == cy && go 0
 
 --------------------------------------------------------------------------------
 
@@ -107,9 +107,13 @@ instance Ord e => Ord (SArray# e) where compare = compare1
 
 instance Ord1 SArray#
   where
-    liftCompare f xs@(SArray# c1 _ _) ys@(SArray# c2 _ _) =
-      let f' i = i == (c1`min`c2) ? c1 <=> c2 $ (xs!^i) `f` (ys!^i) <> f' (i+1)
-      in  f' 0
+    liftCompare f xs@(SArray# cx _ _) ys@(SArray# cy _ _) = go 0
+      where
+        go i =
+          let
+              x = xs !^ i
+              y = ys !^ i
+          in  i == min cx cy ? cx <=> cy $ f x y <> go (i + 1)
 
 --------------------------------------------------------------------------------
 
@@ -500,13 +504,13 @@ instance Sequence (SArray# e) e
     sfoldr = foldr
     sfoldl = foldl
 
-    isPrefixOf xs@(SArray# c1 _ _) ys@(SArray# c2 _ _) =
-      let eq i = i == c1 || (xs !^ i) == (ys !^ i) && eq (i + 1)
-      in  c1 <= c2 && eq 0
+    isPrefixOf xs@(SArray# cx _ _) ys@(SArray# cy _ _) =
+      let eq i = i == cx || (xs !^ i) == (ys !^ i) && eq (i + 1)
+      in  cx <= cy && eq 0
 
-    isSuffixOf xs@(SArray# c1 _ _) ys@(SArray# c2 _ _) =
-      let eq i j = i == c1 || (xs !^ i) == (ys !^ j) && eq (i + 1) (j + 1)
-      in  c1 <= c2 && eq 0 (c2 - c1)
+    isSuffixOf xs@(SArray# cx _ _) ys@(SArray# cy _ _) =
+      let eq i j = i == cx || (xs !^ i) == (ys !^ j) && eq (i + 1) (j + 1)
+      in  cx <= cy && eq 0 (cy - cx)
 
     selectWhile f es@(SArray# c _ _) =
       let go i = i == c ? [] $ maybe [] (: go (i + 1)) $ f (es !^ i)
@@ -602,7 +606,10 @@ instance Ord e => Set (SArray# e) e
 
 instance SetWith (SArray# e) e
   where
-    setWith f = nubSorted f . sortBy f
+    setWith     f = nubSorted  f . sortBy  f
+    subsetsWith f = subsequences . setWith f
+    
+    subsets = subsequences . setWith compare
 
     insertWith f e es = case (\ x -> x `f` e /= LT) .$ es of
       Just i -> e `f` (es!^i) == EQ ? es $ before es i e
@@ -818,9 +825,9 @@ type role STArray# nominal representational
 
 instance Eq (STArray# s e)
   where
-    STArray# c1 o1 marr1# == STArray# c2 o2 marr2# =
+    STArray# cx o1 marr1# == STArray# cy o2 marr2# =
       let same = isTrue# (sameMutableArray# marr1# marr2#)
-      in  c1 == c2 && (c1 == 0 || o1 == o2 && same)
+      in  cx == cy && (cx == 0 || o1 == o2 && same)
 
 --------------------------------------------------------------------------------
 
@@ -1413,8 +1420,6 @@ done (STArray# n o marr#) = ST $ \ s1# -> case unsafeFreezeArray# marr# s1# of
 done' :: Int -> MutableArray# s e -> STRep s (STArray# s e)
 done' n marr# = \ s1# -> (# s1#, STArray# n 0 marr# #)
 
---------------------------------------------------------------------------------
-
 {-# INLINE nubSorted #-}
 nubSorted :: Compare e -> SArray# e -> SArray# e
 nubSorted _ Z  = Z
@@ -1446,4 +1451,5 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
 
