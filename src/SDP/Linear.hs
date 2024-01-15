@@ -45,7 +45,8 @@ module SDP.Linear
   -- * Related functions
   splitBy, divideBy, splits, divides, tails, inits, parts, chunks, save, skip,
   partitions, subsequences, intersperse, intercalate, except, mexcept,
-  csfoldr', csfoldl', msfoldr, msfoldl, spanl, breakl, spanr, breakr,
+  spanl, breakl, spanr, breakr,
+  
   selectWhile', selectEnd', extractWhile', extractEnd', dropWhileEnd,
   stripPrefix, stripSuffix, stripPrefix', stripSuffix',
   each, eachFrom, combo, ascending
@@ -354,40 +355,6 @@ type Linear'' l = forall i e . Linear (l i e) e
 --------------------------------------------------------------------------------
 
 {- |
-  @since 0.3
-
-  Same as 'sfoldr', but also returns the length of the structure.
--}
-csfoldr' :: Linear l e => (e -> a -> a) -> a -> l -> (Int, a)
-csfoldr' f base = sfoldr' (\ e (!n, e') -> (n + 1, f e e')) (0, base)
-
-{- |
-  @since 0.3
-
-  Same as 'sfoldr', but also returns the length of the structure.
--}
-csfoldl' :: Linear l e => (a -> e -> a) -> a -> l -> (Int, a)
-csfoldl' f base = sfoldl' (\ (!n, e') e -> (n + 1, f e' e)) (0, base)
-
-{- |
-  @since 0.3
-
-  Monadic version of 'sfoldr'.
--}
-msfoldr :: (Monad m, Linear l e) => (e -> a -> m a) -> a -> l -> m a
-msfoldr go = sfoldr (\ e xs -> go e =<< xs) . pure
-
-{- |
-  @since 0.3
-
-  Monadic version of 'sfoldl'.
--}
-msfoldl :: (Monad m, Linear l e) => (a -> e -> m a) -> a -> l -> m a
-msfoldl go = sfoldl (\ e xs -> flip go xs =<< e) . pure
-
---------------------------------------------------------------------------------
-
-{- |
   @save n es@ takes first @n@ elements of @es@ if @n > 0@ and last @-n@
   elements otherwise.
 -}
@@ -624,8 +591,6 @@ each n es = case n <=> 1 of
 -}
 eachFrom :: Linear l e => Int -> Int -> l -> l
 eachFrom o n = each n . drop o
-
---------------------------------------------------------------------------------
 
 {- |
   @combo f es@ returns the length of the @es@ subsequence (left to tight)

@@ -32,7 +32,7 @@ module SDP.Sequence
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
-  Sequence', Sequence'', after,
+  Sequence', Sequence'', after, csfoldr', csfoldl', msfoldr, msfoldl,
 #endif
 
   -- ** Legacy
@@ -617,8 +617,43 @@ o_foldl1' =  sfoldl1'
 
 --------------------------------------------------------------------------------
 
+{- |
+  @since 0.3
+
+  Same as 'sfoldr', but also returns the length of the structure.
+-}
+csfoldr' :: Sequence s e => (e -> a -> a) -> a -> s -> (Int, a)
+csfoldr' f base = sfoldr' (\ e (!n, e') -> (n + 1, f e e')) (0, base)
+
+{- |
+  @since 0.3
+
+  Same as 'sfoldr', but also returns the length of the structure.
+-}
+csfoldl' :: Sequence s e => (a -> e -> a) -> a -> s -> (Int, a)
+csfoldl' f base = sfoldl' (\ (!n, e') e -> (n + 1, f e' e)) (0, base)
+
+{- |
+  @since 0.3
+
+  Monadic version of 'sfoldr'.
+-}
+msfoldr :: (Monad m, Sequence s e) => (e -> a -> m a) -> a -> s -> m a
+msfoldr go = sfoldr (\ e xs -> go e =<< xs) . pure
+
+{- |
+  @since 0.3
+
+  Monadic version of 'sfoldl'.
+-}
+msfoldl :: (Monad m, Sequence s e) => (a -> e -> m a) -> a -> s -> m a
+msfoldl go = sfoldl (\ e xs -> flip go xs =<< e) . pure
+
+--------------------------------------------------------------------------------
+
 {-# NOINLINE pfailEx #-}
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Sequence."
+
 
 
