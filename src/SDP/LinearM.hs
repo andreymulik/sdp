@@ -46,7 +46,7 @@ module SDP.LinearM
 where
 
 import Prelude ()
-import SDP.SafePrelude hiding ( filterM )
+import SDP.SafePrelude
 import SDP.SequenceM
 import SDP.Linear
 
