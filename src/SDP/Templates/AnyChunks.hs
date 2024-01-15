@@ -89,23 +89,23 @@ toChunks =  E.coerce
 instance (Eq (rep e), Linear1 rep e) => Eq (AnyChunks rep e)
   where
     Z == Z = True
-    xs@(AnyChunks (x : xs')) == ys@(AnyChunks (y : ys')) = if n1 > n2
-        then take n2 x == y && drop n2 xs == AnyChunks ys'
-        else take n1 y == x && drop n1 ys == AnyChunks xs'
+    xs@(AnyChunks (x : xs')) == ys@(AnyChunks (y : ys')) = if nx > ny
+        then take ny x == y && drop ny xs == AnyChunks ys'
+        else take nx y == x && drop nx ys == AnyChunks xs'
       where
-        n1 = sizeOf x
-        n2 = sizeOf y
+        nx = sizeOf x
+        ny = sizeOf y
     _ == _ = False
 
 instance (Ord (rep e), Linear1 rep e) => Ord (AnyChunks rep e)
   where
     compare Z Z = EQ
-    compare xs@(AnyChunks (x : xs')) ys@(AnyChunks (y : ys')) = if n1 > n2
-        then (take n2 x <=> y) <> (drop n2 xs <=> AnyChunks ys')
-        else (x <=> take n1 y) <> (AnyChunks xs' <=> drop n1 ys)
+    compare xs@(AnyChunks (x : xs')) ys@(AnyChunks (y : ys')) = if nx > ny
+        then (take ny x <=> y) <> (drop ny xs <=> AnyChunks ys')
+        else (x <=> take nx y) <> (AnyChunks xs' <=> drop nx ys)
       where
-        n1 = sizeOf x
-        n2 = sizeOf y
+        nx = sizeOf x
+        ny = sizeOf y
     compare Z _ = LT
     compare _ _ = GT
 
@@ -119,23 +119,23 @@ instance (Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
     liftEq f xs ys
         | isNull xs && isNull ys = True
         | isNull xs || isNull ys = False
-        |         n1 > n2        = liftEq f (take n2 x) y && liftEq f (drop n2 xs) (fromChunks ys')
-        |          True          = liftEq f x (take n1 y) && liftEq f (fromChunks xs') (drop n1 ys)
+        |         nx > ny        = liftEq f (take ny x) y && liftEq f (drop ny xs) (fromChunks ys')
+        |          True          = liftEq f x (take nx y) && liftEq f (fromChunks xs') (drop nx ys)
       where
-        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
-        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
+        (x, xs') = uncons (toChunks xs); nx = sizeOf x
+        (y, ys') = uncons (toChunks ys); ny = sizeOf y
 
 instance (Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
   where
     liftCompare _ Z   Z = EQ
     liftCompare _ Z   _ = LT
     liftCompare _ _   Z = GT
-    liftCompare f xs ys = if n1 > n2
-        then liftCompare f (take n2 x) y <> liftCompare f (drop n2 xs) (fromChunks ys')
-        else liftCompare f x (take n1 y) <> liftCompare f (fromChunks xs') (drop n1 ys)
+    liftCompare f xs ys = if nx > ny
+        then liftCompare f (take ny x) y <> liftCompare f (drop ny xs) (fromChunks ys')
+        else liftCompare f x (take nx y) <> liftCompare f (fromChunks xs') (drop nx ys)
       where
-        (x, xs') = uncons (toChunks xs); n1 = sizeOf x
-        (y, ys') = uncons (toChunks ys); n2 = sizeOf y
+        (x, xs') = uncons (toChunks xs); nx = sizeOf x
+        (y, ys') = uncons (toChunks ys); ny = sizeOf y
 #endif
 
 --------------------------------------------------------------------------------
@@ -530,9 +530,9 @@ instance LinearM1 m rep e => LinearM m (AnyChunks rep e) e
         go c src' trg'
       where
         go n xs@(AnyChunks (x : _)) ys@(AnyChunks (y : _)) = do
-          n1 <- getSizeOf x
-          n2 <- getSizeOf y
-          let n' = n1 `min` n2 `min` n
+          nx <- getSizeOf x
+          ny <- getSizeOf y
+          let n' = nx `min` ny `min` n
 
           copyTo x 0 y 0 n'
           dropM n' xs >>=<< dropM n' ys $ go (n - n')
