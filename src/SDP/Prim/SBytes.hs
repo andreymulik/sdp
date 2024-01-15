@@ -482,8 +482,10 @@ instance Ord e => Set (SBytes# e) e
 
 instance SetWith (SBytes# e) e
   where
-    setWith f es@(SBytes# _ _ _) = nubSorted f (sortBy f es)
-    subsets   es@(SBytes# _ _ _) = subsequences (setWith compare es)
+    setWith     f es@(SBytes# _ _ _) = nubSorted  f (sortBy  f es)
+    subsetsWith f es@(SBytes# _ _ _) = subsequences (setWith f es)
+    
+    subsets es@(SBytes# _ _ _) = subsequences (setWith compare es)
 
     groupSetWith cmp f es@(SBytes# _ _ _) = fromList $ groupSetWith cmp f (listL es)
 
@@ -1420,5 +1422,3 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SBytes."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
-
-

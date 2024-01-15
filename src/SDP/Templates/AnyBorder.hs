@@ -498,7 +498,8 @@ instance (Index i, SetWith1 rep e, Linear1 rep e)
 
     setWith f = withBounds . setWith f . unpack
 
-    subsets = map withBounds . subsets . unpack
+    subsetsWith f = map withBounds . subsetsWith f . unpack
+    subsets       = map withBounds . subsets . unpack
 
     insertWith f e = withBounds . insertWith f e . unpack
     deleteWith f e = withBounds . deleteWith f e . unpack
@@ -697,8 +698,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
 
---------------------------------------------------------------------------------
-
 {-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
+

@@ -35,8 +35,7 @@ import Prelude ()
 import SDP.SafePrelude
 import SDP.Linear
 
-import Data.Maybe ( isJust  )
-import Data.List  ( groupBy )
+import Data.List ( groupBy )
 
 default ()
 
@@ -66,7 +65,7 @@ class SetWith s o | s -> o
     -- | Creates ordered set from linear structure.
     setWith :: Compare o -> s -> s
     setWith f = fromList . setWith f . listL
-    default setWith :: Linear s o => Compare o -> s -> s
+    default setWith :: Sequence s o => Compare o -> s -> s
     
     {- |
       Creates set from linear structure using additional function for
@@ -74,15 +73,15 @@ class SetWith s o | s -> o
     -}
     groupSetWith :: Compare o -> (o -> o -> o) -> s -> s
     groupSetWith cmp f = fromList . groupSetWith cmp f . listL
-    default groupSetWith :: Linear s o => Compare o -> (o -> o -> o) -> s -> s
+    default groupSetWith :: Sequence s o => Compare o -> (o -> o -> o) -> s -> s
     
     -- | Adding element to set.
-    default insertWith :: Linear s o => Compare o -> o -> s -> s
+    default insertWith :: Sequence s o => Compare o -> o -> s -> s
     insertWith :: Compare o -> o -> s -> s
     insertWith f = unionWith f . single
     
     -- | Deleting element from set.
-    default deleteWith :: (Nullable s, Linear s o) => Compare o -> o -> s -> s
+    default deleteWith :: Linear s o => Compare o -> o -> s -> s
     deleteWith :: Nullable s => Compare o -> o -> s -> s
     deleteWith f = flip (differenceWith f) . single
     
@@ -130,19 +129,24 @@ class SetWith s o | s -> o
     isDisjointWith f = isNull ... intersectionWith f
     
     -- | Same as 'elem', but can work faster. By default, uses 'find'.
-    default memberWith :: (t o ~ s, Foldable t) => Compare o -> o -> s -> Bool
+    default memberWith :: Sequence s o => Compare o -> o -> s -> Bool
     memberWith :: Compare o -> o -> s -> Bool
-    memberWith f e = isJust . find (\ x -> f e x == EQ)
+    memberWith f e = sfoldr (\ x b -> b || f e x == EQ) False
     
     -- | Сhecks whether a first set is a subset of second.
-    default isSubsetWith :: (t o ~ s, Foldable t) => Compare o -> s -> s -> Bool
+    default isSubsetWith :: Sequence s o => Compare o -> s -> s -> Bool
     isSubsetWith :: Compare o -> s -> s -> Bool
-    isSubsetWith f xs ys = all (\ x -> memberWith f x ys) xs
+    isSubsetWith f xs ys = sfoldr (\ x b -> b && memberWith f x ys) True xs
     
     -- | Generates a list of different subsets (including empty and equivalent).
-    default subsets :: (Linear s o, Ord o) => s -> [s]
-    subsets :: (Ord o) => s -> [s]
+    subsetsWith :: Compare o -> s -> [s]
+    subsetsWith =  subsequences ... setWith
+    default subsetsWith :: Linear s o => Compare o -> s -> [s]
+    
+    -- | Generates a list of different subsets (including empty and equivalent).
+    subsets :: Ord o => s -> [s]
     subsets =  subsequences . setWith compare
+    default subsets :: (Linear s o, Ord o) => s -> [s]
     
     {- Lookups. -}
     
