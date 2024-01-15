@@ -535,31 +535,45 @@ instance IsMVar m var => UseAttribute var "linear" "" m l e
 
 instance IsMVar m var => UseAttribute var "linear" "head" m l e
   where
-    useAttr attr _ rep = do l <- fromMRef attr; accessHead l rep
+    useAttr attr _ rep = do
+      l <- fromMRef attr
+      accessHead l rep
 
 instance IsMVar m var => UseAttribute var "linear" "last" m l e
   where
-    useAttr attr _ rep = do l <- fromMRef attr; accessLast l rep
+    useAttr attr _ rep = do
+      l <- fromMRef attr
+      accessLast l rep
 
 instance IsMVar m var => UseAttribute var "linear" "left" m l e
   where
-    useAttr attr _ rep = do l <- fromMRef attr; accessLeft l rep
+    useAttr attr _ rep = do
+      l <- fromMRef attr
+      accessLeft l rep
 
 instance IsMVar m var => UseAttribute var "linear" "right" m l e
   where
-    useAttr attr _ rep = do l <- fromMRef attr; accessRight l rep
+    useAttr attr _ rep = do
+      l <- fromMRef attr
+      accessRight l rep
 
 instance IsMVar m var => UseAttribute var "linear" "append" m l e
   where
-    useAttr attr _ rep e = do l <- fromMRef attr; accessAppend l rep e
+    useAttr attr _ rep e = do
+      l <- fromMRef attr
+      accessAppend l rep e
 
 instance IsMVar m var => UseAttribute var "linear" "prepend" m l e
   where
-    useAttr attr _ e rep = do l <- fromMRef attr; accessPrepend l e rep
+    useAttr attr _ e rep = do
+      l <- fromMRef attr
+      accessPrepend l e rep
 
 instance IsMVar m var => UseAttribute var "linear" "remove" m l e
   where
-    useAttr attr _ rep n = do l <- fromMRef attr; accessRemove l rep n
+    useAttr attr _ rep n = do
+      l <- fromMRef attr
+      accessRemove l rep n
 
 pattern (:+=) :: UseField "linear" "append" api
               => FieldT m api l e -> e -> l -> m l

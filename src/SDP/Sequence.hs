@@ -140,7 +140,7 @@ class
 
     -- | Just singleton.
     single :: e -> seq
-    single =  flip toHead Z
+    single =  flip toHead lzero
     default single :: Nullable seq => e -> seq
 
     -- | Prepends element to line, constructor for ':>' pattern.
@@ -364,7 +364,7 @@ class
       Monadic version of 'select'.
     -}
     mselect :: Applicative t => (e -> t (Maybe a)) -> seq -> t [a]
-    mselect go = sfoldr (liftA2 (\ x xs -> maybe xs (: xs) x) . go) (pure [])
+    mselect go = sfoldr (liftA2 (\ x xs -> maybe xs (: xs) x) . go) $ pure []
 
     {- |
       @since 0.3
@@ -374,7 +374,7 @@ class
     mextract :: Applicative t => (e -> t (Maybe a)) -> seq -> t ([a], [e])
     mextract go = sfoldr (\ e -> liftA2 (\ x (xs, es) ->
         maybe (xs, e : es) (\ x' -> (x' : xs, es)) x) (go e)
-      ) (pure ([], []))
+      ) $ pure ([], [])
 
     {- |
       @since 0.3
