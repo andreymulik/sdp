@@ -132,6 +132,14 @@ class (SequenceM m l e, NullableM m l) => LinearM m l e | l -> m, l -> e
     dropM n es = do s <- getSizeOf es; keepM (s - n) es
 
     {- |
+      @since 0.3
+      
+      @sublineM o n === takeM n <=< dropM o@.
+    -}
+    sublineM :: Int -> Int -> l -> m l
+    sublineM o n = takeM n <=< dropM o
+
+    {- |
       @keepM n es@ returns a reference to the @es@, keeping last @n@ elements.
       Changes in the source and result must be synchronous.
     -}
@@ -627,4 +635,5 @@ type LinearM' m l = forall e . LinearM m (l e) e
 -- | 'LinearM' contraint for @(Type -> Type -> Type)@-kind types.
 type LinearM'' m l = forall i e . LinearM m (l i e) e
 #endif
+
 

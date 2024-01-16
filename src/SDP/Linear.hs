@@ -191,6 +191,14 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     drop :: Int -> l -> l
     drop n es = keep (sizeOf es - n) es
 
+    {- |
+      @since 0.3
+      
+      @subline o n === take n . drop o@.
+    -}
+    subline :: Int -> Int -> l -> l
+    subline o n = take n . drop o
+
     -- | @keep n es@ takes last @n@ elements of @es@.
     keep :: Int -> l -> l
     keep n es = drop (sizeOf es - n) es
@@ -656,4 +664,6 @@ instance Linear [e] e
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
+
+
 
