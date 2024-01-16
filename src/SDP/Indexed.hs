@@ -28,6 +28,10 @@ module SDP.Indexed
   -- * Freeze
   Freeze (..), Freeze1, Freeze2,
   
+#ifndef SDP_DISABLE_SHAPED
+  (!!!), slices', unslice',
+#endif
+  
 #ifdef SDP_QUALIFIED_CONSTRAINTS
   -- ** Rank 2 quantified constraints
   -- | GHC 8.6.1+ only
@@ -72,14 +76,14 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
       with the result bounds (not always possible).
     -}
     assoc' :: (i, i) -> e -> [(i, e)] -> v
-    assoc' bnds defvalue = toMap' defvalue . filter (inRange bnds . fst)
+    assoc' bnds de es = toMap' de $ [ (i, e) | (i, e) <- es, inRange bnds i ]
     
     -- | 'fromIndexed' converts this indexed structure to another one.
     fromIndexed :: Indexed m j e => m -> v
     
     -- | Same as 'reshape', deprecated.
     imap :: Map m j e => (i, i) -> m -> (i -> j) -> v
-    imap bnds es f = assoc bnds [ (i, es!f i) | i <- range bnds ]
+    imap bnds es f = assoc bnds [ (i, e) | i <- range bnds, let e = es!f i ]
     
     -- | 'reshape' creates new indexed structure from old with reshaping.
     reshape :: Indexed v' j e => (i, i) -> v' -> (i -> j) -> v
@@ -90,16 +94,14 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
       updated by function @f@ and @ies@ associations list.
     -}
     accum :: (e -> e' -> e) -> v -> [(i, e')] -> v
-    accum f es ies = bounds es `assoc` [ (i, es!i `f` e') | (i, e') <- ies ]
+    accum f es ies = bounds es `assoc` [ (i, f e e') | (i, e') <- ies, let e = es!i ]
     
     {- |
       @since 0.3
       
       @es !! ij@ returns subshape @ij@ of @es@.
     -}
-    (!!) :: (Indexed2 s i e, Indexed2 s j e, SubIndex i j)
-         => v -> i :|: j -> s j e
-    
+    (!!) :: (Indexed2 s j e, SubIndex i j, v ~ s i e) => v -> i :|: j -> s j e
     es !! ij = toMap $ kfoldr (\ i e ies ->
         let (ij', j) = splitDim i
         in  ij' == ij ? (j, e) : ies $ ies
@@ -110,66 +112,63 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
       
       Returns list of @es@ subshapes.
     -}
-    slices :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j)
+    slices :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, v ~ s i e)
            => v -> s (i :|: j) (s j e)
     
-    slices es = let ((ls, l), (us, u)) = splitDim `both` bounds es in assoc (ls, us)
-        [
-          (ij, assoc (l, u) ies)
-        | (ij, ies) <- size (ls, us) `unpick` offset (ls, us) $ kfoldr
-          (\ i e xs -> flip (,) e `second` splitDim i : xs) [] es
-        ]
+    slices es = assoc (ls, us) ess
+      where
+        ess = second (assoc (l, u)) <$> unpick n o (kfoldr ascs [] es)
+        o   = offset (ls, us)
+        n   = size   (ls, us)
+        
+        ascs i e xs = let (ij, j) = splitDim i in (ij, (j, e)) : xs
+        
+        ((ls, l), (us, u)) = splitDim `both` bounds es
     
     {- |
       @since 0.3
       
       Unslice subshapes.
     -}
-    unslice :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j)
+    unslice :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, v ~ s i e)
             => s (i :|: j) (s j e) -> v
     
     unslice = toMap . kfoldr (\ i -> (++) . (first (`joinDim` i) <$>) . assocs) []
-    
+
 #ifndef SDP_DISABLE_SHAPED
-    {- |
-      @since 0.3
-      
-      Stricter version of @('!!')@, returns a subshape of the same type.
-      
-      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
-    -}
-    (!!!) ::
-      (
-        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
-      ) => s i e -> i :|: j -> s j e
-    (!!!) =  (!!)
-    
-    {- |
-      @since 0.3
-      
-      Stricter version of 'slices', returns list of subshapes of the same type.
-      
-      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
-    -}
-    slices' ::
-      (
-        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
-      ) => s i e -> s (i :|: j) (s j e)
-    slices' =  slices
-    
-    {- |
-      @since 0.3
-      
-      Stricter version of 'unslice', creates structure from list of subshapes of
-      the same type.
-      
-      __NOTE:__ for GHC > 8.0.* # works fine in 8.0.1, but fails in 8.0.2
-    -}
-    unslice' ::
-      (
-        Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, s i e ~ v
-      ) => s (i :|: j) (s j e) -> s i e
-    unslice' =  unslice
+{- |
+  @since 0.3
+  
+  Stricter version of @('!!')@, returns a subshape of the same type.
+  
+  __NOTE:__ for GHC >= 8.0.2 # works fine in 8.0.1, but fails in 8.0.2
+-}
+(!!!) :: (Indexed2 s i e, Indexed2 s j e, SubIndex i j, Indexed2 s (i :|: j) (s j e))
+      => s i e -> i :|: j -> s j e
+(!!!) =  (!!)
+
+{- |
+  @since 0.3
+  
+  Stricter version of 'slices', returns list of subshapes of the same type.
+  
+  __NOTE:__ for GHC >= 8.0.2 # works fine in 8.0.1, but fails in 8.0.2
+-}
+slices' :: (Indexed2 s i e, Indexed2 s j e, SubIndex i j, Indexed2 s (i :|: j) (s j e))
+        => s i e -> s (i :|: j) (s j e)
+slices' =  slices
+
+{- |
+  @since 0.3
+  
+  Stricter version of 'unslice', creates structure from list of subshapes of
+  the same type.
+  
+  __NOTE:__ for GHC >= 8.0.2 # works fine in 8.0.1, but fails in 8.0.2
+-}
+unslice' :: (Indexed2 s i e, Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j)
+         => s (i :|: j) (s j e) -> s i e
+unslice' =  unslice
 #endif
 
 --------------------------------------------------------------------------------
@@ -268,8 +267,6 @@ binaryContain f e es =
         j = u - l `div` 2 + l
   in  f e (head es) /= LT && f e (last es) /= GT && contain 0 (sizeOf es - 1)
 
---------------------------------------------------------------------------------
-
 -- | 'memberSorted' checks that sorted structure has equal element.
 memberSorted :: Indexed v i e => Compare e -> e -> v -> Bool
 memberSorted =  binaryContain
@@ -277,4 +274,6 @@ memberSorted =  binaryContain
 {-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Indexed."
+
+
 

@@ -149,10 +149,15 @@ instance (Num e, Num (rep e), Indexed1 rep Int e, Index i, Index ii, GIndex ii ~
     AnyBorder l u xs + AnyBorder _ _ ys = AnyBorder l u (xs + ys)
     AnyBorder l u xs - AnyBorder _ _ ys = AnyBorder l u (xs - ys)
 
-    xs' * ys' = mx /= ny ? undEx "(*)" $ viewOf (l, u) $ fromListN (nx * my) [
-          sum [ xs !^ (i * mx + k) * ys !^ (k * my + j) | k <- [0 .. mx - 1] ]
-        | i <- [0 .. nx - 1], j <- [0 .. my - 1]
+    xs' * ys' = mx /= ny ? underEx "(*)" $ viewOf (l, u) $ fromListN (nx * my) [
+        sum
+          [
+            xs !^ xk * ys !^ yk | k <- [0 .. mx - 1],
+            let xk = i * mx + k; yk = k * my + j
+
+          ] | i <- [0 .. nx - 1], j <- [0 .. my - 1]
         ]
+
       where
         l = fromGIndex (E :& unsafeIndex  1 :& unsafeIndex  1)
         u = fromGIndex (E :& unsafeIndex nx :& unsafeIndex my)
@@ -284,9 +289,9 @@ instance (Index i, Applicative rep) => Applicative (AnyBorder rep i)
   where
     pure = uncurry AnyBorder (defaultBounds 1) . pure
 
-    (AnyBorder lf uf fs) <*> (AnyBorder le ue es) =
-      let (l, u) = defaultBounds (size (lf, uf) * size (le, ue))
-      in  AnyBorder l u (fs <*> es)
+    AnyBorder lf uf fs <*> AnyBorder le ue es =
+      let bnds = defaultBounds (size (lf, uf) * size (le, ue))
+      in  uncurry AnyBorder bnds (fs <*> es)
 
 --------------------------------------------------------------------------------
 
@@ -563,23 +568,39 @@ instance (Index i, Indexed1 rep Int e) => Indexed (AnyBorder rep i e) i e
         bnds' = defaultBounds $ size bnds
 
     fromIndexed = withBounds . fromIndexed
-
-    {-
-    AnyBorder l u rep !! ij = uncurry AnyBorder sub . take s $ drop o rep
+    
+    AnyBorder ls us rep !! ij = case inBounds (lj, uj) ij of
+        IN -> AnyBorder l u (subline o n rep)
+        ER -> emptyEx "(!!)"
+        UR -> underEx "(!!)"
+        OR -> overEx  "(!!)"
       where
-        (num, sub) = slice (l, u) ij
-
-        o = offset num ij * s
-        s = size sub
-
-    slices es =
-      let bnds = both takeDim (bounds es)
-      in  uncurry AnyBorder bnds <$> size bnds `chunks` unpack es
-
+        (lj, l) = splitDim ls
+        (uj, u) = splitDim us
+        
+        o = offset (ls, us) (joinDim l ij)
+        n = size (l, u)
+    
+    slices (AnyBorder ls us rep) = assoc (lj, uj) $
+        range (lj, uj) `zip` (f <$> chunks n rep)
+      where
+        (lj, l) = splitDim ls
+        (uj, u) = splitDim us
+        
+        f = AnyBorder l u
+        n = size (l, u)
+    
+    unslice  Z  = Z -- border normalization
     unslice ess =
-      let bnds = defaultBounds (foldr' ((+) . sizeOf) 0 ess)
-      in  uncurry AnyBorder bnds (concatMap unpack ess)
-    -}
+        let appendAscs ij = flip $ kfoldr (\ j e ies -> (joinDim j ij, e) : ies)
+            -- ^ append a subarray to an association list
+        in  assoc (joinDim l lj, joinDim u uj) $ kfoldr appendAscs [] ess
+      where
+        -- | If the subarrays are of different sizes, take the widest bounds.
+        (l, u) = sfoldr (joinBounds . bounds) (defaultBounds 0) ess
+        
+        joinBounds = uncurry $ on (.) extendBounds
+        (lj, uj)   = bounds ess
 
 --------------------------------------------------------------------------------
 
@@ -698,7 +719,16 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
 
-{-# NOINLINE undEx #-}
-undEx :: String -> a
-undEx =  throw . UndefinedValue . showString "in SDP.Templates.AnyBorder."
+--------------------------------------------------------------------------------
 
+{-# NOINLINE emptyEx #-}
+emptyEx :: String -> a
+emptyEx =  throw . EmptyRange . showString "in SDP.Templates.AnyBorder."
+
+{-# NOINLINE overEx #-}
+overEx :: String -> a
+overEx =  throw . EmptyRange . showString "in SDP.Templates.AnyBorder."
+
+{-# NOINLINE underEx #-}
+underEx :: String -> a
+underEx =  throw . EmptyRange . showString "in SDP.Templates.AnyBorder."
