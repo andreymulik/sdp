@@ -72,12 +72,7 @@ type family GIndex i
   > fromGIndex . toGIndex = id
   > toGIndex . fromGIndex = id
 -}
-class
-    (
-      Eq sh, Eq (GIndex sh),
-      Rank sh ~ Rank (GIndex sh),
-      Eq (DimInit sh), Eq (DimLast sh)
-    ) => Shape sh
+class (Eq sh, Rank sh ~ Rank (GIndex sh)) => Shape sh
   where
     -- | Create index from generalized index.
     {-# INLINE fromGIndex #-}
@@ -435,6 +430,5 @@ rank sh = I# (rank# sh)
 -}
 rank# :: Shape sh => sh -> Int#
 rank# sh = rank## (toProxy## sh)
-
 
 
