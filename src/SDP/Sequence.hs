@@ -71,17 +71,18 @@ infixl 9 !^
   * 'Sequence' implements not only sequence reduction, but also their creation
   * 'Sequence' explicitly implements basic convolution operations
 
-  __NOTE:__ Sequence allows non-empty sequences as a last resort, but not more
-  complex size restrictions. For example, a type with a valid number of elements
-  @3n + 4@ is not a valid sequence instance (but can be 'Foldable').
+  __NOTE:__ 'Sequence' instances must support structures with non-negative or at
+  least positive length without trimming, additional "empty" elements, etc.
+  For example, a type with a valid number of elements @3n + 4@ is not a valid
+  'Sequence' instance (but can be 'Foldable').
 
   Before using 'head', 'tail', 'init' and 'last', you must ensure that there
   is at least one element in the argument structure.
 
   You will receive an error when you try to:
 
-  * use 'fromList' and 'fromFoldable' with an empty sequence
-  * extract the 'tail' or 'init' from single-value sequence
+  * use 'fromList' and 'fromFoldable' with empty list for non-empty sequence
+  * extract the 'tail' or 'init' for single-value non-empty sequence
   * extract the 'head', 'tail', 'init' or 'last' of empty sequence
 
   'Sequence' structures must follow some rules:
@@ -654,6 +655,5 @@ msfoldl go = sfoldl (\ e xs -> flip go xs =<< e) . pure
 {-# NOINLINE pfailEx #-}
 pfailEx :: String -> a
 pfailEx =  throw . PatternMatchFail . showString "in SDP.Sequence."
-
 
 
