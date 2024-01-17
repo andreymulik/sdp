@@ -25,7 +25,7 @@ module SDP.Shape
   Shape (..), GIndex, toGBounds, fromGBounds, rank, rank#,
   
   -- ** Rank constraints
-  Rank0, Rank1, Rank2,  Rank3,  Rank4,  Rank5,  Rank6,  Rank7,
+  AsRankOf, Rank0, Rank1, Rank2, Rank3, Rank4, Rank5, Rank6, Rank7,
   Rank8, Rank9, Rank10, Rank11, Rank12, Rank13, Rank14, Rank15
 )
 where
@@ -53,6 +53,14 @@ type family GIndex i
     GIndex     E     = E
     GIndex (i' :& i) = i' :& i
     GIndex     i     = GIndex (DimInit i) :& DimLast i
+
+-- | Convert any index type bounds to generalized index bounds.
+toGBounds :: Shape sh => (sh, sh) -> (GIndex sh, GIndex sh)
+toGBounds =  both toGIndex
+
+-- | Convert generalized index bounds to any index type bounds.
+fromGBounds :: Shape sh => (GIndex sh, GIndex sh) -> (sh, sh)
+fromGBounds =  both fromGIndex
 
 --------------------------------------------------------------------------------
 
@@ -137,68 +145,62 @@ class (Eq sh, Rank sh ~ Rank (GIndex sh)) => Shape sh
     unconsDim :: sh -> (DimInit sh, DimLast sh)
     unconsDim =  \ sh -> (initDim sh, lastDim sh)
 
---------------------------------------------------------------------------------
-
-{- Rank constraints. -}
+-- | @AsRankOf sh n@ constraint corresponding to @rank sh === n@.
+type AsRankOf sh n = Rank sh ~ n
 
 -- | A constraint corresponding to @rank === 0@.
-type Rank0 sh = Rank sh ~ 0
+type Rank0 sh = sh `AsRankOf` 0
 
 -- | A constraint corresponding to @rank === 1@.
-type Rank1 sh = Rank sh ~ 1
+type Rank1 sh = sh `AsRankOf` 1
 
 -- | A constraint corresponding to @rank === 2@.
-type Rank2 sh = Rank sh ~ 2
+type Rank2 sh = sh `AsRankOf` 2
 
 -- | A constraint corresponding to @rank === 3@.
-type Rank3 sh = Rank sh ~ 3
+type Rank3 sh = sh `AsRankOf` 3
 
 -- | A constraint corresponding to @rank === 4@.
-type Rank4 sh = Rank sh ~ 4
+type Rank4 sh = sh `AsRankOf` 4
 
 -- | A constraint corresponding to @rank === 5@.
-type Rank5 sh = Rank sh ~ 5
+type Rank5 sh = sh `AsRankOf` 5
 
 -- | A constraint corresponding to @rank === 6@.
-type Rank6 sh = Rank sh ~ 6
+type Rank6 sh = sh `AsRankOf` 6
 
 -- | A constraint corresponding to @rank === 7@.
-type Rank7 sh = Rank sh ~ 7
+type Rank7 sh = sh `AsRankOf` 7
 
 -- | A constraint corresponding to @rank === 8@.
-type Rank8 sh = Rank sh ~ 8
+type Rank8 sh = sh `AsRankOf` 8
 
 -- | A constraint corresponding to @rank === 9@.
-type Rank9 sh = Rank sh ~ 9
+type Rank9 sh = sh `AsRankOf` 9
 
 -- | A constraint corresponding to @rank === 10@.
-type Rank10 sh = Rank sh ~ 10
+type Rank10 sh = sh `AsRankOf` 10
 
 -- | A constraint corresponding to @rank === 11@.
-type Rank11 sh = Rank sh ~ 11
+type Rank11 sh = sh `AsRankOf` 11
 
 -- | A constraint corresponding to @rank === 12@.
-type Rank12 sh = Rank sh ~ 12
+type Rank12 sh = sh `AsRankOf` 12
 
 -- | A constraint corresponding to @rank === 13@.
-type Rank13 sh = Rank sh ~ 13
+type Rank13 sh = sh `AsRankOf` 13
 
 -- | A constraint corresponding to @rank === 14@.
-type Rank14 sh = Rank sh ~ 14
+type Rank14 sh = sh `AsRankOf` 14
 
 -- | A constraint corresponding to @rank === 15@.
-type Rank15 sh = Rank sh ~ 15
+type Rank15 sh = sh `AsRankOf` 15
 
 --------------------------------------------------------------------------------
 
 {- Basic instances. -}
 
-instance Shape E
-  where
-    type Rank E = 0
-    
-    toGIndex   = id
-    fromGIndex = id
+instance Shape E where type Rank E = 0; toGIndex = id; fromGIndex = id
 
 instance Shape Int   where type Rank Int   = 1
 instance Shape Int8  where type Rank Int8  = 1
@@ -294,14 +296,6 @@ instance (Shape sh, Enum sh, Bounded sh, Shape (sh' :& sh), Rank1 sh)
     initDim   = \ (is :& _) -> is
     lastDim   = \ (_  :& i) -> i
     unconsDim = \ (is :& i) -> (is, i)
-
--- | Convert any index type bounds to generalized index bounds.
-toGBounds :: Shape sh => (sh, sh) -> (GIndex sh, GIndex sh)
-toGBounds =  both toGIndex
-
--- | Convert generalized index bounds to any index type bounds.
-fromGBounds :: Shape sh => (GIndex sh, GIndex sh) -> (sh, sh)
-fromGBounds =  both fromGIndex
 
 --------------------------------------------------------------------------------
 
@@ -430,5 +424,6 @@ rank sh = I# (rank# sh)
 -}
 rank# :: Shape sh => sh -> Int#
 rank# sh = rank## (toProxy## sh)
+
 
 
