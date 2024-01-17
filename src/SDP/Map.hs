@@ -63,7 +63,7 @@ class Eq key => Map map key e | map -> key, map -> e
     -- | Returns list of associations @(index, element)@.
     assocs :: map -> [(key, e)]
     assocs es = indices es `zip` listL es
-    default assocs :: (Bordered map key, Linear map e) => map -> [(key, e)]
+    default assocs :: (Bordered map key, Sequence map e) => map -> [(key, e)]
     
     {- |
       A less specific version of 'SDP.Indexed.Indexed.assoc' that creates a new
@@ -212,7 +212,7 @@ class Eq key => Map map key e | map -> key, map -> e
       Safe index-based immutable writer. Earlier defined in "SDP.Indexed".
     -}
     {-# INLINE write' #-}
-    default write' :: (Bordered map key, Linear map e) => map -> key -> e -> map
+    default write' :: (Bordered map key, Sequence map e) => map -> key -> e -> map
     write' :: map -> key -> e -> map
     write' es = write es . offsetOf es
     
