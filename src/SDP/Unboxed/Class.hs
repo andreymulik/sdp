@@ -322,7 +322,7 @@ class Eq e => Unboxed e
           go# !s n# o# = go# (max s (arr# !# o#)) (n# -# 1#) (o# +# 1#)
       in  \ n# o# -> case n# ># 0# of
             1# -> go# (arr# !# 1#) n# o#
-            _  -> error "TODO"
+            _  -> error "in SDP.Unboxed.maximumUnboxed#: expected non-empty ByteArray#"
 
     {- |
       @since 0.3
@@ -336,7 +336,7 @@ class Eq e => Unboxed e
           go# !s n# o# = go# (max s (arr# !# o#)) (n# -# 1#) (o# +# 1#)
       in  \ n# o# -> case n# ># 0# of
             1# -> go# (arr# !# 1#) n# o#
-            _  -> error "TODO"
+            _  -> error "in SDP.Unboxed.minimumUnboxed#: expected non-empty ByteArray#"
 
 --------------------------------------------------------------------------------
 
