@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe, TypeOperators #-}
+{-# LANGUAGE Safe, TypeOperators, PatternSynonyms, ViewPatterns #-}
 
 {- |
     Module      :  SDP.Index
@@ -17,7 +17,7 @@ module SDP.Index
   module SDP.Shape,
   
   -- * Shapes
-  (C.:|:), C.SubIndex, takeDim, dropDim, joinDim, C.splitDim,
+  (C.:|:), pattern (:|:), C.SubIndex, takeDim, dropDim, joinDim, C.splitDim,
   
   -- * Indices
   C.Index (..), C.SizesOf,
@@ -35,6 +35,16 @@ import SDP.Nullable
 default ()
 
 --------------------------------------------------------------------------------
+
+{- |
+  'Index' split and join pattern.
+  
+  @
+  takeDim ([1,2,3,4] :: I4 Int) === [1] :: I1 Int
+  takeDim ([1,2,3,4] :: I4 Int) === E@
+-}
+pattern (:|:) :: C.SubIndex i j => j -> i C.:|: j -> i
+pattern j :|: ij <- (C.splitDim -> (ij, j)) where (:|:) = joinDim
 
 {- |
   Take some dimensions.
