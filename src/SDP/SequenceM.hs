@@ -51,9 +51,9 @@ infixl 5 !#>
 class (Monad m, ForceableM m seq, EstimateM m seq)
     => SequenceM m seq e | seq -> m, seq -> e
   where
-    {-# MINIMAL (unconsM|getHead,getTail|unconsM'),
+    {-# MINIMAL (newLinear|fromFoldableM|cat|(+=)),
+                (unconsM|getHead,getTail|unconsM'),
                 (unsnocM|getInit,getLast|unsnocM'),
-                (newLinear|fromFoldableM|cat),
                 (!#>), writeM #-}
 
     -- | Monadic 'single'.
@@ -67,7 +67,7 @@ class (Monad m, ForceableM m seq, EstimateM m seq)
       correctness of the original structure after conversion.
     -}
     (+=) :: e -> seq -> m seq
-    e += es = singleM e >>= (`cat` es)
+    e += es = do e' <- singleM e; e' `cat` es
 
     {- |
       Appends new element to the end of the structure (monadic 'toLast').
@@ -127,7 +127,7 @@ class (Monad m, ForceableM m seq, EstimateM m seq)
     -- | Monadic 'fromFoldable'.
     {-# INLINE fromFoldableM #-}
     fromFoldableM :: Foldable f => f e -> m seq
-    fromFoldableM =  foldr (\ x xs -> (x +=) =<< xs) newNull
+    fromFoldableM =  foldr (\ x xs' -> do xs <- xs'; x += xs) newNull
     default fromFoldableM :: NullableM m seq => Foldable f => f e -> m seq
 
     -- | Left view of line.
