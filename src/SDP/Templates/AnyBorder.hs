@@ -392,6 +392,11 @@ instance ForceableM1 m rep e => ForceableM m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
+instance (Index i, Concat m (rep e)) => Concat m (AnyBorder rep i e)
+  where
+    cat (AnyBorder _ _ xs) (AnyBorder _ _ ys) = uncurry
+        AnyBorder (defaultBounds 0) <$> cat xs ys
+
 instance (Index i, LinearM1 m rep e) => SequenceM m (AnyBorder rep i e) e
   where
     unconsM' es'@(AnyBorder l u es) = nowNull es' ?^ pure Nothing $ fmap (second new) <$> unconsM' es

@@ -98,11 +98,15 @@ class Nullable e
 -}
 class Monad m => NullableM m e
   where
+    {-# MINIMAL newNull #-}
+    
     -- | Monadic 'SDP.Nullable.lzero'.
     newNull :: m e
     
     -- | Monadic 'SDP.Nullable.isNull'.
+    default nowNull :: Eq e => e -> m Bool
     nowNull :: e -> m Bool
+    nowNull e = (e ==) <$> newNull
 
 --------------------------------------------------------------------------------
 

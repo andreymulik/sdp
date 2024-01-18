@@ -112,6 +112,7 @@ Library
     SDP.Scan
     SDP.Sort
     SDP.Map
+    SDP.Cat
     SDP.Zip
     SDP.Set
 
@@ -171,5 +172,4 @@ Library
 
     -- Unboxed class with instances
     SDP.Unboxed.Class
-
 

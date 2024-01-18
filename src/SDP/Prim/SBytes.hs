@@ -803,6 +803,19 @@ instance ForceableM (ST s) (STBytes# s e)
       \ s1# -> case pcloneUnboxedM es marr# o# n# s1# of
         (# s2#, copy# #) -> (# s2#, STBytes# n 0 copy# #)
 
+instance Concat (ST s) (STBytes# s e)
+  where
+    cat xs'@(STBytes# nx@(I# nx#) ox@(I# ox#) xs) (STBytes# (I# ny#) (I# oy#) ys) = ST $
+        \ s1# -> case newUnboxed' err n# s1# of
+          (# s2#, marr# #) -> case copyUnboxedM## e xs ox# marr# 0# nx# s2# of
+            s3# -> case copyUnboxedM## e ys oy# marr# ny# oy# s3# of
+              s4# -> (# s4#, STBytes# n 0 marr# #)
+      where
+        err = unreachEx "cat" `asTypeOf` fromProxy xs'
+        !n@(I# n#) = nx + ox
+        
+        e = toProxy# xs'
+
 instance Unboxed e => SequenceM (ST s) (STBytes# s e) e
   where
     getHead es = es >! 0
@@ -1099,6 +1112,10 @@ instance (MonadIO io, Unboxed e) => BorderedM io (MIOBytes# io e) Int
 instance MonadIO io => ForceableM io (MIOBytes# io e)
   where
     copied (MIOBytes# es) = pack (copied es)
+
+instance MonadIO io => Concat io (MIOBytes# io e)
+  where
+    cat (MIOBytes# xs) (MIOBytes# ys) = pack (cat xs ys)
 
 instance (MonadIO io, Unboxed e) => SequenceM io (MIOBytes# io e) e
   where
@@ -1422,3 +1439,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SBytes."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
+
+
+

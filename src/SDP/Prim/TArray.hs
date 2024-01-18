@@ -139,6 +139,10 @@ instance IsMVar m var => ForceableM m (MArray# m var e)
   where
     copied (MArray# arr) = MArray# <$> otraverse (const $ var <=< fromMRef) arr
 
+instance IsMVar m var => Concat m (MArray# m var e)
+  where
+    cat xs ys = return $ MArray# (unpack xs ++ unpack ys)
+
 instance (Attribute "set" "" m (var e) e, IsMVar m var)
       => SequenceM m (MArray# m var e) e
   where
@@ -282,3 +286,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+

@@ -447,6 +447,10 @@ instance (Monad m, LinearM1 m rep e) => ForceableM m (AnyChunks rep e)
   where
     copied = fmap AnyChunks . mapM copied . toChunks
 
+instance Monad m => Concat m (AnyChunks rep e)
+  where
+    cat (AnyChunks xs) (AnyChunks ys) = return $ AnyChunks (xs ++ ys)
+
 instance LinearM1 m rep e => SequenceM m (AnyChunks rep e) e
   where
     unconsM' (AnyChunks (e : es)) = fmap (second (AnyChunks . (: es))) <$> unconsM' e
@@ -815,5 +819,6 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Templates.AnyChunks."
 
 lim :: Int
 lim =  1024
+
 
 

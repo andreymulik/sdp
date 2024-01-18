@@ -87,6 +87,10 @@ instance (IsMVar m var, ForceableM m rep) => ForceableM m (AnyVar m var rep)
   where
     copied = pack <=< copied <=< unpack
 
+instance (IsMVar m var, Concat m rep) => Concat m (AnyVar m var rep)
+  where
+    cat xs ys = do xs' <- unpack xs; ys' <- unpack ys; pack =<< cat xs' ys'
+
 instance
     (
       Attribute "set" "" m (var rep) rep, IsMVar m var,
@@ -226,4 +230,5 @@ unpack =  fromMRef . fromAnyVar
 withAnyVar :: (Attribute "set" "" m (var rep) rep, IsMVar m var)
            => (rep -> m rep) -> AnyVar m var rep -> m ()
 withAnyVar f (AnyVar es) = accessSet attribute es =<< f =<< fromMRef es
+
 

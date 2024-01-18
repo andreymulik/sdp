@@ -18,6 +18,7 @@
 module SDP.SequenceM
 (
   -- * Export
+  module SDP.Cat,
 
   -- * SequenceM class
   SequenceM (..), SequenceM1, SequenceM2, prepend, append,
@@ -33,6 +34,7 @@ where
 import Prelude ()
 import SDP.SafePrelude
 import SDP.Sequence
+import SDP.Cat
 import SDP.Map
 
 import Control.Exception.SDP
@@ -48,11 +50,10 @@ infixl 5 !#>
 
   'SequenceM' is 'Sequence' for mutable structures.
 -}
-class (Monad m, ForceableM m seq, EstimateM m seq)
+class (Monad m, ForceableM m seq, Concat m seq, EstimateM m seq)
     => SequenceM m seq e | seq -> m, seq -> e
   where
-    {-# MINIMAL (newLinear|fromFoldableM|cat|(+=)),
-                (unconsM|getHead,getTail|unconsM'),
+    {-# MINIMAL (unconsM|getHead,getTail|unconsM'),
                 (unsnocM|getInit,getLast|unsnocM'),
                 (!#>), writeM #-}
 
@@ -193,14 +194,6 @@ class (Monad m, ForceableM m seq, EstimateM m seq)
     ofoldlM' :: (Int -> r -> e -> m r) -> r -> seq -> m r
     ofoldlM' f = ofoldlM (\ !i !r e -> f i r e)
 
-    {- |
-      @since 0.3
-
-      Concatenation of two mutable structures, returning a new structure.
-    -}
-    cat :: seq -> seq -> m seq
-    cat =  newLinear <=<< liftA2 (<>) `on` getLeft
-
     -- | @prefixM p es@ returns the longest @es@ prefix size, satisfying @p@.
     prefixM :: (e -> Bool) -> seq -> m Int
     prefixM p = fmap (prefix p) . getLeft
@@ -337,3 +330,5 @@ append =  (=+)
 {-# NOINLINE emptyEx #-}
 emptyEx :: String -> a
 emptyEx =  throw . PatternMatchFail . showString "in SDP.SequenceM."
+
+

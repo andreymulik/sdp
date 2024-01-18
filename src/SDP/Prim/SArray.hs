@@ -917,6 +917,17 @@ instance ForceableM (ST s) (STArray# s e)
       \ s1# -> case cloneMutableArray# marr# o# n# s1# of
         (# s2#, copy# #) -> (# s2#, STArray# n 0 copy# #)
 
+instance Concat (ST s) (STArray# s e)
+  where
+    cat (STArray# nx@(I# nx#) ox@(I# ox#) xs) (STArray# (I# ny#) (I# oy#) ys) = ST $
+        \ s1# -> case newArray# n# err s1# of
+          (# s2#, marr# #) -> case copyMutableArray# xs ox# marr# 0# nx# s2# of
+            s3# -> case copyMutableArray# ys oy# marr# ny# oy# s3# of
+              s4# -> (# s4#, STArray# n 0 marr# #)
+      where
+        err = unreachEx "cat"
+        !n@(I# n#) = nx + ox
+
 instance SequenceM (ST s) (STArray# s e) e
   where
     getHead es = es >! 0
@@ -934,7 +945,7 @@ instance SequenceM (ST s) (STArray# s e) e
       (# s2#, marr# #) ->
         let go y r = \ i# s3# -> case writeArray# marr# i# y s3# of
               s4# -> if isTrue# (i# ==# n# -# 1#) then s4# else r (i# +# 1#) s4#
-        in done' n marr# ( if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# )
+        in  done' n marr# ( if n == 0 then s2# else foldr go (\ _ s# -> s#) es 0# s2# )
       where
         err = unreachEx "fromFoldableM"
         !n@(I# n#) = length es
@@ -1210,6 +1221,10 @@ instance MonadIO io => BorderedM io (MIOArray# io e) Int
 instance MonadIO io => ForceableM io (MIOArray# io e)
   where
     copied = pack . copied . unpack
+
+instance MonadIO io => Concat io (MIOArray# io e)
+  where
+    cat (MIOArray# xs) (MIOArray# ys) = pack (cat xs ys)
 
 instance MonadIO io => SequenceM io (MIOArray# io e) e
   where
