@@ -146,7 +146,7 @@ instance Monoid  (SArray# e) where mempty = Z; mappend = (<>)
 
 instance Semigroup (SArray# e)
   where
-    -- [internal]: always return new array, even if (at least) one is empty
+    -- [internal]: always return new array, even if (at least) one args is empty
     SArray# (I# n1#) (I# o1#) arr1# <> SArray# (I# n2#) (I# o2#) arr2# =
       runST $ ST $ \ s1# -> case newArray# n# (unreachEx "(++)") s1# of
         (#s2#, marr# #) -> case copyArray# arr1# o1# marr# 0# n1# s2# of
@@ -264,13 +264,13 @@ instance Bordered (SArray# e) Int
 
 instance Monad m => BorderedM m (SArray# e) Int
   where
+    getViewOf = return ... viewOf
+
     nowIndexIn (SArray# c _ _) = return . inRange (0, c - 1)
     getIndices (SArray# c _ _) = return [0 .. c - 1]
     getBounds  (SArray# c _ _) = return (0, c - 1)
     getUpper   (SArray# c _ _) = return (c - 1)
     getLower                 _ = return 0
-
-    getViewOf  = return ... viewOf
 
 --------------------------------------------------------------------------------
 
@@ -282,8 +282,11 @@ instance Functor SArray#
       case newArray# n# (unreachEx "fmap") s1# of
         (# s2#, marr# #) ->
           let go i@(I# i#) s3# = if i == n
-              then case unsafeFreezeArray# marr# s3# of (# s4#, arr# #) -> (# s4#, SArray# n 0 arr# #)
-              else case writeArray# marr# i# (f $ arr ! i) s3# of s5# -> go (i + 1) s5#
+              then case unsafeFreezeArray# marr# s3# of
+                    (# s4#, arr# #) -> (# s4#, SArray# n 0 arr# #)
+
+              else case writeArray# marr# i# (f $ arr ! i) s3# of
+                    s5# -> go (i + 1) s5#
           in go 0 s2#
 
 instance Zip SArray#
@@ -1437,11 +1440,16 @@ done' n marr# = \ s1# -> (# s1#, STArray# n 0 marr# #)
 
 {-# INLINE nubSorted #-}
 nubSorted :: Compare e -> SArray# e -> SArray# e
-nubSorted _ Z  = Z
+nubSorted f (e :> es) =
+  let fun = \ x xs -> x `f` head xs == EQ ? xs $ x : xs
+  in  fromList (foldr fun [e] es)
+nubSorted _ _ = Z
+
+{-
 nubSorted f es = fromList $ foldr fun [last es] ((es !^) <$> [0 .. sizeOf es - 2])
   where
     fun = \ e ls -> e `f` head ls == EQ ? ls $ e : ls
-
+-}
 (<?=>) :: Bordered b i => Int -> b -> Int
 (<?=>) =  (. sizeOf) . min
 
@@ -1466,5 +1474,7 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
+
+
 
 

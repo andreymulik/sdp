@@ -543,7 +543,7 @@ instance (Index i, Enum i, Bounded i, Index (i' :& i), Show (i' :& i :& i), Rank
 {- Tuple instances. -}
 
 #define INDEX_INSTANCE(Type)\
-instance (Ord i, Index i, Enum i, Bounded i, Rank1 i)\
+instance (Index i, Enum i, Bounded i, Rank1 i)\
       => Index (Type i) where\
 {\
 size         = size . toGBounds;\

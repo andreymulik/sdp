@@ -602,7 +602,7 @@ instance (SetWith1 rep e, Linear1 rep e, Ord (rep e))
 
 {- Scan instances. -}
 
-instance Linear1 (AnyChunks rep) e => Scan (AnyChunks rep e) e
+instance Sequence1 (AnyChunks rep) e => Scan (AnyChunks rep e) e
 
 --------------------------------------------------------------------------------
 

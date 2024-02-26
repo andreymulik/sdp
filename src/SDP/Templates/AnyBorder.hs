@@ -529,7 +529,7 @@ instance (Index i, SetWith1 rep e, Linear1 rep e)
 
 {- Scan and Sort instances. -}
 
-instance (Linear2 (AnyBorder rep) i e) => Scan (AnyBorder rep i e) e
+instance Sequence2 (AnyBorder rep) i e => Scan (AnyBorder rep i e) e
 
 instance (Index i, Sort1 rep e) => Sort (AnyBorder rep i e) e
   where

@@ -23,19 +23,19 @@ default ()
 --------------------------------------------------------------------------------
 
 -- | Scan is class of scans.
-class (Linear s a) => Scan s a
+class Sequence s e => Scan s e
   where
-    scanl,  scanl' :: (b -> a -> b) -> b -> s -> [b]
-    scanr,  scanr' :: (a -> b -> b) -> b -> s -> [b]
-    scanl1, scanr1 :: (a -> a -> a) -> s -> [a]
+    scanl,  scanl' :: (b -> e -> b) -> b -> s -> [b]
+    scanr,  scanr' :: (e -> b -> b) -> b -> s -> [b]
+    scanl1, scanr1 :: (e -> e -> e) -> s -> [e]
     
-    scanl  f base = scanl  f base . listL
-    scanr  f base = scanr  f base . listL
-    scanl' f base = scanl' f base . listL
-    scanr' f base = scanr' f base . listL
+    scanl  f base = L.scanl  f base . listL
+    scanr  f base = L.scanr  f base . listL
+    scanl' f base = L.scanl' f base . listL
+    scanr' f base = L.scanr  f base . listL
     
-    scanl1 f = scanl1 f . listL
-    scanr1 f = scanr1 f . listL
+    scanl1 f = L.scanl1 f . listL
+    scanr1 f = L.scanr1 f . listL
 
 --------------------------------------------------------------------------------
 
