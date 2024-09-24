@@ -76,7 +76,7 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
       with the result bounds (not always possible).
     -}
     assoc' :: (i, i) -> e -> [(i, e)] -> v
-    assoc' bnds de es = toMap' de $ [ (i, e) | (i, e) <- es, inRange bnds i ]
+    assoc' bnds de es = toMap' de [ (i, e) | (i, e) <- es, inRange bnds i ]
     
     -- | 'fromIndexed' converts this indexed structure to another one.
     fromIndexed :: Indexed m j e => m -> v
@@ -92,9 +92,18 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     {- |
       @'accum' f es ies@ create a new structure from @es@ elements selectively
       updated by function @f@ and @ies@ associations list.
+      
+      * if there is no new value with the same key, the original values are preserved
+      * if there are several replacement values with one key, the last one is taken
+      
+      @
+      let arr = assoc (0,2) [(0,"a"),(1,"b"),(2,"c")] :: Array Int String
+      
+      accum (++) arr [(2, "d"), (2, "e")] === array (0,2) [(0,"a"),(1,"b"),(2,"ce")]
+      @
     -}
     accum :: (e -> e' -> e) -> v -> [(i, e')] -> v
-    accum f es ies = bounds es `assoc` [ (i, f e e') | (i, e') <- ies, let e = es!i ]
+    accum f es ies = assoc (bounds es) $ assocs es ++ [ (i, f e e') | (i, e') <- ies, let e = es!i ]
     
     {- |
       @since 0.3
@@ -133,7 +142,7 @@ class (Linear v e, Bordered v i, Map v i e) => Indexed v i e | v -> i, v -> e
     unslice :: (Indexed2 s (i :|: j) (s j e), Indexed2 s j e, SubIndex i j, v ~ s i e)
             => s (i :|: j) (s j e) -> v
     
-    unslice = toMap . kfoldr (\ i -> (++) . (first (`joinDim` i) <$>) . assocs) []
+    unslice =  toMap . kfoldr (\ i -> flip $ kfoldr (\ j x xs -> (joinDim j i, x) : xs)) []
 
 #ifndef SDP_DISABLE_SHAPED
 {- |
@@ -274,6 +283,7 @@ memberSorted =  binaryContain
 {-# NOINLINE undEx #-}
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Indexed."
+
 
 
 

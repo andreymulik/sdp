@@ -112,7 +112,7 @@ instance (Ord (rep e), Linear1 rep e) => Ord (AnyChunks rep e)
 --------------------------------------------------------------------------------
 
 {- Eq1 and Ord1 instances. -}
-
+{-
 #ifdef SDP_QUALIFIED_CONSTRAINTS
 instance (Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
   where
@@ -125,7 +125,7 @@ instance (Linear' rep, Eq1 rep) => Eq1 (AnyChunks rep)
         (x, xs') = uncons (toChunks xs); nx = sizeOf x
         (y, ys') = uncons (toChunks ys); ny = sizeOf y
 
-instance (Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
+instance (Linear (rep b) (E.Item (rep b)), Ord1 rep) => Ord1 (AnyChunks rep)
   where
     liftCompare _ Z   Z = EQ
     liftCompare _ Z   _ = LT
@@ -137,7 +137,7 @@ instance (Linear' rep, Ord1 rep) => Ord1 (AnyChunks rep)
         (x, xs') = uncons (toChunks xs); nx = sizeOf x
         (y, ys') = uncons (toChunks ys); ny = sizeOf y
 #endif
-
+-}
 --------------------------------------------------------------------------------
 
 {- Show and Read instances. -}

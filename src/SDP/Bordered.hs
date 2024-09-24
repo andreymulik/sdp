@@ -274,7 +274,7 @@ instance (Monad m, Index i) => BorderedM m (i, i) i
 instance Monad m => BorderedM m [e] Int
   where
     getLower  _ = return 0
-    getViewOf   = return ... viewOf
     getUpper es = return (length es - 1)
+    getViewOf   = return ... L.take . size
 
 

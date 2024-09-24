@@ -479,13 +479,8 @@ instance Sequence [e] e
     listL = toList
     listR = L.reverse
 
-    ofoldr f base =
-      let go !i es = case es of {x : xs -> f i x $ go (i + 1) xs; _ -> base}
-      in  go 0
-
-    ofoldl f =
-      let go !i base es = case es of {x : xs -> go (i + 1) (f i base x) xs; _ -> base}
-      in  go 0
+    ofoldr f base = foldr (\ (i, x) xs -> f i x xs) base . L.zip [0 .. ]
+    ofoldl f base = foldl (\ xs (i, x) -> f i xs x) base . L.zip [0 .. ]
 
     single       = pure
     fromList     = id

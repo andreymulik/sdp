@@ -225,7 +225,7 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
       > splitsOn "fo" "foobar bazfoobar1" == ["","obar baz","obar1"]
     -}
     splitsOn :: Eq e => l -> l -> [l]
-    splitsOn sub line = drop (sizeOf sub) <$> parts (infixes sub line) line
+    splitsOn sub line = drop (sizeOf sub) <$> partsList (infixes sub line) line
 
     -- | Takes the longest 'prefix' by predicate.
     takeWhile :: (e -> Bool) -> l -> l
@@ -270,6 +270,7 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
       > replaceBy "foo" "bar" "foobafoorbaz" == "barbabarrbaz"
     -}
     replaceBy :: Eq e => l -> l -> l -> l
+    replaceBy sub  Z  = removeAll sub
     replaceBy sub new = intercalate new . splitsOn sub
 
     {- |
@@ -300,8 +301,11 @@ class (Monoid l, Nullable l, Sequence l e) => Linear l e | l -> e
     -}
     extractWhile :: (e -> Maybe a) -> l -> ([a], l)
     extractWhile f es =
-      let go e xs = case f e of {Just x -> x : xs; _ -> []}
-      in  second (`drop` es) . swap $ csfoldr' go [] es
+      let
+          go e xs = case f e of {Just x -> x : xs; _ -> []}
+          ys = sfoldr' go [] es
+          n  = sizeOf ys
+      in  (ys, drop (sizeOf ys) es)
 
     {- |
       @extractEnd f es@ selects results of applying @f@ to @es@ (right to left)
@@ -389,9 +393,13 @@ skip n = n > 0 ? drop n $ sans (-n)
   @
 -}
 parts :: (Linear l e, Foldable f) => f Int -> l -> [l]
-parts =
+parts =  partsList . toList
+
+-- | Internal version of 'parts'.
+partsList :: Linear l e => [Int] -> l -> [l]
+partsList =
   let go o is' = case is' of {i : is -> (i - o) : go i is; _ -> []}
-  in  splits . go 0 . toList
+  in  splits . go 0
 
 {- |
   @since 0.3
@@ -657,13 +665,10 @@ instance Linear [e] e
     drop  = L.drop
     split = L.splitAt
 
-    splitsBy f es = dropWhile f <$> L.findIndices f es `parts` es
+    splitsBy f es = L.drop (prefix f es) <$> L.findIndices f es `partsList` es
 
 --------------------------------------------------------------------------------
 
 {-# NOINLINE unreachEx #-}
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Linear."
-
-
-
