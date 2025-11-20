@@ -75,7 +75,11 @@ Library
     cpp-options: -DSDP_DISABLE_SHAPED
   
   exposed-modules:
+    SDP.Prim.SArray.IO
+    SDP.Prim.SArray.ST
     SDP.Prim.SArray
-
-
+    
+    SDP.Prim.SBytes.IO
+    SDP.Prim.SBytes.ST
+    SDP.Prim.SBytes
 
