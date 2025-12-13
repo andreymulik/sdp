@@ -140,8 +140,8 @@ instance Nullable (SArray# e)
 
 instance Monad m => NullableM m (SArray# e)
   where
-    newNull = return lzero
-    isNullM = return . isNull
+    newNull = pure lzero
+    isNullM = pure . isNull
 
 --------------------------------------------------------------------------------
 
@@ -171,25 +171,25 @@ instance Estimate (SArray# e)
 
 instance Monad m => EstimateM m (SArray# e)
   where
-    getSizeHint (SArray# c _ _) = return $ Just (SizeHintEQ c)
-    getSizeOf   (SArray# c _ _) = return c
+    getSizeHint (SArray# c _ _) = pure $ Just (SizeHintEQ c)
+    getSizeOf   (SArray# c _ _) = pure c
     
-    estimateMGE = return ... (.>=.)
-    estimateMLE = return ... (.<=.)
-    estimateMGT = return ... (.>.)
-    estimateMLT = return ... (.<.)
-    estimateMNE = return ... (./=.)
-    estimateMEQ = return ... (.==.)
+    estimateMGE = pure ... (.>=.)
+    estimateMLE = pure ... (.<=.)
+    estimateMGT = pure ... (.>.)
+    estimateMLT = pure ... (.<.)
+    estimateMNE = pure ... (./=.)
+    estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = return ... (.>=)
-    noLongerThanM   = return ... (.<=)
-    longerThanM     = return ... (.>)
-    shorterThanM    = return ... (.<)
-    otherLengthM    = return ... (./=)
-    hasLengthM      = return ... (.==)
+    notShorterThanM = pure ... (.>=)
+    noLongerThanM   = pure ... (.<=)
+    longerThanM     = pure ... (.>)
+    shorterThanM    = pure ... (.<)
+    otherLengthM    = pure ... (./=)
+    hasLengthM      = pure ... (.==)
     
-    (<<=>>) = return ... (<==>)
-    (<=>>)  = return ... (<.=>)
+    (<<=>>) = pure ... (<==>)
+    (<=>>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -224,11 +224,11 @@ instance Bordered (SArray# e) Int
 
 instance Monad m => BorderedM m (SArray# e) Int
   where
-    nowIndexIn (SArray# c _ _) = return . inRange (0, c - 1)
-    getIndices (SArray# c _ _) = return [0 .. c - 1]
-    getBounds  (SArray# c _ _) = return (0, c - 1)
-    getUpper   (SArray# c _ _) = return (c - 1)
-    getLower                 _ = return 0
+    nowIndexIn (SArray# c _ _) = pure . inRange (0, c - 1)
+    getIndices (SArray# c _ _) = pure [0 .. c - 1]
+    getBounds  (SArray# c _ _) = pure (0, c - 1)
+    getUpper   (SArray# c _ _) = pure (c - 1)
+    getLower                 _ = pure 0
     
     getEitherViewOf = pure ... eitherViewOf
 
@@ -351,7 +351,7 @@ instance Applicative SArray#
       xs <- mreplicate (fn * en) $ unreachEx "in SDP.Prim.SArray.(<*>) :: SArray# e"
       
       let
-        go (-1)  _  _ = return ()
+        go (-1)  _  _ = pure ()
         go   i (-1) k = go (i - 1) (en - 1) k
         go   i   j  k = unsafeWriteM xs k (fs!!i $ es!!j) >> go i (j - 1) (k - 1)
       
@@ -804,7 +804,7 @@ instance Storable e => Thaw IO (SArray# e) (Int, Ptr e)
     thaw es = do
       let n = sizeOf es
       ptr <- callocArray n
-      (n, ptr) <$ ofoldr (\ i e go -> do pokeElemOff ptr i e; go) (return ()) es
+      (n, ptr) <$ ofoldr (\ i e go -> do pokeElemOff ptr i e; go) (pure ()) es
 
 instance Storable e => Freeze IO (Int, Ptr e) (SArray# e)
   where

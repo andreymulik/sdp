@@ -170,8 +170,8 @@ instance Nullable (SBytes# e)
 
 instance Monad m => NullableM m (SBytes# e)
   where
-    newNull = return lzero
-    isNullM = return . isNull
+    newNull = pure lzero
+    isNullM = pure . isNull
 
 --------------------------------------------------------------------------------
 
@@ -201,25 +201,25 @@ instance Estimate (SBytes# e)
 
 instance Monad m => EstimateM m (SBytes# e)
   where
-    getSizeHint (SBytes# c _ _) = return $ Just (SizeHintEQ c)
-    getSizeOf   (SBytes# c _ _) = return c
+    getSizeHint (SBytes# c _ _) = pure $ Just (SizeHintEQ c)
+    getSizeOf   (SBytes# c _ _) = pure c
     
-    estimateMGE = return ... (.>=.)
-    estimateMLE = return ... (.<=.)
-    estimateMGT = return ... (.>.)
-    estimateMLT = return ... (.<.)
-    estimateMNE = return ... (./=.)
-    estimateMEQ = return ... (.==.)
+    estimateMGE = pure ... (.>=.)
+    estimateMLE = pure ... (.<=.)
+    estimateMGT = pure ... (.>.)
+    estimateMLT = pure ... (.<.)
+    estimateMNE = pure ... (./=.)
+    estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = return ... (.>=)
-    noLongerThanM   = return ... (.<=)
-    longerThanM     = return ... (.>)
-    shorterThanM    = return ... (.<)
-    otherLengthM    = return ... (./=)
-    hasLengthM      = return ... (.==)
+    notShorterThanM = pure ... (.>=)
+    noLongerThanM   = pure ... (.<=)
+    longerThanM     = pure ... (.>)
+    shorterThanM    = pure ... (.<)
+    otherLengthM    = pure ... (./=)
+    hasLengthM      = pure ... (.==)
     
-    (<<=>>) = return ... (<==>)
-    (<=>>)  = return ... (<.=>)
+    (<<=>>) = pure ... (<==>)
+    (<=>>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -253,11 +253,11 @@ instance Bordered (SBytes# e) Int
 
 instance Monad m => BorderedM m (SBytes# e) Int
   where
-    nowIndexIn (SBytes# c _ _) = return . inRange (0, c - 1)
-    getIndices (SBytes# c _ _) = return [0 .. c - 1]
-    getBounds  (SBytes# c _ _) = return (0, c - 1)
-    getUpper   (SBytes# c _ _) = return (c - 1)
-    getLower                 _ = return 0
+    nowIndexIn (SBytes# c _ _) = pure . inRange (0, c - 1)
+    getIndices (SBytes# c _ _) = pure [0 .. c - 1]
+    getBounds  (SBytes# c _ _) = pure (0, c - 1)
+    getUpper   (SBytes# c _ _) = pure (c - 1)
+    getLower                 _ = pure 0
     
     getEitherViewOf = pure ... eitherViewOf
 

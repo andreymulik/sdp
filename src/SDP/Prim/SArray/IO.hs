@@ -90,22 +90,22 @@ instance MonadIO io => EstimateM io (MIOArray# io e)
     getSizeHint = getSizeHint . unpack
     getSizeOf   = getSizeOf . unpack
     
-    estimateMGE = return ... (.>=.)
-    estimateMLE = return ... (.<=.)
-    estimateMGT = return ... (.>.)
-    estimateMLT = return ... (.<.)
-    estimateMNE = return ... (./=.)
-    estimateMEQ = return ... (.==.)
+    estimateMGE = pure ... (.>=.)
+    estimateMLE = pure ... (.<=.)
+    estimateMGT = pure ... (.>.)
+    estimateMLT = pure ... (.<.)
+    estimateMNE = pure ... (./=.)
+    estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = return ... (.>=)
-    noLongerThanM   = return ... (.<=)
-    longerThanM     = return ... (.>)
-    shorterThanM    = return ... (.<)
-    otherLengthM    = return ... (./=)
-    hasLengthM      = return ... (.==)
+    notShorterThanM = pure ... (.>=)
+    noLongerThanM   = pure ... (.<=)
+    longerThanM     = pure ... (.>)
+    shorterThanM    = pure ... (.<)
+    otherLengthM    = pure ... (./=)
+    hasLengthM      = pure ... (.==)
     
-    (<<=>>) = return ... (<==>)
-    (<=>>)  = return ... (<.=>)
+    (<<=>>) = pure ... (<==>)
+    (<=>>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -125,11 +125,11 @@ instance Bordered (MIOArray# io e) Int
 
 instance MonadIO io => BorderedM io (MIOArray# io e) Int
   where
-    getIndexOf = return ... indexOf . unpack
-    getIndices = return . indices . unpack
-    getBounds  = return . bounds . unpack
-    getUpper   = return . upper . unpack
-    getLower _ = return 0
+    getIndexOf = pure ... indexOf . unpack
+    getIndices = pure . indices . unpack
+    getBounds  = pure . bounds . unpack
+    getUpper   = pure . upper . unpack
+    getLower _ = pure 0
     
     getEitherViewOf = pure ... eitherViewOf
 
@@ -157,28 +157,28 @@ instance MonadIO io => SequenceM io (MIOArray# io e) e
   where
     foldrM f base es = go 0 (sizeOf es)
       where
-        go i n = i >= n ? return base $ do
+        go i n = i >= n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i + 1) n
           f e acc
     
     foldlM f base es = go (sizeOf es) 0
       where
-        go i n = i < n ? return base $ do
+        go i n = i < n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i - 1) n
           f acc e
     
     ofoldrM f base es = go 0 (sizeOf es)
       where
-        go i n = i >= n ? return base $ do
+        go i n = i >= n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i + 1) n
           f i e acc
     
     ofoldlM f base es = go (sizeOf es) 0
       where
-        go i n = i < n ? return base $ do
+        go i n = i < n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i - 1) n
           f i acc e

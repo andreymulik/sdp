@@ -74,7 +74,7 @@ instance Eq (STBytes# s e)
 
 instance NullableM (ST s) (STBytes# s e)
   where
-    isNullM (STBytes# n _ _) = return (n < 1)
+    isNullM (STBytes# n _ _) = pure (n < 1)
     
     newNull = ST $ \ s1# -> case newByteArray# 0# s1# of
         (# s2#, marr# #) -> (# s2#, coerce' (STBytes# 0 0 marr#) #)
@@ -110,25 +110,25 @@ instance Estimate (STBytes# s e)
 
 instance Monad m => EstimateM m (STBytes# s e)
   where
-    getSizeHint (STBytes# c _ _) = return $ Just (SizeHintEQ c)
-    getSizeOf   (STBytes# c _ _) = return c
+    getSizeHint (STBytes# c _ _) = pure $ Just (SizeHintEQ c)
+    getSizeOf   (STBytes# c _ _) = pure c
     
-    estimateMGE = return ... (.>=.)
-    estimateMLE = return ... (.<=.)
-    estimateMGT = return ... (.>.)
-    estimateMLT = return ... (.<.)
-    estimateMNE = return ... (./=.)
-    estimateMEQ = return ... (.==.)
+    estimateMGE = pure ... (.>=.)
+    estimateMLE = pure ... (.<=.)
+    estimateMGT = pure ... (.>.)
+    estimateMLT = pure ... (.<.)
+    estimateMNE = pure ... (./=.)
+    estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = return ... (.>=)
-    noLongerThanM   = return ... (.<=)
-    longerThanM     = return ... (.>)
-    shorterThanM    = return ... (.<)
-    otherLengthM    = return ... (./=)
-    hasLengthM      = return ... (.==)
+    notShorterThanM = pure ... (.>=)
+    noLongerThanM   = pure ... (.<=)
+    longerThanM     = pure ... (.>)
+    shorterThanM    = pure ... (.<)
+    otherLengthM    = pure ... (./=)
+    hasLengthM      = pure ... (.==)
     
-    (<<=>>) = return ... (<==>)
-    (<=>>)  = return ... (<.=>)
+    (<<=>>) = pure ... (<==>)
+    (<=>>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -163,11 +163,11 @@ instance Bordered (STBytes# s e) Int
 
 instance BorderedM (ST s) (STBytes# s e) Int
   where
-    nowIndexIn (STBytes# c _ _) = return . inRange (0, c - 1)
-    getIndices (STBytes# c _ _) = return [0 .. c - 1]
-    getBounds  (STBytes# c _ _) = return (0, c - 1)
-    getUpper   (STBytes# c _ _) = return (c - 1)
-    getLower                  _ = return 0
+    nowIndexIn (STBytes# c _ _) = pure . inRange (0, c - 1)
+    getIndices (STBytes# c _ _) = pure [0 .. c - 1]
+    getBounds  (STBytes# c _ _) = pure (0, c - 1)
+    getUpper   (STBytes# c _ _) = pure (c - 1)
+    getLower                  _ = pure 0
     
     getEitherViewOf = pure ... eitherViewOf
 
@@ -194,7 +194,7 @@ instance Unboxed e => ConcatM (ST s) (STBytes# s e)
       unsafeCopyTo xs 0 marr 0  xn
       unsafeCopyTo ys 0 marr xn yn
       
-      return marr
+      pure marr
     
     concatM ess = do
       let n = foldr' ((+) . sizeOf) 0 ess
@@ -202,8 +202,8 @@ instance Unboxed e => ConcatM (ST s) (STBytes# s e)
       marr <$ foldr (\ arr o' -> let c = sizeOf arr in do
           o <- o'
           unsafeCopyTo arr 0 marr o c
-          return (o + c)
-        ) (return 0) ess
+          pure (o + c)
+        ) (pure 0) ess
     
     concatMapM f = concatM <=< mapM f . toList
 
@@ -215,34 +215,34 @@ instance SequenceM (ST s) (STBytes# s e) e
   where
     foldrM f base es@(STBytes# c _ _) = go 0 c
       where
-        go i n = i >= n ? return base $ do
+        go i n = i >= n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i + 1) n
           f e acc
     
     foldlM f base es@(STBytes# c _ _) = go c 0
       where
-        go i n = i < n ? return base $ do
+        go i n = i < n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i - 1) n
           f acc e
     
     ofoldrM f base es@(STBytes# c _ _) = go 0 c
       where
-        go i n = i >= n ? return base $ do
+        go i n = i >= n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i + 1) n
           f i e acc
     
     ofoldlM f base es@(STBytes# c _ _) = go c 0
       where
-        go i n = i < n ? return base $ do
+        go i n = i < n ? pure base $ do
           e   <- unsafeReadByOff es i
           acc <- go (i - 1) n
           f i acc e
     
-    getLeft  = foldrM (return ... (:)) []
-    getRight = foldlM (flip $ return ... (:)) []
+    getLeft  = foldrM (pure ... (:)) []
+    getRight = foldlM (flip $ pure ... (:)) []
 
 instance Unboxed e => LinearM (ST s) (STBytes# s e) e
   where
@@ -256,45 +256,45 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
         (# s2#, marr# #) -> case pcopyUnboxedM es arr# o# marr# 0# c# s2# of
           s3# -> (# s3#, STBytes# (I# c#) 0 marr# #)
     
-    unconsM'    (STBytes# 0 _    _) = return Nothing
+    unconsM'    (STBytes# 0 _    _) = pure Nothing
     unconsM' es@(STBytes# n o arr#) = do
       h <- unsafeReadMByKey es 0
-      return $ Just (h, STBytes# (n - 1) (o + 1) arr#)
+      pure $ Just (h, STBytes# (n - 1) (o + 1) arr#)
     
-    unsnocM'    (STBytes# 0 _    _) = return Nothing
+    unsnocM'    (STBytes# 0 _    _) = pure Nothing
     unsnocM' es@(STBytes# n o arr#) = do
       l <- unsafeReadMByKey es (n - 1)
-      return $ Just (STBytes# (n - 1) o arr#, l)
+      pure $ Just (STBytes# (n - 1) o arr#, l)
     
     takeM n es@(STBytes# c o marr#)
       | n <= 0 = newNull
-      | n >= c = return es
-      |  True  = return (STBytes# n o marr#)
+      | n >= c = pure es
+      |  True  = pure (STBytes# n o marr#)
     
     dropM n es@(STBytes# c o marr#)
       | n >= c = newNull
-      | n <= 0 = return es
-      |  True  = return (STBytes# (c - n) (o + n) marr#)
+      | n <= 0 = pure es
+      |  True  = pure (STBytes# (c - n) (o + n) marr#)
     
     keepM n es@(STBytes# c o marr#)
       | n <= 0 = newNull
-      | n >= c = return es
-      |  True  = return (STBytes# n (c - n + o) marr#)
+      | n >= c = pure es
+      |  True  = pure (STBytes# n (c - n + o) marr#)
     
     sansM n es@(STBytes# c o marr#)
       | n >= c = newNull
-      | n <= 0 = return es
-      |  True  = return (STBytes# (c - n) o marr#)
+      | n <= 0 = pure es
+      |  True  = pure (STBytes# (c - n) o marr#)
     
     splitM n es@(STBytes# c o marr#)
-      | n <= 0 = do e' <- newNull; return (e', es)
-      | n >= c = do e' <- newNull; return (es, e')
-      |  True  = return (STBytes# n o marr#, STBytes# (c - n) (o + n) marr#)
+      | n <= 0 = do e' <- newNull; pure (e', es)
+      | n >= c = do e' <- newNull; pure (es, e')
+      |  True  = pure (STBytes# n o marr#, STBytes# (c - n) (o + n) marr#)
     
     divideM n es@(STBytes# c o marr#)
-      | n <= 0 = do e' <- newNull; return (es, e')
-      | n >= c = do e' <- newNull; return (e', es)
-      |  True  = return (STBytes# n (c - n + o) marr#, STBytes# (c - n) o marr#)
+      | n <= 0 = do e' <- newNull; pure (es, e')
+      | n >= c = do e' <- newNull; pure (e', es)
+      |  True  = pure (STBytes# n (c - n + o) marr#, STBytes# (c - n) o marr#)
     
     newLinear = fromFoldableM
     
@@ -362,7 +362,7 @@ instance Unboxed e => IndexedM (ST s) (STBytes# s e) Int e
     
     fromIndexed' es = do
       copy <- mreplicate (sizeOf es) (unreachEx "fromIndexed'")
-      copy <$ ofoldr (\ i e go -> do unsafeWriteM copy i e; go) (return ()) es
+      copy <$ ofoldr (\ i e go -> do unsafeWriteM copy i e; go) (pure ()) es
     
     fromIndexedM es = do
       copy <- flip mreplicate (unreachEx "fromIndexedM") =<< getSizeOf es
@@ -374,7 +374,7 @@ instance Unboxed e => IndexedM (ST s) (STBytes# s e) Int e
 
 instance Unboxed e => SortM (ST s) (STBytes# s e) e
   where
-    sortedMBy f es = n < 2 ? return True $ fmap and $ forM [0 .. n - 2] $ \ i -> g i (i + 1)
+    sortedMBy f es = n < 2 ? pure True $ fmap and $ forM [0 .. n - 2] $ \ i -> g i (i + 1)
       where
         g = liftA2 f `on` unsafeReadByOff es
         n = sizeOf es
