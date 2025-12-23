@@ -1,5 +1,5 @@
-{-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, BangPatterns, GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, RoleAnnotations #-}
+{-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, BangPatterns, RoleAnnotations #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, GADTs, TypeFamilies #-}
 
 {- |
     Module      :  SDP.Prim.SBytes.ST
@@ -32,12 +32,14 @@ import SDP.SortM
 
 import GHC.Exts
   (
-    MutableByteArray#, State#, Int#, (+#),
-    newByteArray#, sameMutableByteArray#
+    MutableByteArray#, State#, Int#, (+#), (<=#),
+    newByteArray#, sameMutableByteArray#, resizeMutableByteArray#
   )
 
 import GHC.Types
 import GHC.ST ( ST (..) )
+
+import Data.STRef
 
 import Unsafe.Coerce
 
@@ -184,28 +186,29 @@ instance ForceableM (ST s) (STBytes# s e)
 --------------------------------------------------------------------------------
 
 {- ConcatM instance. -}
--- TODO: create buffer type and implement
+
 instance Unboxed e => ConcatM (ST s) (STBytes# s e)
   where
     xs@(STBytes# _ _ _) <~> ys = do
       let xn = sizeOf xs; yn = sizeOf ys; n = xn + yn
-      marr <- mreplicate n (unreachEx "<~>")
+      marr <- mreplicate n filler
       
       unsafeCopyTo xs 0 marr 0  xn
       unsafeCopyTo ys 0 marr xn yn
       
       pure marr
     
-    concatM ess = do
-      let n = foldr' ((+) . sizeOf) 0 ess
-      marr <- mreplicate n (unreachEx "merged")
-      marr <$ foldr (\ arr o' -> let c = sizeOf arr in do
-          o <- o'
-          unsafeCopyTo arr 0 marr o c
-          pure (o + c)
-        ) (pure 0) ess
+    concatM = concatMapM pure
     
-    concatMapM f = concatM <=< mapM f . toList
+    concatMapM f ess = do
+      -- create empty buffer
+      buff <- newNull
+      
+      -- write all structures to buffer
+      foldr (\ es go -> do appendBufferM buff =<< f es; go) (pure ()) ess
+      
+      -- Since we don't use the buffer any further, we can turn it into STBytes#
+      unsafeFromBufferM buff
 
 --------------------------------------------------------------------------------
 
@@ -323,6 +326,10 @@ instance Unboxed e => LinearM (ST s) (STBytes# s e) e
       \ s1# -> case writeUnboxed# marr# (o# +# i#) e s1# of
         s2# -> (# s2#, () #)
     
+    unsafeCopyM es l n = do
+      copy <- mreplicate n filler
+      copy <$ unsafeCopyTo es l copy 0 n
+    
     unsafeCopyTo src sc trg tc n@(I# n#) = when (n > 0) $ do
         when      (sc < 0 || tc < 0)      $ underEx "copyTo"
         when (sc + n > n1 || tc + n > n2) $ overEx  "copyTo"
@@ -341,6 +348,8 @@ instance Unboxed e => MapM (ST s) (STBytes# s e) Int e
     writeM' (STBytes# _ (I# o#) marr#) = \ (I# i#) e -> ST $
       \ s1# -> case writeUnboxed# marr# (o# +# i#) e s1# of
         s2# -> (# s2#, () #)
+    
+    newMap = newMap' filler
     
     newMap' e ascs =
       let bnds = rangeBounds (fsts ascs)
@@ -361,11 +370,11 @@ instance Unboxed e => IndexedM (ST s) (STBytes# s e) Int e
       es <$ overwrite es ascs
     
     fromIndexed' es = do
-      copy <- mreplicate (sizeOf es) (unreachEx "fromIndexed'")
+      copy <- mreplicate (sizeOf es) filler
       copy <$ ofoldr (\ i e go -> do unsafeWriteM copy i e; go) (pure ()) es
     
     fromIndexedM es = do
-      copy <- flip mreplicate (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <- flip mreplicate filler =<< getSizeOf es
       copy <$ ofoldrM (\ i e _ -> unsafeWriteM copy i e) () es
 
 --------------------------------------------------------------------------------
@@ -413,13 +422,54 @@ coerceSTBytes# pa@(STBytes# n o bytes#) = pb
 
 --------------------------------------------------------------------------------
 
+data STBufferRep# s e
+  where
+    STBufferRep# :: Unboxed e => Int# -> MutableByteArray# s -> STBufferRep# s e
+
+newtype STBuffer# s e = STBuffer# (STRef s (STBufferRep# s e))
+
+instance Unboxed e => NullableM (ST s) (STBuffer# s e)
+  where
+    isNullM (STBuffer# ref) = do
+      STBufferRep# c# _ <- readSTRef ref
+      return (isTrue# (c# <=# 0#))
+    
+    newNull = do
+      rep <- ST $ \ s1# -> case newByteArray# 0# s1# of
+        (# s2#, marr# #) -> (# s2#, STBufferRep# 0# marr# #)
+      
+      STBuffer# <$> newSTRef rep
+
+instance Unboxed e => BufferM (ST s) (STBytes# s e)
+  where
+    type BufferForM (ST s) (STBytes# s e) = STBuffer# s e
+    
+    unsafeFromBufferM (STBuffer# ref) = do
+      STBufferRep# c# marr# <- readSTRef ref
+      return (STBytes# (I# c#) 0 marr#)
+    
+    fromBufferM buff = do
+      es@(STBytes# (I# c#) (I# o#) marr#) <- unsafeFromBufferM buff
+      
+      ST $ \ s1# -> case pcloneUnboxedM es marr# c# o# s1# of
+        (# s2#, copy# #) -> (# s2#, STBytes# (I# c#) (I# o#) copy# #)
+    
+    appendBufferM (STBuffer# ref) es@(STBytes# (I# c#) (I# o#) marr#) = do
+      STBufferRep# n# buff# <- readSTRef ref
+      
+      rep <- ST $ \ s1# -> case resizeMutableByteArray# buff# (psizeof# es (n# +# c#)) s1# of
+        (# s2#, new_buff# #) -> case pcopyUnboxedM es marr# o# new_buff# n# c# s2# of
+          s3# -> (# s3#, STBufferRep# (n# +# c#) new_buff# #)
+      
+      writeSTRef ref rep
+
+--------------------------------------------------------------------------------
+
 overEx :: String -> a
 overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
 
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
 
 

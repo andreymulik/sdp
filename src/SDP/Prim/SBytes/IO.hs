@@ -1,5 +1,5 @@
-{-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeFamilies, GADTs #-}
+{-# LANGUAGE Trustworthy, MagicHash, UnboxedTuples, KindSignatures #-}
 
 {- |
     Module      :  SDP.Prim.SBytes.IO
@@ -153,6 +153,18 @@ instance (MonadIO io, Unboxed e) => ForceableM io (MIOBytes# io e)
 instance (MonadIO io, Unboxed e) => ConcatM io (MIOBytes# io e)
   where
     MIOBytes# xs <~> MIOBytes# ys = MIOBytes# <$> stToMIO (xs <~> ys)
+    
+    concatM = concatMapM pure
+    
+    concatMapM f ess = do
+      -- create empty buffer
+      buff <- newNull
+      
+      -- write all structures to buffer
+      foldr (\ es go -> do appendBufferM buff =<< f es; go) (pure ()) ess
+      
+      -- Since we don't use the buffer any further, we can turn it into STBytes#
+      unsafeFromBufferM buff
 
 --------------------------------------------------------------------------------
 
@@ -365,6 +377,26 @@ unsafePtrToSBytes# (c, ptr) = do
 
 --------------------------------------------------------------------------------
 
+newtype MIOBuffer# e = MIOBuffer# (BufferForM (ST RealWorld) (STBytes# RealWorld e))
+
+instance (MonadIO io, Unboxed e) => NullableM io (MIOBuffer# e)
+  where
+    isNullM = \ (MIOBuffer# buff) -> stToMIO (isNullM buff)
+    newNull = stToMIO (MIOBuffer# <$> newNull)
+
+instance (MonadIO io, Unboxed e) => BufferM io (MIOBytes# io e)
+  where
+    type BufferForM io (MIOBytes# io e) = MIOBuffer# e
+    
+    unsafeFromBufferM (MIOBuffer# buff) = stToMIO (MIOBytes# <$> unsafeFromBufferM buff)
+    
+    fromBufferM (MIOBuffer# buff) = stToMIO (MIOBytes# <$> fromBufferM buff)
+    
+    appendBufferM (MIOBuffer# buff) (MIOBytes# mbytes) =
+      stToMIO (appendBufferM buff mbytes)
+
+--------------------------------------------------------------------------------
+
 {-# INLINE unpack #-}
 unpack :: MIOBytes# io e -> STBytes# RealWorld e
 unpack =  \ (MIOBytes# es) -> es
@@ -375,6 +407,4 @@ pack =  stToMIO . fmap MIOBytes#
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes.IO."
-
-
 
