@@ -16,17 +16,15 @@ module SDP.Bytes.ST
   module SDP.SortM,
   
   -- * STBytes and BytesST
-  STBytes, BytesST
+  STBytes --, BytesST
 )
 where
 
 import SDP.Templates.AnyBorder
-import SDP.Templates.AnyVar
-import SDP.Prim.SBytes
+-- TODO: import SDP.Templates.AnyVar
+import SDP.Prim.SBytes.ST
 import SDP.IndexedM
 import SDP.SortM
-
-import Control.Monad.ST
 
 default ()
 
@@ -36,5 +34,7 @@ default ()
 type STBytes s = AnyBorder (STBytes# s)
 
 -- | 'BytesST' is mutable version of 'SDP.Bytes.Bytes'.
-type BytesST s i = AnyVar (ST s) (STBytes s i)
+-- type BytesST s i = AnyVar (ST s) (STBytes s i)
+
+
 

@@ -75,6 +75,8 @@ Library
     cpp-options: -DSDP_DISABLE_SHAPED
   
   exposed-modules:
+    SDP.Templates.AnyBorder
+    
     SDP.Prim.SArray.IO
     SDP.Prim.SArray.ST
     SDP.Prim.SArray
@@ -82,4 +84,12 @@ Library
     SDP.Prim.SBytes.IO
     SDP.Prim.SBytes.ST
     SDP.Prim.SBytes
+    
+    SDP.Array.IO
+    SDP.Array.ST
+    SDP.Array
+    
+    SDP.Bytes.IO
+    SDP.Bytes.ST
+    SDP.Bytes
 

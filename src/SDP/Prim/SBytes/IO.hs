@@ -89,6 +89,8 @@ instance Estimate (MIOBytes# io e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
+    
+    shrinkTo n (MIOBytes# es) = MIOBytes# (shrinkTo n es)
 
 instance MonadIO io => EstimateM io (MIOBytes# io e)
   where
@@ -407,4 +409,7 @@ pack =  stToMIO . fmap MIOBytes#
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes.IO."
+
+
+
 

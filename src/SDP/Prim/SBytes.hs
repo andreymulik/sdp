@@ -182,6 +182,11 @@ instance Estimate (SBytes# e)
     sizeHint (SBytes# c _ _) = Just (SizeHintEQ c)
     sizeOf   (SBytes# c _ _) = c
     
+    shrinkTo n es@(SBytes# c o arr#)
+      | n <= 0 = Z
+      | n >= c = es
+      |  True  = SBytes# n o arr#
+    
     (<==>) = on (<=>) sizeOf
     (<.=>) = (<=>) . sizeOf
     
@@ -239,7 +244,7 @@ instance Bordered (SBytes# e) Int
         | isEmpty bnds = Right Z
         |    l /= 0    = Left  inapplicableEx
         |    n > c     = Left  expandEx
-        |     True     = Right (take n es)
+        |     True     = Right (shrinkTo n es)
       where
         inapplicableEx = InapplicableBoundaries
                        . showString "in SDP.Bordered.eitherViewOf: lower border "
@@ -323,10 +328,7 @@ instance Unboxed e => Linear (SBytes# e) e
     tail (SBytes# c o arr#) = c < 1 ? undEx "tail" $ SBytes# (c - 1) (o + 1) arr#
     
     -- | O(1) 'take', O(1) memory.
-    take n es@(SBytes# c o arr#)
-      | n <= 0 = Z
-      | n >= c = es
-      |  True  = SBytes# n o arr#
+    take = shrinkTo
     
     -- | O(1) 'drop', O(1) memory.
     drop n es@(SBytes# c o arr#)
@@ -749,7 +751,5 @@ nubSorted f es@(SBytes# _ _ _) = case unsnoc' es of
 
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SBytes."
-
-
 
 

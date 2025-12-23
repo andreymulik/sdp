@@ -109,6 +109,8 @@ instance Estimate (STBytes# s e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
+    
+    shrinkTo n (STBytes# c o marr#) = STBytes# (c `min` n `max` 0) o marr#
 
 instance Monad m => EstimateM m (STBytes# s e)
   where
@@ -470,6 +472,4 @@ overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
-
-
 

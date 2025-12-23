@@ -115,7 +115,10 @@ instance E.IsList (SArray# e)
 
 {- Semigroup and Monoid instances. -}
 
-instance Monoid (SArray# e) where mempty = Z; mappend = (<>)
+instance Monoid (SArray# e)
+  where
+    mappend = (<>)
+    mempty  = Z
 
 instance Semigroup (SArray# e)
   where
@@ -151,6 +154,8 @@ instance Estimate (SArray# e)
   where
     sizeHint (SArray# c _ _) = Just (SizeHintEQ c)
     sizeOf   (SArray# c _ _) = c
+    
+    shrinkTo = take
     
     (<==>) = on (<=>) sizeOf
     (<.=>) = (<=>) . sizeOf
@@ -207,19 +212,10 @@ instance Bordered (SArray# e) Int
     
     eitherViewOf bnds@(l, _) es
         | isEmpty bnds = Right Z
-        |    l /= 0    = Left  inapplicableEx
-        |    n > c     = Left  expandEx
+        |    l /= 0    = Left  $ inapplicableEx bnds
+        |    n >. es   = Left  $ expandEx bnds
         |     True     = Right (take n es)
       where
-        inapplicableEx = InapplicableBoundaries
-                       . showString "in SDP.Bordered.eitherViewOf: lower border "
-                       $ shows l " of list should be 0"
-        
-        expandEx = UnacceptableExpansion
-                 . showString "in SDP.Bordered.eitherViewOf: new borders "
-                 $ shows bnds " can't be wider than range of list values"
-        
-        c = sizeOf es
         n = size bnds
 
 instance Monad m => BorderedM m (SArray# e) Int
@@ -410,7 +406,7 @@ instance Forceable (SArray# e)
 --------------------------------------------------------------------------------
 
 {- Concat instance. -}
--- TODO: create buffer type and implement
+
 instance Concat (SArray# e)
 
 --------------------------------------------------------------------------------
@@ -862,4 +858,13 @@ pfailEx =  throw . PatternMatchFail . showString "in SDP.Prim.SArray."
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray."
 
+inapplicableEx :: Index i => (i, i) -> IndexException
+inapplicableEx (l, _) = InapplicableBoundaries
+                      . showString "in SDP.Bordered.eitherViewOf: lower border "
+                      $ shows l " of list should be 0"
+
+expandEx :: Index i => (i, i) -> IndexException
+expandEx bnds = UnacceptableExpansion
+              . showString "in SDP.Bordered.eitherViewOf: new borders "
+              $ shows bnds " can't be wider than range of list values"
 

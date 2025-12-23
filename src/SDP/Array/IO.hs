@@ -20,13 +20,13 @@ module SDP.Array.IO
   MIOArray, IOArray,
   
   -- ** With mutable bounds
-  ArrayMIO, ArrayIO
+  -- ArrayMIO, ArrayIO
 )
 where
 
 import SDP.Templates.AnyBorder
-import SDP.Templates.AnyVar
-import SDP.Prim.SArray
+-- TODO: import SDP.Templates.AnyVar
+import SDP.Prim.SArray.IO
 import SDP.IndexedM
 import SDP.SortM
 
@@ -41,10 +41,10 @@ type MIOArray io = AnyBorder (MIOArray# io)
 type IOArray = AnyBorder IOArray#
 
 -- | 'ArrayMIO' is mutable version of 'SDP.Array.Array'.
-type ArrayMIO io i = AnyVar io (MIOArray io i)
+-- type ArrayMIO io i = AnyVar io (MIOArray io i)
 
 -- | 'ArrayIO' is mutable version of 'SDP.Array.Array'.
-type ArrayIO i = AnyVar IO (IOArray i)
+-- type ArrayIO i = AnyVar IO (IOArray i)
 
 
 

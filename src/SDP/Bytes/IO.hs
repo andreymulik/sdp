@@ -21,13 +21,13 @@ module SDP.Bytes.IO
   MIOBytes, IOBytes,
   
   -- ** With mutable bounds
-  BytesMIO, BytesIO
+  -- BytesMIO, BytesIO
 )
 where
 
 import SDP.Templates.AnyBorder
-import SDP.Templates.AnyVar
-import SDP.Prim.SBytes
+-- TODO: import SDP.Templates.AnyVar
+import SDP.Prim.SBytes.IO
 import SDP.IndexedM
 import SDP.Unboxed
 import SDP.SortM
@@ -43,8 +43,8 @@ type MIOBytes io = AnyBorder (MIOBytes# io)
 type IOBytes = AnyBorder IOBytes#
 
 -- | 'BytesMIO' is mutable version of 'SDP.Bytes.Bytes'.
-type BytesMIO io i = AnyVar io (MIOBytes io i)
+-- type BytesMIO io i = AnyVar io (MIOBytes io i)
 
 -- | 'BytesIO' is mutable version of 'SDP.Bytes.Bytes'.
-type BytesIO i = AnyVar IO (IOBytes i)
+-- type BytesIO i = AnyVar IO (IOBytes i)
 

@@ -84,6 +84,8 @@ instance Estimate (MIOArray# io e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
+    
+    shrinkTo n (MIOArray# es) = MIOArray# (shrinkTo n es)
 
 instance MonadIO io => EstimateM io (MIOArray# io e)
   where
@@ -332,4 +334,7 @@ pack =  stToMIO . coerce
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray.IO."
+
+
+
 

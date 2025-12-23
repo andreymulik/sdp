@@ -102,6 +102,8 @@ instance Estimate (STArray# s e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
+    
+    shrinkTo n (STArray# c o marr#) = STArray# (c `min` n `max` 0) o marr#
 
 instance Monad m => EstimateM m (STArray# s e)
   where
@@ -422,4 +424,7 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SArray.ST."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray.ST."
+
+
+
 

@@ -16,17 +16,15 @@ module SDP.Array.ST
   module SDP.SortM,
   
   -- * STArray and ArrayST
-  STArray, ArrayST
+  STArray --, ArrayST
 )
 where
 
 import SDP.Templates.AnyBorder
-import SDP.Templates.AnyVar
-import SDP.Prim.SArray
+-- TODO: import SDP.Templates.AnyVar
+import SDP.Prim.SArray.ST
 import SDP.IndexedM
 import SDP.SortM
-
-import Control.Monad.ST
 
 default ()
 
@@ -36,5 +34,7 @@ default ()
 type STArray s = AnyBorder (STArray# s)
 
 -- | 'ArrayST' is mutable version of 'SDP.Array.Array'.
-type ArrayST s i = AnyVar (ST s) (STArray s i)
+-- type ArrayST s i = AnyVar (ST s) (STArray s i)
+
+
 
