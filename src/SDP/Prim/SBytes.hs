@@ -268,7 +268,7 @@ instance Monad m => BorderedM m (SBytes# e) Int
 instance Forceable (SBytes# e)
   where
     force es@(SBytes# n@(I# n#) (I# o#) bytes#) =
-      SBytes# n 0 (cloneUnboxed1# es bytes# n# o#)
+      SBytes# n 0 (cloneUnboxed1# es bytes# o# n#)
 
 --------------------------------------------------------------------------------
 
@@ -606,9 +606,7 @@ instance Sort (SBytes# e) e
 
 instance Unboxed e => Map (SBytes# e) Int e
   where
-    toMap ascs =
-      let bnds = rangeBounds (fsts ascs)
-      in  isNull ascs ? Z $ assoc bnds ascs
+    toMap ascs = runST $ newMap ascs >>= done
     
     Z  // ascs = toMap ascs
     es // ascs = runST $ do
@@ -629,7 +627,7 @@ instance Unboxed e => Indexed (SBytes# e) Int e
     
     fromIndexed es = runST $ do
       let n = sizeOf es
-      copy <- mreplicate n (unreachEx "fromIndexed")
+      copy <- mreplicate n filler
       updateM copy (\ i _ -> es!!i)
       done copy
 
@@ -751,9 +749,6 @@ nubSorted f es@(SBytes# _ _ _) = case unsnoc' es of
 
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SBytes."
-
-unreachEx :: String -> a
-unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes."
 
 
 
