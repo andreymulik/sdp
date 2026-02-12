@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Templates.AnyBorder
-    Copyright   :  (c) Andrey Mulik 2020-2025
+    Copyright   :  (c) Andrey Mulik 2020-2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -100,8 +100,7 @@ instance (Indexed1 rep Int e, Index i, Read i, Read e) => Read (AnyBorder rep i 
 
 {- Overloaded Lists and String support. -}
 
-instance (Index i, IsString (rep Char), Estimate1 rep Char)
-      => IsString (AnyBorder rep i Char)
+instance (Index i, IsString (rep Char)) => IsString (AnyBorder rep i Char)
   where
     fromString str =
       let bnds = defaultBounds (sizeOf str)
@@ -155,20 +154,6 @@ instance Estimate (AnyBorder rep i e)
     
     sizeHint = Just . SizeHintEQ . sizeOf
     
-    shrinkTo n es@(AnyBorder l _ xs)
-        | isEmpty bnds = es
-        |    n >. es   = throw expandEx
-        |     n < 1    = uncurry AnyBorder (defaultBounds 0) xs
-        |     True     = AnyBorder l u xs
-      where
-        expandEx = UnacceptableExpansion
-                 . showString "in SDP.Template.AnyBorder.shrinkTo: new borders "
-                 $ shows bnds " can't be wider than range of list values"
-        
-        u = index bnds (n - 1)
-        
-        bnds = bounds es
-    
     (<==>) = on (<=>) sizeOf
     (<.=>) = (<=>) . sizeOf
     
@@ -198,15 +183,15 @@ instance Monad m => EstimateM m (AnyBorder rep i e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -222,7 +207,10 @@ instance Index i => Bordered (AnyBorder rep i e) i
     indexOf  (AnyBorder l u _) = index   (l, u)
     offsetOf (AnyBorder l u _) = offset  (l, u)
     
-    eitherViewOf bnds es = n <=. es ? Right (shrinkTo n es) $ Left err
+    eitherViewOf bnds@(l, u) es@(AnyBorder _ _ xs)
+        | isEmpty bnds = Right es
+        |    n >. es   = Left err
+        |     True     = Right $ AnyBorder l u xs
       where
         err = UnacceptableExpansion
             . showString "in SDP.Template.AnyBorder.eitherViewOf: new borders "
@@ -317,22 +305,16 @@ instance Traversable rep => Traversable (AnyBorder rep i)
 
 --------------------------------------------------------------------------------
 
-{- Forceable instance. -}
+{- Forceable, Concat and Sequence instances. -}
 
 instance Forceable1 rep e => Forceable (AnyBorder rep i e)
   where
     force (AnyBorder l u rep) = AnyBorder l u (force rep)
 
---------------------------------------------------------------------------------
-
-{- Concat instance. -}
-
 instance (Index i, Concat (rep e), Estimate (rep e)) => Concat (AnyBorder rep i e)
   where
     concatMap = withBounds ... concatMap . (unpack .)
     concat    = withBounds  .  concatMap unpack
-
---------------------------------------------------------------------------------
 
 instance (Index i, Sequence1 rep e) => Sequence (AnyBorder rep i e) e
   where
@@ -347,6 +329,10 @@ instance (Index i, Sequence1 rep e) => Sequence (AnyBorder rep i e) e
     
     prefix p = prefix p . unpack
     suffix p = suffix p . unpack
+
+--------------------------------------------------------------------------------
+
+{- Linear instance. -}
 
 instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
   where
@@ -417,13 +403,14 @@ instance (Index i, Linear1 rep e) => Linear (AnyBorder rep i e) e
 
 --------------------------------------------------------------------------------
 
-{- ForceableM and LinearM instances. -}
+{- ForceableM, ConcatM and SequenceM instances. -}
 
 instance ForceableM1 m rep e => ForceableM m (AnyBorder rep i e)
   where
     copied (AnyBorder l u es) = AnyBorder l u <$> copied es
 
-instance (Index i, EstimateM m (rep e), ConcatM m (rep e)) => ConcatM m (AnyBorder rep i e)
+instance (Index i, EstimateM m (rep e), ConcatM m (rep e))
+      => ConcatM m (AnyBorder rep i e)
   where
     (<~>)        = withBounds' <=<< on (<~>) unpack
     concatM      = withBounds' <=< concatMapM (pure . unpack)
@@ -443,7 +430,12 @@ instance (Index i, SequenceM1 m rep e) => SequenceM m (AnyBorder rep i e) e
     mprefix p = mprefix p . unpack
     msuffix p = msuffix p . unpack
 
-instance (Index i, BorderedM1 m rep Int e, LinearM1 m rep e) => LinearM m (AnyBorder rep i e) e
+--------------------------------------------------------------------------------
+
+{- LinearM instance. -}
+
+instance (Index i, BorderedM1 m rep Int e, LinearM1 m rep e)
+      => LinearM m (AnyBorder rep i e) e
   where
     prepend e = withBounds' <=< prepend e . unpack
     append es = withBounds' <=< append (unpack es)
@@ -682,4 +674,7 @@ withBounds rep = uncurry AnyBorder (defaultBounds $ sizeOf rep) rep
 {-# INLINE withBounds' #-}
 withBounds' :: (Index i, EstimateM1 m rep e) => rep e -> m (AnyBorder rep i e)
 withBounds' rep = (\ n -> uncurry AnyBorder (defaultBounds n) rep) <$> getSizeOf rep
+
+
+
 

@@ -4,7 +4,7 @@
 
 {- |
     Module      :  SDP.Prim.SBytes
-    Copyright   :  (c) Andrey Mulik 2019-2025
+    Copyright   :  (c) Andrey Mulik 2019-2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -182,11 +182,6 @@ instance Estimate (SBytes# e)
     sizeHint (SBytes# c _ _) = Just (SizeHintEQ c)
     sizeOf   (SBytes# c _ _) = c
     
-    shrinkTo n es@(SBytes# c o arr#)
-      | n <= 0 = Z
-      | n >= c = es
-      |  True  = SBytes# n o arr#
-    
     (<==>) = on (<=>) sizeOf
     (<.=>) = (<=>) . sizeOf
     
@@ -216,15 +211,15 @@ instance Monad m => EstimateM m (SBytes# e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -244,7 +239,7 @@ instance Bordered (SBytes# e) Int
         | isEmpty bnds = Right Z
         |    l /= 0    = Left  inapplicableEx
         |    n > c     = Left  expandEx
-        |     True     = Right (shrinkTo n es)
+        |     True     = Right (take n es)
       where
         inapplicableEx = InapplicableBoundaries
                        . showString "in SDP.Bordered.eitherViewOf: lower border "
@@ -328,7 +323,10 @@ instance Unboxed e => Linear (SBytes# e) e
     tail (SBytes# c o arr#) = c < 1 ? undEx "tail" $ SBytes# (c - 1) (o + 1) arr#
     
     -- | O(1) 'take', O(1) memory.
-    take = shrinkTo
+    take n es@(SBytes# c o arr#)
+      | n <= 0 = Z
+      | n >= c = es
+      |  True  = SBytes# n o arr#
     
     -- | O(1) 'drop', O(1) memory.
     drop n es@(SBytes# c o arr#)
@@ -751,5 +749,7 @@ nubSorted f es@(SBytes# _ _ _) = case unsnoc' es of
 
 undEx :: String -> a
 undEx =  throw . UndefinedValue . showString "in SDP.Prim.SBytes."
+
+
 
 

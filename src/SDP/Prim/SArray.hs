@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SArray
-    Copyright   :  (c) Andrey Mulik 2019-2025
+    Copyright   :  (c) Andrey Mulik 2019-2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -155,8 +155,6 @@ instance Estimate (SArray# e)
     sizeHint (SArray# c _ _) = Just (SizeHintEQ c)
     sizeOf   (SArray# c _ _) = c
     
-    shrinkTo = take
-    
     (<==>) = on (<=>) sizeOf
     (<.=>) = (<=>) . sizeOf
     
@@ -186,15 +184,15 @@ instance Monad m => EstimateM m (SArray# e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -867,4 +865,6 @@ expandEx :: Index i => (i, i) -> IndexException
 expandEx bnds = UnacceptableExpansion
               . showString "in SDP.Bordered.eitherViewOf: new borders "
               $ shows bnds " can't be wider than range of list values"
+
+
 

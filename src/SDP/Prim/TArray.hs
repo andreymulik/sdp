@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.TArray
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable
@@ -13,16 +13,22 @@
 -}
 module SDP.Prim.TArray
 (
-  -- TArray
-  MArray# (.., TArray#), TArray#, STM, TVar
+  -- * Exports
+  module SDP.IndexedM,
+  module SDP.Var,
+  
+  -- * MArray
+  MArray# (.., TArray#), TArray#
 )
 where
 
 import Prelude ()
 import SDP.SafePrelude
-import SDP.Prim.SArray hiding ( set )
+import SDP.Prim.SArray
+import SDP.IndexedM
+import SDP.Var
 
-import Data.Field
+import Data.Functor
 
 import GHC.Conc
 
@@ -62,12 +68,12 @@ instance Eq (Var m e) => Eq (MArray# m e)
 instance MonadVar m => Nullable (MArray# m e)
   where
     isNull = \ (MArray# es) -> isNull es
-    lzero  = MArray# Z
+    lzero  = MArray# lzero
 
 instance MonadVar m => NullableM m (MArray# m e)
   where
-    newNull = return Z
-    nowNull = return . isNull
+    newNull = pure lzero
+    isNullM = pure . isNull
 
 --------------------------------------------------------------------------------
 
@@ -91,19 +97,25 @@ instance Estimate (MArray# m e)
 
 instance Monad m => EstimateM m (MArray# m e)
   where
-    getSizeOf = return . sizeOf
+    getSizeHint = pure . sizeHint
+    getSizeOf   = pure . sizeOf
     
-    estimateMLT = return ... (.<.)
-    estimateMGT = return ... (.>.)
-    estimateMLE = return ... (.<=.)
-    estimateMGE = return ... (.>=.)
-    estimateM   = return ... (<==>)
+    estimateMGE = pure ... (.>=.)
+    estimateMLE = pure ... (.<=.)
+    estimateMGT = pure ... (.>.)
+    estimateMLT = pure ... (.<.)
+    estimateMNE = pure ... (./=.)
+    estimateMEQ = pure ... (.==.)
     
-    lestimateMLT = return ... (.<)
-    lestimateMGT = return ... (.>)
-    lestimateMLE = return ... (.<=)
-    lestimateMGE = return ... (.>=)
-    lestimateM   = return ... (<.=>)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
+    
+    (<<=>>) = pure ... (<==>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -120,17 +132,17 @@ instance Bordered (MArray# m e) Int
     indexOf  (MArray# es) = index (0, upper es)
     offsetOf (MArray# es) = offset (0, upper es)
     
-    viewOf bnds (MArray# es) = MArray# (viewOf bnds es)
+    eitherViewOf bnds (MArray# es) = MArray# <$> eitherViewOf bnds es
 
 instance MonadVar m => BorderedM m (MArray# m e) Int
   where
-    getIndexOf = return ... indexOf
-    getIndices = return . indices
-    getBounds  = return . bounds
-    getUpper   = return . upper
-    getLower _ = return 0
+    getIndexOf = pure ... indexOf
+    getIndices = pure . indices
+    getBounds  = pure . bounds
+    getUpper   = pure . upper
+    getLower _ = pure 0
     
-    getViewOf = takeM . size
+    getEitherViewOf bnds (MArray# es) = fmap MArray# <$> getEitherViewOf bnds es
 
 --------------------------------------------------------------------------------
 
@@ -138,75 +150,81 @@ instance MonadVar m => BorderedM m (MArray# m e) Int
 
 instance MonadVar m => ForceableM m (MArray# m e)
   where
-    copied (MArray# arr) = MArray# <$> otraverse (const $ var <=< get this') arr
+    copied (MArray# es) = MArray# <$> traverse (newVar <=< readVar) es
+
+instance MonadVar m => ConcatM m (MArray# m e)
+  where
+    MArray# xs <~> MArray# ys = pure $ MArray# (xs ++ ys)
+
+instance MonadVar m => SequenceM m (MArray# m e) e
+  where
+    ofoldlM f base (MArray# es) = ofoldl (\ i xs -> join . liftA2 (f i) xs . readVar) (pure base) es
+    ofoldrM f base (MArray# es) = ofoldr (\ i -> join ... liftA2 (f i) . readVar) (pure base) es
+    
+    foldlM f base (MArray# es) = foldl (\ xs -> join . liftA2 f xs . readVar) (pure base) es
+    foldrM f base (MArray# es) = foldr (join ... liftA2 f . readVar) (pure base) es
+    
+    getLeft  (MArray# es) = mapM readVar $ listL es
+    getRight (MArray# es) = mapM readVar $ listR es
 
 instance MonadVar m => LinearM m (MArray# m e) e
   where
-    getHead = get this . head . unpack
-    getLast = get this . last . unpack
-    singleM = fmap (MArray# . single) . var
+    prepend e (MArray# es) = MArray# . (:> es) <$> newVar e
+    append  (MArray# es) e = MArray# . (es :<) <$> newVar e
     
-    prepend e es = MArray# . (:> unpack es) <$> var e
-    append  es e = MArray# . (unpack es :<) <$> var e
+    unconsM' (MArray# es) = case uncons' es of
+      Just (v, t) -> readVar v <&> \ h -> Just (h, MArray# t)
+      Nothing     -> pure Nothing
     
-    newLinear     = fmap (MArray# . fromList) . mapM var
-    newLinearN  n = fmap (MArray# . fromListN n) . mapM var
-    fromFoldableM = fmap (MArray# . fromList) . foldr (liftA2 (:) . var) (return [])
+    unsnocM' (MArray# es) = case unsnoc' es of
+      Just (i, v) -> readVar v <&> \ l -> Just (MArray# i, l)
+      Nothing     -> pure Nothing
     
-    (!#>)  = get this ... (!^) . unpack
-    writeM = writeM'
+    takeM n = pure . MArray# . take n . unpack
+    dropM n = pure . MArray# . drop n . unpack
+    keepM n = pure . MArray# . keep n . unpack
+    sansM n = pure . MArray# . sans n . unpack
     
-    getLeft  = mapM (get this) . listL . unpack
-    getRight = mapM (get this) . listR . unpack
-    merged   = return . MArray# . concatMap unpack
-    reversed = return . MArray# . reverse . unpack
-    filled n = fmap (MArray# . fromList) . replicateM n . var
+    singleM e = MArray# . single <$> newVar e
     
-    copyTo src so trg to n = when (n > 0) $ do
-        when      (so < 0 || to < 0)      $ underEx "copyTo"
-        when (so + n > n1 || to + n > n2) $ overEx  "copyTo"
+    newLinear     = fmap (MArray# . fromList) . mapM newVar
+    newLinearN  n = fmap (MArray# . fromListN n) . mapM newVar
+    fromFoldableM = fmap (MArray# . fromList) . foldr (liftA2 (:) . newVar) (pure [])
+    
+    reverseM = pure . MArray# . reverse . unpack
+    
+    reversed (MArray# es) = [1 .. n `quot` 2] `forM_` \ i -> do
+        let ei' = es !! i; j = n - i; ej' = es !! j
+        
+        ei <- readVar ei'
+        ej <- readVar ej'
+        
+        writeVar ej' ei
+        writeVar ei' ej
+      where
+        n = sizeOf es
+    
+    unsafeReadByOff (MArray# es) o = readVar  (es !! o)
+    unsafeWriteM    (MArray# es) o = writeVar (es !! o)
+    
+    (!*) = unsafeReadByOff
+    
+    writeM = unsafeWriteM
+    
+    unsafeCopyM (MArray# es) l n = pure . MArray# . take n $ drop l es
+    
+    unsafeCopyTo src so trg to n = when (n > 0) $ do
+        when      (so < 0 || to < 0)      $ underEx "unsafeCopyTo"
+        when (so + n > n1 || to + n > n2) $ overEx  "unsafeCopyTo"
         go so to n
       where
-        go _ _ 0 = return ()
-        go i j c = do e <- src !#> i; writeM trg j e; go (i + 1) (j + 1) (c - 1)
+        go _ _ 0 = pure ()
+        go i j c = do
+          unsafeWriteM trg j =<< unsafeReadByOff src i
+          go (i + 1) (j + 1) (c - 1)
         
         n1 = sizeOf src
         n2 = sizeOf trg
-    
-    ofoldlM f base = ofoldl (\ i es -> ($ f i) . (es >>=<<) . get this) (return base) . unpack
-    ofoldrM f base = ofoldr (\ i -> ($ f i) ... (>>=<<) . get this) (return base) . unpack
-    
-    foldlM f base = foldl (\ es -> ($ f) . (es >>=<<) . get this) (return base) . unpack
-    foldrM f base = foldr (($ f) ... (>>=<<) . get this) (return base) . unpack
-    
-    takeM n = return . MArray# . take n . unpack
-    dropM n = return . MArray# . drop n . unpack
-    keepM n = return . MArray# . keep n . unpack
-    sansM n = return . MArray# . sans n . unpack
-    
-    prefixM p es =
-      let
-          go i = i >= c ? return c $ do e <- es !#> i; p e ? go (succ 1) $ return i
-          c = sizeOf es
-      in  go 0
-    
-    suffixM p es =
-      let
-          go i = i < 0 ? return c $ do e <- es !#> i; p e ? go (pred i) $ return (c - i - 1)
-          c = sizeOf es
-      in  go (c - 1)
-    
-    mprefix p es =
-      let
-          go i = i >= c ? return c $ do e <- es !#> i; p e ?^ go (succ 1) $ return i
-          c = sizeOf es
-      in  go 0
-    
-    msuffix p es =
-      let
-          go i = i < 0 ? return c $ do e <- es !#> i; p e ?^ go (pred i) $ return (c - i - 1)
-          c = sizeOf es
-      in  go (c - 1)
 
 --------------------------------------------------------------------------------
 
@@ -214,16 +232,17 @@ instance MonadVar m => LinearM m (MArray# m e) e
 
 instance MonadVar m => MapM m (MArray# m e) Int e
   where
-    newMap' defvalue ascs =
+    newMap' def ascs =
       let bnds = rangeBounds (fsts ascs)
-      in  fromAssocs' bnds defvalue ascs
+      in  fromAssocs' bnds def ascs
     
     {-# INLINE writeM' #-}
-    writeM' = setField this ... (!^) . unpack
+    writeM' = unsafeWriteM
     
-    (>!) = (!#>)
+    {-# INLINE unsafeReadMByKey #-}
+    unsafeReadMByKey = unsafeReadByOff
     
-    overwrite es ascs = uncurry (writeM es) `mapM_` (filter (indexIn es . fst) ascs)
+    overwrite es ascs = uncurry (unsafeWriteM es) `mapM_` filter (indexIn es . fst) ascs
     
     kfoldrM = ofoldrM
     kfoldlM = ofoldlM
@@ -234,18 +253,17 @@ instance MonadVar m => MapM m (MArray# m e) Int e
 
 instance MonadVar m => IndexedM m (MArray# m e) Int e
   where
-    fromAssocs' bnds defvalue ascs = do
-      es <- filled (size bnds) defvalue
-      overwrite es ascs
-      return es
+    fromAssocs' bnds def ascs = do
+      es <- mreplicate (size bnds) def
+      es <$ overwrite es ascs
     
     fromIndexed' es = do
-      copy <- filled (sizeOf es) (unreachEx "fromIndexed'")
-      copy <$ ofoldr (\ i e go -> do writeM copy i e; go) (return ()) es
+      copy <- mreplicate (sizeOf es) (unreachEx "fromIndexed'")
+      copy <$ ofoldr (\ i e go -> do unsafeWriteM copy i e; go) (pure ()) es
     
     fromIndexedM es = do
-      copy <- flip filled (unreachEx "fromIndexedM") =<< getSizeOf es
-      copy <$ ofoldrM (\ i e _ -> writeM copy i e) () es
+      copy <- flip mreplicate (unreachEx "fromIndexedM") =<< getSizeOf es
+      copy <$ ofoldrM (\ i e _ -> unsafeWriteM copy i e) () es
 
 --------------------------------------------------------------------------------
 
@@ -253,11 +271,11 @@ instance MonadVar m => IndexedM m (MArray# m e) Int e
 
 instance MonadVar m => Thaw m (SArray# e) (MArray# m e)
   where
-    thaw es = MArray# <$> mapM var es
+    thaw es = MArray# <$> mapM newVar es
 
 instance Monad m => Freeze m (MArray# m e) (SArray# e)
   where
-    freeze (MArray# es) = get this `mapM` es
+    freeze (MArray# es) = mapM readVar es
 
 --------------------------------------------------------------------------------
 
@@ -272,4 +290,6 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.TArray."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.TArray."
+
+
 

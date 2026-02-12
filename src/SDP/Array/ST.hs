@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Array.ST
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2025
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -16,12 +16,12 @@ module SDP.Array.ST
   module SDP.SortM,
   
   -- * STArray and ArrayST
-  STArray --, ArrayST
+  STArray, ArrayST
 )
 where
 
 import SDP.Templates.AnyBorder
--- TODO: import SDP.Templates.AnyVar
+import SDP.Templates.AnyVar
 import SDP.Prim.SArray.ST
 import SDP.IndexedM
 import SDP.SortM
@@ -34,7 +34,7 @@ default ()
 type STArray s = AnyBorder (STArray# s)
 
 -- | 'ArrayST' is mutable version of 'SDP.Array.Array'.
--- type ArrayST s i = AnyVar (ST s) (STArray s i)
+type ArrayST s i = AnyVar (ST s) (STArray s i)
 
 
 

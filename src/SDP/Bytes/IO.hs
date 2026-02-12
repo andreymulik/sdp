@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Bytes.IO
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2025
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -21,12 +21,12 @@ module SDP.Bytes.IO
   MIOBytes, IOBytes,
   
   -- ** With mutable bounds
-  -- BytesMIO, BytesIO
+  BytesMIO, BytesIO
 )
 where
 
 import SDP.Templates.AnyBorder
--- TODO: import SDP.Templates.AnyVar
+import SDP.Templates.AnyVar
 import SDP.Prim.SBytes.IO
 import SDP.IndexedM
 import SDP.Unboxed
@@ -43,8 +43,8 @@ type MIOBytes io = AnyBorder (MIOBytes# io)
 type IOBytes = AnyBorder IOBytes#
 
 -- | 'BytesMIO' is mutable version of 'SDP.Bytes.Bytes'.
--- type BytesMIO io i = AnyVar io (MIOBytes io i)
+type BytesMIO io i = AnyVar io (MIOBytes io i)
 
 -- | 'BytesIO' is mutable version of 'SDP.Bytes.Bytes'.
--- type BytesIO i = AnyVar IO (IOBytes i)
+type BytesIO i = AnyVar IO (IOBytes i)
 

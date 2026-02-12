@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SArray.ST
-    Copyright   :  (c) Andrey Mulik 2025
+    Copyright   :  (c) Andrey Mulik 2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -18,7 +18,7 @@ module SDP.Prim.SArray.ST
   
   -- * Pseudo-primitive types
   STArray#, fromSTArray#, unpackSTArray#, offsetSTArray#,
-  packSTArray#, coerceSTArray#
+  packSTArray#, coerceSTArray#, ST
 )
 where
 
@@ -102,8 +102,6 @@ instance Estimate (STArray# s e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
-    
-    shrinkTo n (STArray# c o marr#) = STArray# (c `min` n `max` 0) o marr#
 
 instance Monad m => EstimateM m (STArray# s e)
   where
@@ -117,15 +115,15 @@ instance Monad m => EstimateM m (STArray# s e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -424,7 +422,4 @@ underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SArray.ST."
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SArray.ST."
-
-
-
 

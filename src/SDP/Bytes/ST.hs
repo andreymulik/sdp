@@ -2,7 +2,7 @@
 
 {- |
     Module      :  SDP.Bytes.ST
-    Copyright   :  (c) Andrey Mulik 2019-2022
+    Copyright   :  (c) Andrey Mulik 2019-2025
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -16,12 +16,12 @@ module SDP.Bytes.ST
   module SDP.SortM,
   
   -- * STBytes and BytesST
-  STBytes --, BytesST
+  STBytes, BytesST
 )
 where
 
 import SDP.Templates.AnyBorder
--- TODO: import SDP.Templates.AnyVar
+import SDP.Templates.AnyVar
 import SDP.Prim.SBytes.ST
 import SDP.IndexedM
 import SDP.SortM
@@ -34,7 +34,7 @@ default ()
 type STBytes s = AnyBorder (STBytes# s)
 
 -- | 'BytesST' is mutable version of 'SDP.Bytes.Bytes'.
--- type BytesST s i = AnyVar (ST s) (STBytes s i)
+type BytesST s i = AnyVar (ST s) (STBytes s i)
 
 
 

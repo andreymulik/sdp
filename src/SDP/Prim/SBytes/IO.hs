@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SBytes.IO
-    Copyright   :  (c) Andrey Mulik 2025
+    Copyright   :  (c) Andrey Mulik 2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -89,8 +89,6 @@ instance Estimate (MIOBytes# io e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
-    
-    shrinkTo n (MIOBytes# es) = MIOBytes# (shrinkTo n es)
 
 instance MonadIO io => EstimateM io (MIOBytes# io e)
   where
@@ -104,15 +102,15 @@ instance MonadIO io => EstimateM io (MIOBytes# io e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -409,7 +407,4 @@ pack =  stToMIO . fmap MIOBytes#
 
 unreachEx :: String -> a
 unreachEx =  throw . UnreachableException . showString "in SDP.Prim.SBytes.IO."
-
-
-
 

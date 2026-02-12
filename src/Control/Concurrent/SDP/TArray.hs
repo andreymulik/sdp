@@ -2,7 +2,7 @@
 
 {- |
     Module      :  Control.Concurrent.SDP.TArray
-    Copyright   :  (c) Andrey Mulik 2020-2022
+    Copyright   :  (c) Andrey Mulik 2020-2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  portable
@@ -11,13 +11,18 @@
 -}
 module Control.Concurrent.SDP.TArray
 (
+  -- * Exports
+  module SDP.Prim.TArray,
+  module SDP.Var,
+  
   -- * TArray
-  TArray, STM, TVar
+  TArray
 )
 where
 
 import SDP.Templates.AnyBorder
 import SDP.Prim.TArray
+import SDP.Var
 
 default ()
 

@@ -3,7 +3,7 @@
 
 {- |
     Module      :  SDP.Prim.SBytes.ST
-    Copyright   :  (c) Andrey Mulik 2025
+    Copyright   :  (c) Andrey Mulik 2026
     License     :  BSD-style
     Maintainer  :  work.a.mulik@gmail.com
     Portability :  non-portable (GHC extensions)
@@ -18,7 +18,7 @@ module SDP.Prim.SBytes.ST
   
   -- * Pseudo-primitive types
   STBytes#, fromSTBytes#, unpackSTBytes#, offsetSTBytes#,
-  packSTBytes#, coerceSTBytes#
+  packSTBytes#, coerceSTBytes#, ST
 )
 where
 
@@ -109,8 +109,6 @@ instance Estimate (STBytes# s e)
     (.<=) = (<=) . sizeOf
     (.>)  = (>)  . sizeOf
     (.<)  = (<)  . sizeOf
-    
-    shrinkTo n (STBytes# c o marr#) = STBytes# (c `min` n `max` 0) o marr#
 
 instance Monad m => EstimateM m (STBytes# s e)
   where
@@ -124,15 +122,15 @@ instance Monad m => EstimateM m (STBytes# s e)
     estimateMNE = pure ... (./=.)
     estimateMEQ = pure ... (.==.)
     
-    notShorterThanM = pure ... (.>=)
-    noLongerThanM   = pure ... (.<=)
-    longerThanM     = pure ... (.>)
-    shorterThanM    = pure ... (.<)
-    otherLengthM    = pure ... (./=)
-    hasLengthM      = pure ... (.==)
+    noShorterThanM = pure ... (.>=)
+    noLongerThanM  = pure ... (.<=)
+    longerThanM    = pure ... (.>)
+    shorterThanM   = pure ... (.<)
+    otherLengthM   = pure ... (./=)
+    hasLengthM     = pure ... (.==)
     
     (<<=>>) = pure ... (<==>)
-    (<=>>)  = pure ... (<.=>)
+    (<<=>)  = pure ... (<.=>)
 
 --------------------------------------------------------------------------------
 
@@ -472,4 +470,6 @@ overEx =  throw . IndexOverflow . showString "in SDP.Prim.SBytes."
 
 underEx :: String -> a
 underEx =  throw . IndexUnderflow . showString "in SDP.Prim.SBytes."
+
+
 
