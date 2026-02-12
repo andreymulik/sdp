@@ -598,7 +598,7 @@ instance (Index i, IndexedM1 m rep Int e) => IndexedM m (AnyBorder rep i e) i e
         ies  = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
         bnds = (0, size  (l, u) - 1)
     
-    fromAssocs' (l, u) def ascs = AnyBorder l u <$> fromAssocs' bnds def ies
+    fromAssocs' def (l, u) ascs = AnyBorder l u <$> fromAssocs' def bnds ies
       where
         ies  = [ (offset (l, u) i, e) | (i, e) <- ascs, inRange (l, u) i ]
         bnds = (0, size (l, u) - 1)

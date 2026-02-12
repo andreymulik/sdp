@@ -234,7 +234,7 @@ instance MonadVar m => MapM m (MArray# m e) Int e
   where
     newMap' def ascs =
       let bnds = rangeBounds (fsts ascs)
-      in  fromAssocs' bnds def ascs
+      in  fromAssocs' def bnds ascs
     
     {-# INLINE writeM' #-}
     writeM' = unsafeWriteM
@@ -253,7 +253,7 @@ instance MonadVar m => MapM m (MArray# m e) Int e
 
 instance MonadVar m => IndexedM m (MArray# m e) Int e
   where
-    fromAssocs' bnds def ascs = do
+    fromAssocs' def bnds ascs = do
       es <- mreplicate (size bnds) def
       es <$ overwrite es ascs
     

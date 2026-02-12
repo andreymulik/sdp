@@ -353,7 +353,7 @@ instance Unboxed e => MapM (ST s) (STBytes# s e) Int e
     
     newMap' e ascs =
       let bnds = rangeBounds (fsts ascs)
-      in  fromAssocs' bnds e ascs
+      in  fromAssocs' e bnds ascs
     
     unsafeReadMByKey = unsafeReadByOff
     
@@ -365,7 +365,7 @@ instance Unboxed e => MapM (ST s) (STBytes# s e) Int e
 
 instance Unboxed e => IndexedM (ST s) (STBytes# s e) Int e
   where
-    fromAssocs' bnds e ascs = do
+    fromAssocs' e bnds ascs = do
       es <- mreplicate (size bnds) e
       es <$ overwrite es ascs
     

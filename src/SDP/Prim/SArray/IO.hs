@@ -234,7 +234,7 @@ instance MonadIO io => MapM io (MIOArray# io e) Int e
   where
     newMap' e ascs =
       let bnds = rangeBounds (fsts ascs)
-      in  isNull ascs ? newNull $ fromAssocs' bnds e ascs
+      in  isNull ascs ? newNull $ fromAssocs' e bnds ascs
     
     writeM' es = stToMIO ... writeM' (unpack es)
     
@@ -246,8 +246,8 @@ instance MonadIO io => MapM io (MIOArray# io e) Int e
 
 instance MonadIO io => IndexedM io (MIOArray# io e) Int e
   where
-    fromAssocs  bnds = pack  .  fromAssocs  bnds
-    fromAssocs' bnds = pack ... fromAssocs' bnds
+    fromAssocs    = pack ... fromAssocs
+    fromAssocs' e = pack ... fromAssocs' e
     
     fromIndexed' = pack . fromIndexed'
     

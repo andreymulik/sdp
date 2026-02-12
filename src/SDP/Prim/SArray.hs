@@ -751,7 +751,7 @@ instance Map (SArray# e) Int e
 
 instance Indexed (SArray# e) Int e
   where
-    assoc' e bnds ascs = runST $ fromAssocs' bnds e ascs >>= done
+    assoc' e bnds ascs = runST $ fromAssocs' e bnds ascs >>= done
     
     fromIndexed es = runST $ do
       let n = sizeOf es
